@@ -20,7 +20,7 @@ type NavMainProps = {
   items: NavItem[];
   LinkComponent?: React.ComponentType<{
     href: string;
-    children: React.ReactNode;
+    children?: React.ReactNode;
     className?: string;
   }>;
 };
@@ -84,7 +84,7 @@ export function NavMain({ items, LinkComponent }: NavMainProps) {
               <SidebarMenuButton
                 tooltip={item.title}
                 data-active={isActive(pathname, item.url) || undefined}
-                render={<Link href={item.url}>{null}</Link>}
+                render={<Link href={item.url} />}
               >
                 {item.icon}
                 <span>{item.title}</span>

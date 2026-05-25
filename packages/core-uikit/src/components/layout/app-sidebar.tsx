@@ -73,7 +73,7 @@ const data = {
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   LinkComponent?: React.ComponentType<{
     href: string;
-    children: React.ReactNode;
+    children?: React.ReactNode;
     className?: string;
   }>;
   /** Override default user data for nav footer */
