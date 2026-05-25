@@ -152,13 +152,14 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
         return;
       }
 
-      // Upload to R2
+      // Upload to R2 (unique key to avoid URL caching)
+      const ts = Date.now();
       const uploadRes = await fetch("/api/generate/upload-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           base64: data.base64,
-          key: `assets/${bookId}/pages/${redesignPageId}.png`,
+          key: `assets/${bookId}/pages/${redesignPageId}-${ts}.png`,
         }),
       });
       const uploadData = await uploadRes.json();

@@ -50,11 +50,12 @@ export async function POST(req: NextRequest) {
     const base64 = img.dataUrl.split(",")[1];
     const buffer = Buffer.from(base64, "base64");
 
+    const ts = Date.now();
     let key: string;
     if (bookId && pageId) {
-      key = `assets/${bookId}/pages/${pageId}-colored.png`;
+      key = `assets/${bookId}/pages/${pageId}-colored-${ts}.png`;
     } else {
-      key = `assets/coloring-styles/${coloringStyleId}/test-${Date.now()}.png`;
+      key = `assets/coloring-styles/${coloringStyleId}/test-${ts}.png`;
     }
 
     const { url: coloredUrl } = await uploadToR2({
@@ -109,6 +110,8 @@ export async function POST(req: NextRequest) {
         if (existingIdx >= 0) {
           coloringPages[existingIdx].coloredUrl = coloredUrl;
           coloringPages[existingIdx].coloringStyleId = coloringStyleId;
+        } else {
+          console.warn(`[colorize] Page ${pageId} not found in book ${bookId} coloringPages`);
         }
 
         await bookRef.update({

@@ -46,7 +46,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const buffer = Buffer.from(img.base64, "base64");
       const r2Config = getR2Config();
       const r2Client = createR2Client(r2Config);
-      const key = `assets/characters/${id}/reference.png`;
+      const key = `assets/characters/${id}/reference-${Date.now()}.png`;
       const { url } = await uploadToR2({
         client: r2Client,
         config: r2Config,
