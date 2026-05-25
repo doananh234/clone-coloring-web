@@ -374,10 +374,17 @@ export function BookCreatePage({ existingBookId }: { existingBookId?: string }) 
             i === index ? { ...p, r2Url, status: "done" as const } : p,
           );
 
-          // Update Firebase with all done pages
+          // Update Firebase with all done pages (persist generation context)
           const coloringPages = updated
             .filter((p) => p.status === "done" && p.r2Url)
-            .map((p) => ({ id: p.id, url: p.r2Url!, isPublic: false }));
+            .map((p) => ({
+              id: p.id,
+              url: p.r2Url!,
+              isPublic: false,
+              prompt: p.prompt || "",
+              characterReferenceImageUrls: p.characterReferenceImageUrls || [],
+              locationReferenceImageUrls: p.locationReferenceImageUrls || [],
+            }));
 
           firestoreUpdate(firestore, "books", bookId, {
             coloringPages,

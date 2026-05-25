@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSpinner, faCheck } from "@fortawesome/pro-regular-svg-icons";
+import { faSpinner, faCheck, faBook } from "@fortawesome/pro-regular-svg-icons";
+import { notify } from "@vx/core-uikit/notifications";
 import { ArtStylePicker } from "@/components/art-style-picker";
 import type { CloneJob, ExtractedCharacter, ExtractedLocation } from "@/lib/ai/clone-types";
 
@@ -24,6 +25,7 @@ export function CloneConfirmStep({ job, onBack }: CloneConfirmStepProps) {
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(job.status === "confirmed");
   const [savedCounts, setSavedCounts] = useState({ characters: 0, locations: 0 });
+  const [savedBookId, setSavedBookId] = useState<string | null>(null);
 
   // Deduplicate characters across pages
   const uniqueCharacters = useMemo<UniqueCharacter[]>(() => {
@@ -95,6 +97,7 @@ export function CloneConfirmStep({ job, onBack }: CloneConfirmStepProps) {
           characters: data.savedCharacters?.length || 0,
           locations: data.savedLocations?.length || 0,
         });
+        setSavedBookId(data.bookId || null);
         setConfirmed(true);
       }
     } catch (err) {
@@ -104,6 +107,30 @@ export function CloneConfirmStep({ job, onBack }: CloneConfirmStepProps) {
     }
   };
 
+  const [creatingBook, setCreatingBook] = useState(false);
+
+  async function handleCreateBook() {
+    setCreatingBook(true);
+    try {
+      const res = await fetch(`/api/clone/${job.id}/create-book`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSavedBookId(data.bookId);
+        notify.success("Book created from clone job with full story context");
+      } else {
+        notify.error(data.error || "Failed to create book");
+      }
+    } catch {
+      notify.error("Failed to create book");
+    } finally {
+      setCreatingBook(false);
+    }
+  }
+
   if (confirmed) {
     return (
       <div className="flex flex-col items-center gap-6 py-12">
@@ -112,15 +139,37 @@ export function CloneConfirmStep({ job, onBack }: CloneConfirmStepProps) {
         </div>
         <h3 className="text-lg font-semibold">Clone Job Confirmed</h3>
         <div className="text-center text-sm text-muted-foreground">
+          {savedBookId && <p className="font-medium text-foreground">Book created successfully!</p>}
           {savedCounts.characters > 0 && (
             <p>{savedCounts.characters} character(s) saved to library</p>
           )}
           {savedCounts.locations > 0 && <p>{savedCounts.locations} location(s) saved to library</p>}
-          {savedCounts.characters === 0 && savedCounts.locations === 0 && (
-            <p>Clone job confirmed. No entities were selected to save.</p>
+          {!savedBookId && savedCounts.characters === 0 && savedCounts.locations === 0 && (
+            <p>Clone job confirmed. No book was created yet.</p>
           )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
+          {savedBookId && (
+            <a
+              href={`/books/${savedBookId}`}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            >
+              <FontAwesomeIcon icon={faBook} className="h-3.5 w-3.5" />
+              View Book
+            </a>
+          )}
+          <button
+            onClick={handleCreateBook}
+            disabled={creatingBook}
+            className="inline-flex items-center gap-2 rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
+          >
+            {creatingBook ? (
+              <FontAwesomeIcon icon={faSpinner} className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FontAwesomeIcon icon={faBook} className="h-3.5 w-3.5" />
+            )}
+            {creatingBook ? "Creating..." : savedBookId ? "Re-create Book" : "Create Book"}
+          </button>
           {savedCounts.characters > 0 && (
             <a
               href="/characters"
@@ -139,7 +188,7 @@ export function CloneConfirmStep({ job, onBack }: CloneConfirmStepProps) {
           )}
           <a
             href="/clone"
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-accent"
           >
             Clone Another
           </a>

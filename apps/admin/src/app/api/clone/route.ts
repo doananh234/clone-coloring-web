@@ -8,6 +8,37 @@ import type { CloneJob, CloneJobPage } from "@/lib/ai/clone-types";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
+export async function GET() {
+  try {
+    const snap = await adminDb
+      .collection("cloneJobs")
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get();
+
+    const jobs = snap.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        status: data.status,
+        totalPages: data.totalPages,
+        analyzedPages: data.analyzedPages,
+        bookId: data.bookId || null,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      };
+    });
+
+    return NextResponse.json({ success: true, data: jobs });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const contentType = req.headers.get("content-type") || "";

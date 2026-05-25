@@ -27,6 +27,7 @@ export {
 // Image Provider
 export {
   generateImage,
+  editImage,
   generateCharacterReference,
   generateLocationReference,
   generateBookCover,

@@ -47,6 +47,10 @@ export type CloneJobPage = {
   imageUrl: string;
   status: "pending" | "analyzing" | "analyzed" | "error";
   rawData?: ClonePageRawData;
+  /** URL of the redesigned version (image-to-image from original + prompt) */
+  redesignedUrl?: string;
+  /** Prompt used for redesign */
+  redesignPrompt?: string;
   error?: string;
 };
 
@@ -60,16 +64,37 @@ export type CloneJobBookData = {
   artStyleId?: string;
 };
 
+export type CloneEntityRef = {
+  id: string;
+  name: string;
+  referenceImageUrl: string;
+};
+
+export type CloneEntityMap = {
+  characters: CloneEntityRef[];
+  locations: CloneEntityRef[];
+};
+
 export type CloneJob = {
   id: string;
   name: string;
-  status: "uploading" | "extracted" | "analyzing" | "analyzed" | "confirmed" | "error";
+  status:
+    | "uploading"
+    | "extracted"
+    | "analyzing"
+    | "analyzed"
+    | "confirmed"
+    | "entities_ready"
+    | "reproduced"
+    | "error";
   sourceFileName: string;
   sourcePdfUrl: string;
   totalPages: number;
   analyzedPages: number;
   pages: CloneJobPage[];
   bookData?: CloneJobBookData;
+  entityMap?: CloneEntityMap;
+  bookId?: string;
   resultBookId?: string;
   error?: string;
   createdAt: string;

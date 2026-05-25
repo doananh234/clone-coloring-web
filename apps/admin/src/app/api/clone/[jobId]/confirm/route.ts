@@ -85,15 +85,78 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // Update clone job status to confirmed
+    // Create a book from the cloned pages (persist full generation context)
+    const bookId = crypto.randomUUID();
+    const coloringPages = job.pages
+      .filter((p) => p.imageUrl)
+      .map((p) => ({
+        id: crypto.randomUUID(),
+        url: p.imageUrl,
+        isPublic: false,
+        prompt: p.rawData?.reproductionPrompt || "",
+        sceneData: p.rawData
+          ? {
+              scene: p.rawData.scene,
+              environment: p.rawData.environment,
+              characters: (p.rawData.characters || []).map((c) => ({
+                name: c.name,
+                type: c.type,
+                role: c.role,
+                characterPrompt: c.characterPrompt,
+              })),
+              locations: (p.rawData.locations || []).map((l) => ({
+                name: l.name,
+                description: l.description,
+                locationPrompt: l.locationPrompt,
+              })),
+            }
+          : undefined,
+      }));
+
+    const storyOutline = job.pages
+      .filter((p) => p.rawData)
+      .map((p, i) => ({
+        pageNumber: i + 1,
+        scene: p.rawData!.scene?.description || "",
+        characters: (p.rawData!.characters || []).map((c) => c.name),
+        locations: (p.rawData!.locations || []).map((l) => l.name),
+        mood: p.rawData!.environment?.mood || "",
+      }));
+
+    await adminDb
+      .collection("books")
+      .doc(bookId)
+      .set({
+        title: body.bookData.title || job.name || "Untitled",
+        subtitle: body.bookData.subtitle || "",
+        description: body.bookData.description || "",
+        artStyleId: body.bookData.artStyleId || null,
+        status: "draft",
+        coloringPages,
+        summaryPages: [],
+        specifications: { pages: coloringPages.length },
+        storyOutline,
+        isPublic: false,
+        isPremium: false,
+        isConverted: false,
+        isRedesigned: false,
+        isEditionConverted: false,
+        cloneJobId: jobId,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+    // Update clone job status to confirmed with book reference
     await docRef.update({
       bookData: body.bookData,
+      bookId,
       status: "confirmed",
       updatedAt: now,
     });
 
     return NextResponse.json({
       success: true,
+      bookId,
       savedCharacters: savedCharacterIds,
       savedLocations: savedLocationIds,
     });

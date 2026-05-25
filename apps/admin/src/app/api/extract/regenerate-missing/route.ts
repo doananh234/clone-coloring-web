@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
             characterInfo: character.visualDna?.distinguishingFeatures?.join(", ") || "",
           });
           const buffer = Buffer.from(img.base64, "base64");
-          const key = `assets/characters/${doc.id}/reference-${Date.now()}.png`;
+          const key = `assets/characters/${doc.id}/reference.png`;
           const { url } = await uploadToR2({
             client: r2Client,
             config: r2Config,
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
             locationName: location.name,
           });
           const buffer = Buffer.from(img.base64, "base64");
-          const key = `assets/locations/${doc.id}/reference-${Date.now()}.png`;
+          const key = `assets/locations/${doc.id}/reference.png`;
           const { url } = await uploadToR2({
             client: r2Client,
             config: r2Config,

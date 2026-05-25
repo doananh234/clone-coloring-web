@@ -50,12 +50,11 @@ export async function POST(req: NextRequest) {
     const base64 = img.dataUrl.split(",")[1];
     const buffer = Buffer.from(base64, "base64");
 
-    const ts = Date.now();
     let key: string;
     if (bookId && pageId) {
-      key = `assets/${bookId}/pages/${pageId}-colored-${ts}.png`;
+      key = `assets/${bookId}/pages/${pageId}-colored.png`;
     } else {
-      key = `assets/coloring-styles/${coloringStyleId}/test-${ts}.png`;
+      key = `assets/coloring-styles/${coloringStyleId}/test-${Date.now()}.png`;
     }
 
     const { url: coloredUrl } = await uploadToR2({
@@ -105,10 +104,12 @@ export async function POST(req: NextRequest) {
         }
 
         // Find existing entry by `id` and set coloredUrl
+        // Append cache-bust param so Firestore value changes even when R2 key is the same
+        const coloredUrlWithBust = `${coloredUrl}?v=${Date.now()}`;
         const existingIdx = coloringPages.findIndex((p: PageEntry) => p.id === pageId);
 
         if (existingIdx >= 0) {
-          coloringPages[existingIdx].coloredUrl = coloredUrl;
+          coloringPages[existingIdx].coloredUrl = coloredUrlWithBust;
           coloringPages[existingIdx].coloringStyleId = coloringStyleId;
         } else {
           console.warn(`[colorize] Page ${pageId} not found in book ${bookId} coloringPages`);

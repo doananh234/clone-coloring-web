@@ -21,6 +21,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     const resolvedPages = job.pages.map((p) => ({
       ...p,
       imageUrl: resolveR2Url(p.imageUrl),
+      redesignedUrl: p.redesignedUrl ? resolveR2Url(p.redesignedUrl) : undefined,
     }));
 
     return NextResponse.json({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSpinner,
@@ -9,6 +10,8 @@ import {
   faChevronLeft,
   faChevronRight,
   faFloppyDisk,
+  faDroplet,
+  faPaintbrushPencil,
 } from "@fortawesome/pro-regular-svg-icons";
 import type { CloneJob, CloneJobPage } from "@/lib/ai/clone-types";
 
@@ -20,6 +23,7 @@ interface CloneAnalyzeStepProps {
 }
 
 export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnalyzeStepProps) {
+  const router = useRouter();
   const [analyzing, setAnalyzing] = useState(false);
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   const [editingRawData, setEditingRawData] = useState<string>("");
@@ -123,16 +127,19 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
         <p className="text-sm text-muted-foreground">
           Analyzed {analyzedCount} of {job.totalPages} pages
         </p>
-        {!allAnalyzed && (
-          <button
-            onClick={startAnalysis}
-            disabled={analyzing}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          >
-            {analyzing && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
-            {analyzing ? `Analyzing page ${job.analyzedPages + 1}...` : "Start Analysis"}
-          </button>
-        )}
+        <div className="flex gap-2">
+          {allAnalyzed && <AnalyzeCreateStyleMenu pages={job.pages} router={router} />}
+          {!allAnalyzed && (
+            <button
+              onClick={startAnalysis}
+              disabled={analyzing}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {analyzing && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
+              {analyzing ? `Analyzing page ${job.analyzedPages + 1}...` : "Start Analysis"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -258,9 +265,118 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
           disabled={!allAnalyzed}
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
-          Continue to Confirm
+          Next →
         </button>
       </div>
+    </div>
+  );
+}
+
+// --- Create Style from Page Image ---
+
+const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
+
+function resolveStyleUrl(url: string | undefined | null): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
+    return url;
+  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
+  return url;
+}
+
+function AnalyzeCreateStyleMenu({
+  pages,
+  router,
+}: {
+  pages: CloneJobPage[];
+  router: ReturnType<typeof useRouter>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selectingFor, setSelectingFor] = useState<"coloring" | "art" | null>(null);
+
+  const pageImages = pages
+    .filter((p) => p.imageUrl)
+    .map((p, i) => ({ index: i, url: p.imageUrl, pageNumber: p.pageNumber }));
+
+  function handleSelectPage(imageUrl: string, type: "coloring" | "art") {
+    const resolvedUrl = resolveStyleUrl(imageUrl);
+    if (type === "coloring") {
+      router.push(`/coloring-styles/new?referenceImage=${encodeURIComponent(resolvedUrl)}`);
+    } else {
+      router.push(`/art-styles/new?referenceImage=${encodeURIComponent(resolvedUrl)}`);
+    }
+    setOpen(false);
+    setSelectingFor(null);
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-accent"
+      >
+        <FontAwesomeIcon icon={faPaintbrushPencil} className="h-3 w-3" />
+        Create Style
+      </button>
+
+      {open && !selectingFor && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-lg border bg-popover p-1 shadow-lg">
+            <button
+              type="button"
+              onClick={() => setSelectingFor("coloring")}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+            >
+              <FontAwesomeIcon icon={faDroplet} className="h-3 w-3 text-purple-500" />
+              Coloring Style
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectingFor("art")}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+            >
+              <FontAwesomeIcon icon={faPaintbrushPencil} className="h-3 w-3 text-amber-500" />
+              Art Style
+            </button>
+          </div>
+        </>
+      )}
+
+      {open && selectingFor && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setSelectingFor(null); }} />
+          <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-lg border bg-popover p-3 shadow-lg">
+            <p className="mb-2 text-xs font-medium">
+              Select a page for {selectingFor === "coloring" ? "Coloring" : "Art"} Style
+            </p>
+            <div className="grid max-h-[200px] grid-cols-4 gap-1.5 overflow-y-auto">
+              {pageImages.map((p) => (
+                <button
+                  key={p.index}
+                  type="button"
+                  onClick={() => handleSelectPage(p.url, selectingFor)}
+                  className="overflow-hidden rounded border hover:ring-2 hover:ring-primary"
+                >
+                  <img
+                    src={resolveStyleUrl(p.url)}
+                    alt={`Page ${p.pageNumber}`}
+                    className="aspect-[3/4] w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectingFor(null)}
+              className="mt-2 text-[11px] text-muted-foreground hover:underline"
+            >
+              ← Back
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

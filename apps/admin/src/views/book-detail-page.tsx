@@ -114,6 +114,8 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
   const [redesignPageId, setRedesignPageId] = useState("");
   const [redesignPageUrl, setRedesignPageUrl] = useState("");
   const [redesignPrompt, setRedesignPrompt] = useState("");
+  const [redesignCharRefs, setRedesignCharRefs] = useState<string[]>([]);
+  const [redesignLocRefs, setRedesignLocRefs] = useState<string[]>([]);
   const [redesigning, setRedesigning] = useState(false);
 
   function openLightbox(images: ImageItem[], index: number) {
@@ -132,7 +134,9 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
   function handleRedesignOpen(image: ImageItem) {
     setRedesignPageId(image.id);
     setRedesignPageUrl(resolveUrl(image.url));
-    setRedesignPrompt("");
+    setRedesignPrompt(image.prompt || "");
+    setRedesignCharRefs(image.characterReferenceImageUrls || []);
+    setRedesignLocRefs(image.locationReferenceImageUrls || []);
     setLightboxOpen(false);
     setRedesignOpen(true);
   }
@@ -144,7 +148,11 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
       const res = await fetch("/api/generate/coloring-page", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: redesignPrompt }),
+        body: JSON.stringify({
+          prompt: redesignPrompt,
+          characterReferenceImageUrls: redesignCharRefs.length > 0 ? redesignCharRefs : undefined,
+          locationReferenceImageUrls: redesignLocRefs.length > 0 ? redesignLocRefs : undefined,
+        }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -152,14 +160,13 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
         return;
       }
 
-      // Upload to R2 (unique key to avoid URL caching)
-      const ts = Date.now();
+      // Upload to R2
       const uploadRes = await fetch("/api/generate/upload-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           base64: data.base64,
-          key: `assets/${bookId}/pages/${redesignPageId}-${ts}.png`,
+          key: `assets/${bookId}/pages/${redesignPageId}.png`,
         }),
       });
       const uploadData = await uploadRes.json();
@@ -168,9 +175,12 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
         return;
       }
 
-      // Update the page URL in Firestore
-      const updatePages = (pages: { id: string; url: string; isPublic?: boolean }[]) =>
-        pages.map((p) => (p.id === redesignPageId ? { ...p, url: uploadData.url } : p));
+      // Update the page URL + prompt in Firestore (cache-bust so value always changes)
+      const newUrl = `${uploadData.url}?v=${Date.now()}`;
+      const updatePages = (pages: { id: string; url: string; isPublic?: boolean; prompt?: string }[]) =>
+        pages.map((p) =>
+          p.id === redesignPageId ? { ...p, url: newUrl, prompt: redesignPrompt } : p,
+        );
 
       await firestoreUpdate(firestore, "books", bookId, {
         coloringPages: updatePages(book?.coloringPages ?? []),
@@ -306,6 +316,9 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
       isPublic?: boolean;
       coloredUrl?: string;
       coloringStyleId?: string;
+      prompt?: string;
+      characterReferenceImageUrls?: string[];
+      locationReferenceImageUrls?: string[];
     };
     const realPages = (rawPages as RawPage[]).filter((p) => p.id && p.url);
     const orphans = (rawPages as RawPage[]).filter((p) => !p.url && p.pageId && p.coloredUrl);
@@ -326,6 +339,9 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
         isPublic: p.isPublic,
         coloredUrl: p.coloredUrl || orphan?.coloredUrl,
         coloringStyleId: p.coloringStyleId || orphan?.coloringStyleId,
+        prompt: p.prompt,
+        characterReferenceImageUrls: p.characterReferenceImageUrls,
+        locationReferenceImageUrls: p.locationReferenceImageUrls,
       };
     });
   })();
@@ -929,14 +945,33 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
               />
             </div>
           )}
+          {(redesignCharRefs.length > 0 || redesignLocRefs.length > 0) && (
+            <div className="mb-3 rounded-md bg-muted/50 p-2.5 text-[11px] text-muted-foreground space-y-1">
+              {redesignCharRefs.length > 0 && (
+                <p>
+                  <span className="font-medium">Character refs:</span> {redesignCharRefs.length} image(s) will be used
+                </p>
+              )}
+              {redesignLocRefs.length > 0 && (
+                <p>
+                  <span className="font-medium">Location refs:</span> {redesignLocRefs.length} image(s) will be used
+                </p>
+              )}
+            </div>
+          )}
           <div className="mb-3">
             <label className="text-sm font-medium mb-1.5 block">
-              Describe what to change or generate
+              Generation prompt (edit to change the page content)
             </label>
+            {!redesignPrompt && (
+              <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                No saved prompt for this page. Write a detailed description of what you want — include characters, scene, mood, and composition for best results.
+              </div>
+            )}
             <textarea
               className="w-full rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              rows={4}
-              placeholder='e.g. "Add more flowers in the background" or a completely new prompt...'
+              rows={6}
+              placeholder="Describe the scene: characters, location, activity, mood, composition..."
               value={redesignPrompt}
               onChange={(e) => setRedesignPrompt(e.target.value)}
               disabled={redesigning}

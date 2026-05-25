@@ -26,6 +26,12 @@ export type BookEntity = {
     isPublic?: boolean;
     coloredUrl?: string;
     coloringStyleId?: string;
+    /** Generation prompt used to create this page */
+    prompt?: string;
+    /** Character reference image URLs used during generation */
+    characterReferenceImageUrls?: string[];
+    /** Location reference image URLs used during generation */
+    locationReferenceImageUrls?: string[];
   }[];
   specifications: { pages: number; dimensions?: string; ageRange?: string };
   isConverted?: boolean;
