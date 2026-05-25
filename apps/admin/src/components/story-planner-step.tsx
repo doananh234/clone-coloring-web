@@ -213,6 +213,19 @@ export function StoryPlannerStep({ title, description, onBack, onNext }: StoryPl
         items={allCharacters.filter((c) => c.referenceImageUrl)}
         selectedIds={selectedCharacters.map((c) => c.id)}
         onToggle={toggleCharacter}
+        onSelectAll={() =>
+          setSelectedCharacters(
+            allCharacters
+              .filter((c) => c.referenceImageUrl)
+              .map((c) => ({
+                id: c.id,
+                name: c.name,
+                characterPrompt: c.characterPrompt,
+                referenceImageUrl: c.referenceImageUrl,
+              })),
+          )
+        }
+        onDeselectAll={() => setSelectedCharacters([])}
         emptyMessage="No characters with reference images — AI will invent them"
         getImageUrl={(c) => resolveUrl(c.referenceImageUrl)}
         getName={(c) => c.name}
@@ -225,6 +238,19 @@ export function StoryPlannerStep({ title, description, onBack, onNext }: StoryPl
         items={allLocations.filter((l) => l.referenceImageUrl)}
         selectedIds={selectedLocations.map((l) => l.id)}
         onToggle={toggleLocation}
+        onSelectAll={() =>
+          setSelectedLocations(
+            allLocations
+              .filter((l) => l.referenceImageUrl)
+              .map((l) => ({
+                id: l.id,
+                name: l.name,
+                locationPrompt: l.locationPrompt,
+                referenceImageUrl: l.referenceImageUrl,
+              })),
+          )
+        }
+        onDeselectAll={() => setSelectedLocations([])}
         emptyMessage="No locations with reference images — AI will invent them"
         getImageUrl={(l) => resolveUrl(l.referenceImageUrl)}
         getName={(l) => l.name}
@@ -303,6 +329,8 @@ interface PickerSectionProps<T> {
   items: T[];
   selectedIds: string[];
   onToggle: (item: T) => void;
+  onSelectAll?: () => void;
+  onDeselectAll?: () => void;
   emptyMessage: string;
   getImageUrl: (item: T) => string;
   getName: (item: T) => string;
@@ -314,10 +342,14 @@ function PickerSection<T extends { id: string }>({
   items,
   selectedIds,
   onToggle,
+  onSelectAll,
+  onDeselectAll,
   emptyMessage,
   getImageUrl,
   getName,
 }: PickerSectionProps<T>) {
+  const allSelected = items.length > 0 && selectedIds.length === items.length;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-1.5">
@@ -328,40 +360,53 @@ function PickerSection<T extends { id: string }>({
             {selectedIds.length}
           </span>
         )}
+        {items.length > 0 && (
+          <button
+            type="button"
+            onClick={allSelected ? onDeselectAll : onSelectAll}
+            className="ml-auto text-[11px] font-medium text-primary hover:underline"
+          >
+            {allSelected ? "Deselect All" : "Select All"}
+          </button>
+        )}
       </div>
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground italic">{emptyMessage}</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {items.map((item) => {
-            const selected = selectedIds.includes(item.id);
-            const imgUrl = getImageUrl(item);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onToggle(item)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs transition-all",
-                  selected
-                    ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                    : "border-border hover:border-primary/30 hover:bg-muted/50",
-                )}
-              >
-                {imgUrl ? (
-                  <img src={imgUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
-                ) : (
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[8px] font-bold text-muted-foreground">
-                    {getName(item).charAt(0)}
-                  </div>
-                )}
-                <span className={cn("font-medium", selected && "text-primary")}>
-                  {getName(item)}
-                </span>
-                {selected && <FontAwesomeIcon icon={faXmark} className="h-3 w-3 text-primary/60" />}
-              </button>
-            );
-          })}
+        <div className="max-h-[180px] overflow-y-auto rounded-lg border p-2">
+          <div className="flex flex-wrap gap-2">
+            {items.map((item) => {
+              const selected = selectedIds.includes(item.id);
+              const imgUrl = getImageUrl(item);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onToggle(item)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs transition-all",
+                    selected
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                      : "border-border hover:border-primary/30 hover:bg-muted/50",
+                  )}
+                >
+                  {imgUrl ? (
+                    <img src={imgUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[8px] font-bold text-muted-foreground">
+                      {getName(item).charAt(0)}
+                    </div>
+                  )}
+                  <span className={cn("font-medium", selected && "text-primary")}>
+                    {getName(item)}
+                  </span>
+                  {selected && (
+                    <FontAwesomeIcon icon={faXmark} className="h-3 w-3 text-primary/60" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

@@ -12,6 +12,8 @@ import {
   faTrash,
   faUser,
   faUpload,
+  faRotate,
+  faImageSlash,
 } from "@fortawesome/pro-regular-svg-icons";
 import { appNavigate } from "@/lib/navigate";
 import { ExtractionReviewModal } from "@/components/extraction-review-modal";
@@ -35,10 +37,11 @@ interface CharacterEntity {
 
 // --- Filter types ---
 
-type FilterKey = "all" | "animal" | "character" | "person" | "object";
+type FilterKey = "all" | "animal" | "character" | "person" | "object" | "missing_image";
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
+  { key: "missing_image", label: "Missing Image" },
   { key: "animal", label: "Animal" },
   { key: "character", label: "Character" },
   { key: "person", label: "Person" },
@@ -47,6 +50,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 function applyFilter(items: CharacterEntity[], filter: FilterKey): CharacterEntity[] {
   if (filter === "all") return items;
+  if (filter === "missing_image") return items.filter((c) => !c.referenceImageUrl);
   return items.filter((c) => c.type === filter);
 }
 
@@ -85,6 +89,7 @@ export function CharacterListPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [extractionOpen, setExtractionOpen] = useState(false);
   const [extractionImageUrl, setExtractionImageUrl] = useState("");
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   function handleUploadForExtraction(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -118,6 +123,36 @@ export function CharacterListPage() {
     return items;
   }, [allCharacters, filter, search]);
 
+  const missingCount = useMemo(
+    () => allCharacters.filter((c) => !c.referenceImageUrl).length,
+    [allCharacters],
+  );
+
+  async function handleRegenerateMissing() {
+    setIsRegenerating(true);
+    try {
+      const res = await fetch("/api/extract/regenerate-missing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entityType: "characters" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        notify.success(`Regenerated ${data.succeeded} of ${data.total} characters`);
+        if (data.failed > 0) {
+          notify.error(`${data.failed} failed to regenerate`);
+        }
+        queryClient.invalidateQueries({ queryKey: ["characters"] });
+      } else {
+        notify.error(data.error || "Failed to regenerate");
+      }
+    } catch {
+      notify.error("Failed to regenerate missing images");
+    } finally {
+      setIsRegenerating(false);
+    }
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -148,7 +183,22 @@ export function CharacterListPage() {
             {filtered.length} of {allCharacters.length} characters
           </p>
         </div>
-        <div>
+        <div className="flex gap-2">
+          {missingCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleRegenerateMissing}
+              disabled={isRegenerating}
+            >
+              <FontAwesomeIcon
+                icon={faRotate}
+                className={`mr-2 h-4 w-4 ${isRegenerating ? "animate-spin" : ""}`}
+              />
+              {isRegenerating
+                ? "Regenerating..."
+                : `Regenerate Missing (${missingCount})`}
+            </Button>
+          )}
           <input
             type="file"
             accept="image/*"
