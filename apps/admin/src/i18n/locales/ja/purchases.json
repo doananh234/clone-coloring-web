@@ -1,0 +1,21 @@
+{
+  "title": "購入履歴",
+  "fields": {
+    "purchaseId": "購入ID",
+    "bookId": "書籍",
+    "platform": "プラットフォーム",
+    "productId": "商品ID",
+    "status": "ステータス",
+    "transactionId": "取引ID",
+    "createdAt": "日付"
+  },
+  "statuses": {
+    "all": "すべて",
+    "verified": "確認済み",
+    "pending": "保留中",
+    "failed": "失敗",
+    "refunded": "返金済み"
+  },
+  "noPurchases": "このユーザーの購入履歴はありません。",
+  "backToUser": "ユーザーに戻る"
+}

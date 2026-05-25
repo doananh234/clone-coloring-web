@@ -1,0 +1,21 @@
+{
+  "title": "Purchase History",
+  "fields": {
+    "purchaseId": "Purchase ID",
+    "bookId": "Book",
+    "platform": "Platform",
+    "productId": "Product ID",
+    "status": "Status",
+    "transactionId": "Transaction ID",
+    "createdAt": "Date"
+  },
+  "statuses": {
+    "all": "All",
+    "verified": "Verified",
+    "pending": "Pending",
+    "failed": "Failed",
+    "refunded": "Refunded"
+  },
+  "noPurchases": "No purchases found for this user.",
+  "backToUser": "Back to user"
+}

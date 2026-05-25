@@ -1,0 +1,15 @@
+{
+  "title": "User Management",
+  "fields": {
+    "name": "Name",
+    "email": "Email",
+    "role": "Role"
+  },
+  "options": {
+    "role": {
+      "admin": "Admin",
+      "user": "User",
+      "editor": "Editor"
+    }
+  }
+}

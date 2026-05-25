@@ -1,0 +1,37 @@
+{
+  "title": "Quản lý Sách",
+  "fields": {
+    "title": "Tiêu đề",
+    "subtitle": "Phụ đề",
+    "description": "Mô tả",
+    "price": "Giá",
+    "originalPrice": "Giá gốc",
+    "discount": "Giảm giá",
+    "categoryId": "ID Danh mục",
+    "category": "Danh mục",
+    "badge": "Nhãn",
+    "backgroundColor": "Màu nền",
+    "coverUrl": "Ảnh bìa",
+    "thumbnailUrl": "Ảnh thu nhỏ",
+    "squareThumbnailUrl": "Ảnh thu nhỏ vuông",
+    "tryoutPage": "Trang dùng thử",
+    "pdfUrl": "URL PDF",
+    "coloringPages": "Trang tô màu",
+    "summaryPages": "Trang tóm tắt",
+    "specifications": "Thông số",
+    "isConverted": "Đã chuyển đổi",
+    "isRedesigned": "Đã thiết kế lại",
+    "isEditionConverted": "Đã chuyển đổi phiên bản",
+    "isPublic": "Công khai",
+    "isPremium": "Cao cấp",
+    "createdAt": "Ngày tạo",
+    "updatedAt": "Ngày cập nhật"
+  },
+  "options": {
+    "badge": {
+      "NEW": "Mới",
+      "HOT": "Nổi bật",
+      "SALE": "Giảm giá"
+    }
+  }
+}

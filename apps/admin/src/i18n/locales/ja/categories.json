@@ -1,0 +1,15 @@
+{
+  "title": "カテゴリ管理",
+  "fields": {
+    "name": "内部名",
+    "displayName": "表示名",
+    "description": "説明",
+    "iconUrl": "アイコン",
+    "iconPrompt": "アイコンプロンプト",
+    "isPublic": "公開",
+    "index": "並び順",
+    "books": "書籍",
+    "createdAt": "作成日",
+    "updatedAt": "更新日"
+  }
+}

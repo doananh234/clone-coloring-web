@@ -1,0 +1,19 @@
+node_modules
+dist
+.turbo
+*.log
+.env.local
+.DS_Store
+service-account*.json
+.superpowers
+routeTree.gen.ts
+
+# Next.js
+apps/admin/.next/
+
+# Screenshots
+*.png
+detail-scroll
+011-detail
+012-detail-scroll
+026-detail-scrolled

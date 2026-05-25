@@ -1,0 +1,10 @@
+{
+  "title": "Credit Ledger",
+  "fields": {
+    "userId": "User",
+    "amount": "Amount",
+    "type": "Type",
+    "description": "Description",
+    "createdAt": "Date"
+  }
+}

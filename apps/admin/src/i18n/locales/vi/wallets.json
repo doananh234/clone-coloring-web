@@ -1,0 +1,9 @@
+{
+  "title": "Quản lý Ví",
+  "fields": {
+    "id": "ID Người dùng",
+    "balance": "Số dư",
+    "currency": "Tiền tệ",
+    "updatedAt": "Cập nhật"
+  }
+}

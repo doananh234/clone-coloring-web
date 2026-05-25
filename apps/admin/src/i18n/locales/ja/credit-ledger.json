@@ -1,0 +1,10 @@
+{
+  "title": "\u30af\u30ec\u30b8\u30c3\u30c8\u53f0\u5e33",
+  "fields": {
+    "userId": "\u30e6\u30fc\u30b6\u30fc",
+    "amount": "\u91d1\u984d",
+    "type": "\u7a2e\u985e",
+    "description": "\u8aac\u660e",
+    "createdAt": "\u65e5\u4ed8"
+  }
+}

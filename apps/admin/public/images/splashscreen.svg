@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#18181b"/>
+  <text x="400" y="290" text-anchor="middle" font-family="system-ui, sans-serif" font-size="32" font-weight="bold" fill="#a1a1aa">VX Admin</text>
+  <text x="400" y="330" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" fill="#71717a">Replace with your image</text>
+</svg>

@@ -1,0 +1,37 @@
+{
+  "title": "Book Management",
+  "fields": {
+    "title": "Title",
+    "subtitle": "Subtitle",
+    "description": "Description",
+    "price": "Price",
+    "originalPrice": "Original Price",
+    "discount": "Discount",
+    "categoryId": "Category ID",
+    "category": "Category",
+    "badge": "Badge",
+    "backgroundColor": "Background Color",
+    "coverUrl": "Cover Image",
+    "thumbnailUrl": "Thumbnail",
+    "squareThumbnailUrl": "Square Thumbnail",
+    "tryoutPage": "Tryout Page",
+    "pdfUrl": "PDF URL",
+    "coloringPages": "Coloring Pages",
+    "summaryPages": "Summary Pages",
+    "specifications": "Specifications",
+    "isConverted": "Converted",
+    "isRedesigned": "Redesigned",
+    "isEditionConverted": "Edition Converted",
+    "isPublic": "Public",
+    "isPremium": "Premium",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At"
+  },
+  "options": {
+    "badge": {
+      "NEW": "New",
+      "HOT": "Hot",
+      "SALE": "Sale"
+    }
+  }
+}

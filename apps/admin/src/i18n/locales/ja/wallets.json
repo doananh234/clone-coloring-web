@@ -1,0 +1,9 @@
+{
+  "title": "ウォレット管理",
+  "fields": {
+    "id": "ユーザーID",
+    "balance": "残高",
+    "currency": "通貨",
+    "updatedAt": "更新日"
+  }
+}

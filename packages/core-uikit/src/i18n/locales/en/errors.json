@@ -1,0 +1,12 @@
+{
+  "networkError": "Network error. Please check your connection.",
+  "notFound": "The requested resource was not found.",
+  "unauthorized": "You are not authorized. Please log in again.",
+  "forbidden": "You do not have permission to access this resource.",
+  "serverError": "An internal server error occurred. Please try again later.",
+  "unknownError": "An unknown error occurred.",
+  "timeout": "The request timed out. Please try again.",
+  "badRequest": "Invalid request. Please check your input.",
+  "conflict": "A conflict occurred. The resource may have been modified.",
+  "tooManyRequests": "Too many requests. Please wait and try again."
+}

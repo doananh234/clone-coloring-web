@@ -1,0 +1,37 @@
+{
+  "title": "書籍管理",
+  "fields": {
+    "title": "タイトル",
+    "subtitle": "サブタイトル",
+    "description": "説明",
+    "price": "価格",
+    "originalPrice": "元の価格",
+    "discount": "割引",
+    "categoryId": "カテゴリID",
+    "category": "カテゴリ",
+    "badge": "バッジ",
+    "backgroundColor": "背景色",
+    "coverUrl": "カバー画像",
+    "thumbnailUrl": "サムネイル",
+    "squareThumbnailUrl": "正方形サムネイル",
+    "tryoutPage": "お試しページ",
+    "pdfUrl": "PDF URL",
+    "coloringPages": "ぬりえページ",
+    "summaryPages": "概要ページ",
+    "specifications": "仕様",
+    "isConverted": "変換済み",
+    "isRedesigned": "リデザイン済み",
+    "isEditionConverted": "エディション変換済み",
+    "isPublic": "公開",
+    "isPremium": "プレミアム",
+    "createdAt": "作成日",
+    "updatedAt": "更新日"
+  },
+  "options": {
+    "badge": {
+      "NEW": "新着",
+      "HOT": "人気",
+      "SALE": "セール"
+    }
+  }
+}

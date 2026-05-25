@@ -1,0 +1,15 @@
+{
+  "title": "Category Management",
+  "fields": {
+    "name": "Internal Name",
+    "displayName": "Display Name",
+    "description": "Description",
+    "iconUrl": "Icon",
+    "iconPrompt": "Icon Prompt",
+    "isPublic": "Public",
+    "index": "Sort Order",
+    "books": "Books",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At"
+  }
+}

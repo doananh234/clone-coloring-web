@@ -1,0 +1,9 @@
+{
+  "title": "Wallet Management",
+  "fields": {
+    "id": "User ID",
+    "balance": "Balance",
+    "currency": "Currency",
+    "updatedAt": "Updated"
+  }
+}

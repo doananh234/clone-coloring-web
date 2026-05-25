@@ -1,0 +1,15 @@
+{
+  "title": "Quản lý Danh mục",
+  "fields": {
+    "name": "Tên nội bộ",
+    "displayName": "Tên hiển thị",
+    "description": "Mô tả",
+    "iconUrl": "Biểu tượng",
+    "iconPrompt": "Prompt biểu tượng",
+    "isPublic": "Công khai",
+    "index": "Thứ tự",
+    "books": "Sách",
+    "createdAt": "Ngày tạo",
+    "updatedAt": "Ngày cập nhật"
+  }
+}

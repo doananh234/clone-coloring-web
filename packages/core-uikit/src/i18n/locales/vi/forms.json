@@ -1,0 +1,15 @@
+{
+  "required": "Trường này là bắt buộc",
+  "invalidEmail": "Vui lòng nhập địa chỉ email hợp lệ",
+  "minLength": "Phải có ít nhất {{min}} ký tự",
+  "maxLength": "Tối đa {{max}} ký tự",
+  "minValue": "Giá trị tối thiểu là {{min}}",
+  "maxValue": "Giá trị tối đa là {{max}}",
+  "passwordMismatch": "Mật khẩu không khớp",
+  "invalidFormat": "Định dạng không hợp lệ",
+  "invalidUrl": "Vui lòng nhập URL hợp lệ",
+  "invalidPhone": "Vui lòng nhập số điện thoại hợp lệ",
+  "mustBeNumber": "Phải là số",
+  "mustBePositive": "Phải là số dương",
+  "selectOption": "Vui lòng chọn một tùy chọn"
+}

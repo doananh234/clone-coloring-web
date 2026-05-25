@@ -1,0 +1,15 @@
+{
+  "required": "この項目は必須です",
+  "invalidEmail": "有効なメールアドレスを入力してください",
+  "minLength": "{{min}}文字以上で入力してください",
+  "maxLength": "{{max}}文字以内で入力してください",
+  "minValue": "{{min}}以上の値を入力してください",
+  "maxValue": "{{max}}以下の値を入力してください",
+  "passwordMismatch": "パスワードが一致しません",
+  "invalidFormat": "無効な形式です",
+  "invalidUrl": "有効なURLを入力してください",
+  "invalidPhone": "有効な電話番号を入力してください",
+  "mustBeNumber": "数値を入力してください",
+  "mustBePositive": "正の数を入力してください",
+  "selectOption": "オプションを選択してください"
+}

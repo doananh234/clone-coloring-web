@@ -1,0 +1,15 @@
+{
+  "title": "Quản lý người dùng",
+  "fields": {
+    "name": "Tên",
+    "email": "Email",
+    "role": "Vai trò"
+  },
+  "options": {
+    "role": {
+      "admin": "Quản trị viên",
+      "user": "Người dùng",
+      "editor": "Biên tập viên"
+    }
+  }
+}

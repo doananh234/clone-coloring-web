@@ -1,0 +1,29 @@
+{
+  "name": "@vx/auth-module",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./components": "./src/components/index.ts",
+    "./hooks": "./src/hooks/index.ts",
+    "./config": "./src/config.ts",
+    "./types": "./src/types.ts",
+    "./i18n": "./src/i18n/index.ts"
+  },
+  "dependencies": {
+    "@vx/core-uikit": "workspace:*",
+    "i18next": "*",
+    "react-i18next": "*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vx/tsconfig": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.8.0"
+  }
+}

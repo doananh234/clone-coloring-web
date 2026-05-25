@@ -1,0 +1,15 @@
+{
+  "required": "This field is required",
+  "invalidEmail": "Please enter a valid email address",
+  "minLength": "Must be at least {{min}} characters",
+  "maxLength": "Must be at most {{max}} characters",
+  "minValue": "Must be at least {{min}}",
+  "maxValue": "Must be at most {{max}}",
+  "passwordMismatch": "Passwords do not match",
+  "invalidFormat": "Invalid format",
+  "invalidUrl": "Please enter a valid URL",
+  "invalidPhone": "Please enter a valid phone number",
+  "mustBeNumber": "Must be a number",
+  "mustBePositive": "Must be a positive number",
+  "selectOption": "Please select an option"
+}

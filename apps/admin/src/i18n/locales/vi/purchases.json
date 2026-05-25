@@ -1,0 +1,21 @@
+{
+  "title": "Lịch sử mua hàng",
+  "fields": {
+    "purchaseId": "Mã giao dịch",
+    "bookId": "Sách",
+    "platform": "Nền tảng",
+    "productId": "Mã sản phẩm",
+    "status": "Trạng thái",
+    "transactionId": "Mã giao dịch cửa hàng",
+    "createdAt": "Ngày"
+  },
+  "statuses": {
+    "all": "Tất cả",
+    "verified": "Đã xác minh",
+    "pending": "Đang chờ",
+    "failed": "Thất bại",
+    "refunded": "Đã hoàn tiền"
+  },
+  "noPurchases": "Không tìm thấy giao dịch nào cho người dùng này.",
+  "backToUser": "Quay lại người dùng"
+}

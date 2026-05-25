@@ -1,0 +1,12 @@
+{
+  "networkError": "Lỗi mạng. Vui lòng kiểm tra kết nối.",
+  "notFound": "Không tìm thấy tài nguyên yêu cầu.",
+  "unauthorized": "Bạn chưa được xác thực. Vui lòng đăng nhập lại.",
+  "forbidden": "Bạn không có quyền truy cập tài nguyên này.",
+  "serverError": "Lỗi máy chủ nội bộ. Vui lòng thử lại sau.",
+  "unknownError": "Đã xảy ra lỗi không xác định.",
+  "timeout": "Yêu cầu đã hết thời gian. Vui lòng thử lại.",
+  "badRequest": "Yêu cầu không hợp lệ. Vui lòng kiểm tra dữ liệu nhập.",
+  "conflict": "Xảy ra xung đột. Tài nguyên có thể đã được thay đổi.",
+  "tooManyRequests": "Quá nhiều yêu cầu. Vui lòng đợi và thử lại."
+}
