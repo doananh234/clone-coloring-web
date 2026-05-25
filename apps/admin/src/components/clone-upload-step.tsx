@@ -13,6 +13,7 @@ export function CloneUploadStep({ onUploaded }: CloneUploadStepProps) {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,20 +49,43 @@ export function CloneUploadStep({ onUploaded }: CloneUploadStepProps) {
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      if (name) formData.append("name", name);
+      // Step 1: Get presigned URL
+      setProgress("Preparing upload...");
+      const presignRes = await fetch("/api/clone/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name }),
+      });
+      const presignData = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
 
-      const res = await fetch("/api/clone", { method: "POST", body: formData });
-      const data = await res.json();
+      const { uploadUrl, jobId, key } = presignData;
 
-      if (!res.ok) throw new Error(data.error || "Upload failed");
+      // Step 2: Upload directly to R2 via presigned URL
+      setProgress("Uploading PDF...");
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/pdf" },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error("Failed to upload file to storage");
 
-      onUploaded(data.job);
+      // Step 3: Tell the server to process it
+      setProgress("Extracting pages...");
+      const processRes = await fetch("/api/clone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId, key, name: name || file.name, fileName: file.name }),
+      });
+      const processData = await processRes.json();
+      if (!processRes.ok) throw new Error(processData.error || "Processing failed");
+
+      onUploaded(processData.job);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
+      setProgress("");
     }
   };
 
@@ -108,7 +132,7 @@ export function CloneUploadStep({ onUploaded }: CloneUploadStepProps) {
               className="mb-3 h-10 w-10 text-muted-foreground"
             />
             <p className="text-sm font-medium">Drop a PDF here or click to browse</p>
-            <p className="text-xs text-muted-foreground">Max 50MB</p>
+            <p className="text-xs text-muted-foreground">Supports large files (100MB+)</p>
           </>
         )}
       </div>
@@ -135,7 +159,7 @@ export function CloneUploadStep({ onUploaded }: CloneUploadStepProps) {
         className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
       >
         {uploading && <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4" />}
-        {uploading ? "Extracting pages..." : "Upload & Extract"}
+        {uploading ? progress || "Processing..." : "Upload & Extract"}
       </button>
     </div>
   );

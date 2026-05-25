@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export interface R2Config {
   accountId: string;
@@ -82,6 +83,27 @@ export async function uploadToR2(params: {
   // Store relative path only — CDN host is resolved at read time via resolveR2Url()
   const url = `/${key}`;
   return { key, url };
+}
+
+/**
+ * Generate a presigned PUT URL for direct browser-to-R2 upload.
+ */
+export async function getPresignedUploadUrl(params: {
+  client: S3Client;
+  config: R2Config;
+  key: string;
+  contentType: string;
+  expiresIn?: number;
+}): Promise<{ uploadUrl: string; key: string }> {
+  const { client, config, key, contentType, expiresIn = 3600 } = params;
+  const command = new PutObjectCommand({
+    Bucket: config.bucket,
+    Key: key,
+    ContentType: contentType,
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const uploadUrl = await getSignedUrl(client as any, command as any, { expiresIn });
+  return { uploadUrl, key };
 }
 
 /**
