@@ -49,38 +49,21 @@ export function CloneUploadStep({ onUploaded }: CloneUploadStepProps) {
     setError(null);
 
     try {
-      // Step 1: Get presigned URL
-      setProgress("Preparing upload...");
-      const presignRes = await fetch("/api/clone/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name }),
-      });
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-
-      const { uploadUrl, jobId, key } = presignData;
-
-      // Step 2: Upload directly to R2 via presigned URL
+      // Upload PDF to server via FormData — server handles R2 upload internally
       setProgress("Uploading PDF...");
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": "application/pdf" },
-        body: file,
-      });
-      if (!uploadRes.ok) throw new Error("Failed to upload file to storage");
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", name || file.name.replace(/\.pdf$/i, ""));
 
-      // Step 3: Tell the server to process it
       setProgress("Extracting pages...");
-      const processRes = await fetch("/api/clone", {
+      const res = await fetch("/api/clone", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, key, name: name || file.name, fileName: file.name }),
+        body: formData,
       });
-      const processData = await processRes.json();
-      if (!processRes.ok) throw new Error(processData.error || "Processing failed");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Processing failed");
 
-      onUploaded(processData.job);
+      onUploaded(data.job);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {

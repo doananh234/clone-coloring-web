@@ -23,6 +23,36 @@ function ensurePolyfills() {
     globalThis.DOMRect = geometry.DOMRect;
   }
 
+  // ImageData polyfill (required by pdfjs-dist canvas renderer in Node.js)
+  if (typeof globalThis.ImageData === "undefined") {
+    globalThis.ImageData = class ImageData {
+      readonly data: Uint8ClampedArray;
+      readonly width: number;
+      readonly height: number;
+      readonly colorSpace: PredefinedColorSpace;
+
+      constructor(
+        dataOrWidth: Uint8ClampedArray | number,
+        widthOrHeight: number,
+        heightOrSettings?: number | ImageDataSettings,
+      ) {
+        if (typeof dataOrWidth === "number") {
+          this.width = dataOrWidth;
+          this.height = widthOrHeight;
+          this.data = new Uint8ClampedArray(this.width * this.height * 4);
+        } else {
+          this.data = dataOrWidth;
+          this.width = widthOrHeight;
+          this.height =
+            typeof heightOrSettings === "number"
+              ? heightOrSettings
+              : dataOrWidth.length / (widthOrHeight * 4);
+        }
+        this.colorSpace = "srgb";
+      }
+    } as unknown as typeof ImageData;
+  }
+
   // Uint8Array.prototype.toHex polyfill (ES2024 — not in all TS targets yet)
   if (typeof (Uint8Array.prototype as unknown as Record<string, unknown>).toHex !== "function") {
     (Uint8Array.prototype as unknown as Record<string, unknown>).toHex = function (
@@ -31,6 +61,22 @@ function ensurePolyfills() {
       return Array.from(this)
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
+    };
+  }
+
+  // Map.prototype.getOrInsertComputed polyfill (TC39 Stage 3 — required by pdfjs-dist v5.7+)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const MapProto = Map.prototype as any;
+  if (typeof MapProto.getOrInsertComputed !== "function") {
+    MapProto.getOrInsertComputed = function <K, V>(
+      this: Map<K, V>,
+      key: K,
+      callbackFn: (key: K) => V,
+    ): V {
+      if (this.has(key)) return this.get(key)!;
+      const value = callbackFn(key);
+      this.set(key, value);
+      return value;
     };
   }
 }
