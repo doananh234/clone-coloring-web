@@ -35,8 +35,8 @@ const STEPS = [
   { title: "Preview Pages", description: "Review extracted thumbnails", icon: faImages },
   { title: "Analyze & Review", description: "AI analysis with review", icon: faWandMagicSparkles },
   { title: "Redesign Pages", description: "Original + prompt → new version", icon: faPaintbrushPencil },
-  { title: "Extract & Generate", description: "Save entities & generate refs", icon: faUsers },
   { title: "Reproduce Book", description: "Review results & create book", icon: faSparkles },
+  { title: "Extract Library", description: "Save characters & locations", icon: faUsers },
 ];
 
 interface ClonePageProps {
@@ -60,8 +60,8 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
         if (data.success) {
           setJob(data.job);
           // Resume at appropriate step
-          if (data.job.status === "reproduced") setCurrentStep(5);
-          else if (data.job.status === "entities_ready") setCurrentStep(5);
+          if (data.job.status === "entities_ready") setCurrentStep(5);
+          else if (data.job.status === "reproduced") setCurrentStep(4);
           else if (data.job.status === "confirmed") setCurrentStep(4);
           else if (data.job.status === "analyzed") setCurrentStep(3);
           else if (data.job.status === "extracted") setCurrentStep(1);
@@ -100,8 +100,8 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
         s === "reproduced"
       );
     if (step === 3) return currentStep > 3;
-    if (step === 4) return s === "entities_ready" || s === "reproduced";
-    if (step === 5) return s === "reproduced";
+    if (step === 4) return s === "reproduced" || s === "entities_ready";
+    if (step === 5) return s === "entities_ready";
     return false;
   };
 
@@ -216,16 +216,15 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
           )}
 
           {currentStep === 4 && job && (
-            <CloneExtractStep
-              job={job}
-              onJobUpdate={handleJobUpdate}
-              onNext={() => setCurrentStep(5)}
-              onBack={() => setCurrentStep(3)}
-            />
+            <CloneReproduceStep job={job} onBack={() => setCurrentStep(3)} onNext={() => setCurrentStep(5)} />
           )}
 
           {currentStep === 5 && job && (
-            <CloneReproduceStep job={job} onBack={() => setCurrentStep(4)} />
+            <CloneExtractStep
+              job={job}
+              onJobUpdate={handleJobUpdate}
+              onBack={() => setCurrentStep(4)}
+            />
           )}
         </div>
       </div>

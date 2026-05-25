@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { generateColoringPage } from "@/lib/ai";
-import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
+import { editImage } from "@/lib/ai";
+import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
 import type { CloneJob } from "@/lib/ai/clone-types";
 
 export const maxDuration = 300;
@@ -11,24 +11,26 @@ type RouteParams = { params: Promise<{ jobId: string }> };
 type EntityRef = { id: string; name: string; referenceImageUrl: string };
 type EntityMap = { characters: EntityRef[]; locations: EntityRef[] };
 
+const STRENGTH_PREFIX =
+  "Make small refinements only (~30% change). Keep the same characters, composition, and scene layout. Preserve character identity and proportions. Only improve line quality, details, and minor adjustments:\n\n";
+
 /**
- * Reproduce a single page: generate coloring page using prompt + character/location refs.
+ * Reproduce a single page: image-to-image edit from original/redesigned + prompt.
+ * Keeps characters and composition, only ~30% change.
  */
 async function reproducePage(
+  sourceImageUrl: string,
   prompt: string,
-  charRefs: string[],
-  locRefs: string[],
   bookId: string,
   pageId: string,
   r2Client: ReturnType<typeof createR2Client>,
   r2Config: ReturnType<typeof getR2Config>,
 ) {
-  const img = await generateColoringPage(prompt, {
-    characterReferenceImageUrls: charRefs.length > 0 ? charRefs : undefined,
-    locationReferenceImageUrls: locRefs.length > 0 ? locRefs : undefined,
-  });
+  const fullPrompt = `${STRENGTH_PREFIX}${prompt}`;
+  const img = await editImage(resolveR2Url(sourceImageUrl), fullPrompt);
 
-  const buffer = Buffer.from(img.base64, "base64");
+  const base64 = img.base64 || img.dataUrl?.split(",")[1] || "";
+  const buffer = Buffer.from(base64, "base64");
   const key = `assets/${bookId}/pages/${pageId}.png`;
   const { url } = await uploadToR2({
     client: r2Client,
@@ -163,8 +165,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     for (const idx of pagesToGenerate) {
       const page = coloringPages[idx];
+      const jobPage = job.pages[idx];
       if (!page || !page.prompt) {
         results.push({ index: idx, success: false, error: "No prompt for this page" });
+        continue;
+      }
+
+      // Use redesigned image if available, otherwise original from clone job
+      const sourceImageUrl = jobPage?.redesignedUrl || jobPage?.imageUrl || page.url || "";
+      if (!sourceImageUrl) {
+        results.push({ index: idx, success: false, error: "No source image for this page" });
         continue;
       }
 
@@ -174,9 +184,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         await bookRef.update({ coloringPages, updatedAt: now });
 
         const url = await reproducePage(
+          sourceImageUrl,
           page.prompt,
-          page.characterReferenceImageUrls || [],
-          page.locationReferenceImageUrls || [],
           bookId,
           page.id,
           r2Client,

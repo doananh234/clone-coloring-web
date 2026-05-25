@@ -15,6 +15,7 @@ import type { CloneJob } from "@/lib/ai/clone-types";
 interface CloneReproduceStepProps {
   job: CloneJob;
   onBack: () => void;
+  onNext?: () => void;
 }
 
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
@@ -27,7 +28,7 @@ function resolveUrl(url: string | undefined | null): string {
   return url;
 }
 
-export function CloneReproduceStep({ job, onBack }: CloneReproduceStepProps) {
+export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepProps) {
   const router = useRouter();
   const [bookId, setBookId] = useState<string | null>(job.bookId || null);
   const [creating, setCreating] = useState(false);
@@ -279,6 +280,14 @@ export function CloneReproduceStep({ job, onBack }: CloneReproduceStepProps) {
             )}
             {bookId ? "Re-create Book" : "Create Book"}
           </button>
+          {onNext && (
+            <button
+              onClick={onNext}
+              className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-accent"
+            >
+              Extract Library →
+            </button>
+          )}
         </div>
       </div>
     </div>
