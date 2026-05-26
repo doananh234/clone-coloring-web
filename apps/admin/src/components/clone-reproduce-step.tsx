@@ -2,15 +2,21 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useFirestore } from "@vx/core-uikit/firebase";
+import { useFirestoreGetAll } from "@vx/core-uikit/firebase";
+import { Combobox, Label, Input } from "@vx/core-uikit/components";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSpinner,
   faSparkles,
   faRotate,
   faBook,
+  faChevronDown,
+  faChevronUp,
 } from "@fortawesome/pro-regular-svg-icons";
 import { notify } from "@vx/core-uikit/notifications";
 import type { CloneJob } from "@/lib/ai/clone-types";
+import type { CategoryEntity } from "@/crud/categories";
 
 interface CloneReproduceStepProps {
   job: CloneJob;
@@ -30,8 +36,28 @@ function resolveUrl(url: string | undefined | null): string {
 
 export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepProps) {
   const router = useRouter();
+  const firestore = useFirestore();
   const [bookId, setBookId] = useState<string | null>(job.bookId || null);
   const [creating, setCreating] = useState(false);
+  const [metaOpen, setMetaOpen] = useState(false);
+
+  // Book metadata
+  const [title, setTitle] = useState(job.bookData?.title || job.name || "");
+  const [subtitle, setSubtitle] = useState(job.bookData?.subtitle || "");
+  const [description, setDescription] = useState(job.bookData?.description || "");
+  const [categoryId, setCategoryId] = useState(job.bookData?.categoryId || "");
+  const [category, setCategory] = useState(job.bookData?.category || "");
+  const [badge, setBadge] = useState("");
+  const [price, setPrice] = useState("");
+
+  const { data: categories } = useFirestoreGetAll<CategoryEntity>({
+    entityName: "categoriesForClone",
+    collectionPath: "categories",
+    orderByField: "index",
+    orderByDirection: "asc",
+    pageSize: 100,
+    firestore,
+  });
 
   // Each page: redesigned URL is the "init result", can be overridden by AI regeneration
   const [pageOverrides, setPageOverrides] = useState<Record<number, string>>({});
@@ -90,7 +116,19 @@ export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepPr
       const res = await fetch(`/api/clone/${job.id}/create-book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: true, useRedesigned: true }),
+        body: JSON.stringify({
+          force: true,
+          useRedesigned: true,
+          metadata: {
+            title: title || job.name || "Untitled",
+            subtitle,
+            description,
+            categoryId: categoryId || undefined,
+            category: category || undefined,
+            badge: badge || undefined,
+            price: price || undefined,
+          },
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -172,6 +210,81 @@ export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepPr
             </button>
           )}
         </div>
+      </div>
+
+      {/* Book Metadata */}
+      <div className="rounded-lg border">
+        <button
+          type="button"
+          onClick={() => setMetaOpen((v) => !v)}
+          className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-medium hover:bg-muted/50"
+        >
+          <span>Book Info {title && `— ${title}`}</span>
+          <FontAwesomeIcon
+            icon={metaOpen ? faChevronUp : faChevronDown}
+            className="h-3 w-3 text-muted-foreground"
+          />
+        </button>
+        {metaOpen && (
+          <div className="space-y-3 border-t px-4 py-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Title</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Book title" className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Subtitle</Label>
+                <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Subtitle" className="h-8 text-xs" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Description</Label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Book description"
+                rows={2}
+                className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Category</Label>
+                <Combobox
+                  options={(categories || []).map((cat) => ({
+                    value: cat.id,
+                    label: cat.displayName,
+                  }))}
+                  value={categoryId}
+                  onValueChange={(val) => {
+                    setCategoryId(val);
+                    const cat = (categories || []).find((c) => c.id === val);
+                    if (cat) setCategory(cat.name || cat.displayName);
+                  }}
+                  placeholder="Select"
+                  searchPlaceholder="Search..."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Badge</Label>
+                <Combobox
+                  options={[
+                    { value: "NEW", label: "NEW" },
+                    { value: "HOT", label: "HOT" },
+                    { value: "SALE", label: "SALE" },
+                  ]}
+                  value={badge}
+                  onValueChange={setBadge}
+                  placeholder="None"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Price</Label>
+                <Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="7.99" className="h-8 text-xs" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Page grid */}

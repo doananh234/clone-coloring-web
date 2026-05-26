@@ -12,7 +12,7 @@ type EntityRef = { id: string; name: string; referenceImageUrl: string };
 type EntityMap = { characters: EntityRef[]; locations: EntityRef[] };
 
 const STRENGTH_PREFIX =
-  "Make small refinements only (~30% change). Keep the same characters, composition, and scene layout. Preserve character identity and proportions. Only improve line quality, details, and minor adjustments:\n\n";
+  "Modify this image by approximately 30%. Keep 70% of the original unchanged.\n\n";
 
 /**
  * Reproduce a single page: image-to-image edit from original/redesigned + prompt.

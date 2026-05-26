@@ -47,13 +47,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     // Prepend strength guidance based on changePercent
-    const pct = changePercent || 10;
-    const strengthPrefix =
-      pct <= 10
-        ? "Make very minor refinements only. Keep the composition, characters, and style nearly identical to the original. Only fix small details:"
-        : pct <= 20
-          ? "Make small changes while keeping the overall composition and characters very similar to the original. Adjust some details:"
-          : "Redesign with moderate changes. Keep the same characters and general scene but allow significant style and layout variations:";
+    const pct = changePercent || 30;
+    const strengthPrefix = `Modify this image by approximately ${pct}%. Keep ${100 - pct}% of the original unchanged.`;
 
     const fullPrompt = `${strengthPrefix}\n\n${basePrompt}`;
 

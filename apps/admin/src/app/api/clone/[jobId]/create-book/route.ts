@@ -8,7 +8,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
     const body = await req.json().catch(() => ({}));
-    const { force, useRedesigned } = body as { force?: boolean; useRedesigned?: boolean };
+    const { force, useRedesigned, metadata } = body as {
+      force?: boolean;
+      useRedesigned?: boolean;
+      metadata?: {
+        title?: string;
+        subtitle?: string;
+        description?: string;
+        categoryId?: string;
+        category?: string;
+        badge?: string;
+        price?: string;
+      };
+    };
 
     const docRef = adminDb.collection("cloneJobs").doc(jobId);
     const doc = await docRef.get();
@@ -66,14 +78,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         mood: p.rawData!.environment?.mood || "",
       }));
 
+    // Merge metadata from request > bookData > job defaults
+    const m = metadata || {};
+    const bd = job.bookData || ({} as Partial<NonNullable<CloneJob["bookData"]>>);
+
     await adminDb
       .collection("books")
       .doc(bookId)
       .set({
-        title: job.bookData?.title || job.name || "Untitled",
-        subtitle: job.bookData?.subtitle || "",
-        description: job.bookData?.description || "",
-        artStyleId: job.bookData?.artStyleId || null,
+        title: m.title || bd.title || job.name || "Untitled",
+        subtitle: m.subtitle || bd.subtitle || "",
+        description: m.description || bd.description || "",
+        categoryId: m.categoryId || bd.categoryId || null,
+        category: m.category || bd.category || null,
+        badge: m.badge || null,
+        price: m.price || null,
+        artStyleId: bd.artStyleId || null,
         status: "draft",
         coloringPages,
         summaryPages: [],

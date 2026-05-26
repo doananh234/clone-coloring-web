@@ -16,8 +16,7 @@ import { notify } from "@vx/core-uikit/notifications";
 import type { CloneJob, CloneJobPage } from "@/lib/ai/clone-types";
 
 const CHANGE_OPTIONS = [
-  { value: 10, label: "10% — Minor refinements" },
-  { value: 20, label: "20% — Small changes" },
+  { value: 30, label: "30% — Small changes" },
   { value: 50, label: "50% — Moderate redesign" },
 ] as const;
 
@@ -40,7 +39,7 @@ function resolveUrl(url: string | undefined | null): string {
 
 export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRedesignStepProps) {
   const router = useRouter();
-  const [changePercent, setChangePercent] = useState(10);
+  const [changePercent, setChangePercent] = useState(30);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [pageStates, setPageStates] = useState<
     Record<number, { status: "idle" | "generating" | "done" | "error"; url?: string }>

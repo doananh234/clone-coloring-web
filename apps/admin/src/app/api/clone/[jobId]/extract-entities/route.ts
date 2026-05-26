@@ -18,9 +18,18 @@ type SavedEntity = {
   error?: string;
 };
 
-export async function POST(_req: NextRequest, { params }: RouteParams) {
+type SelectedChar = { char: ExtractedCharacter; sourcePageImageUrl: string };
+type SelectedLoc = { loc: ExtractedLocation; sourcePageImageUrl: string };
+
+export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
+    const body = await req.json().catch(() => ({}));
+    const { characters: selectedChars, locations: selectedLocs } = body as {
+      characters?: SelectedChar[];
+      locations?: SelectedLoc[];
+    };
+
     const docRef = adminDb.collection("cloneJobs").doc(jobId);
     const doc = await docRef.get();
 
@@ -34,32 +43,36 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     const now = new Date().toISOString();
     const results: SavedEntity[] = [];
 
-    // Deduplicate characters across all pages
-    const charMap = new Map<string, { char: ExtractedCharacter; sourcePageImageUrl: string }>();
-    for (const page of job.pages) {
-      if (!page.rawData?.characters) continue;
-      for (const char of page.rawData.characters) {
-        const key = char.name.toLowerCase().trim();
-        if (!charMap.has(key)) {
-          charMap.set(key, { char, sourcePageImageUrl: page.imageUrl });
-        }
-      }
-    }
+    // Use client-selected characters, or fallback to all from job
+    const charsToProcess: SelectedChar[] = selectedChars && selectedChars.length > 0
+      ? selectedChars
+      : (() => {
+          const items: SelectedChar[] = [];
+          for (const page of job.pages) {
+            if (!page.rawData?.characters) continue;
+            for (const char of page.rawData.characters) {
+              items.push({ char, sourcePageImageUrl: page.imageUrl });
+            }
+          }
+          return items;
+        })();
 
-    // Deduplicate locations across all pages
-    const locMap = new Map<string, { loc: ExtractedLocation; sourcePageImageUrl: string }>();
-    for (const page of job.pages) {
-      if (!page.rawData?.locations) continue;
-      for (const loc of page.rawData.locations) {
-        const key = loc.name.toLowerCase().trim();
-        if (!locMap.has(key)) {
-          locMap.set(key, { loc, sourcePageImageUrl: page.imageUrl });
-        }
-      }
-    }
+    // Use client-selected locations, or fallback to all from job
+    const locsToProcess: SelectedLoc[] = selectedLocs && selectedLocs.length > 0
+      ? selectedLocs
+      : (() => {
+          const items: SelectedLoc[] = [];
+          for (const page of job.pages) {
+            if (!page.rawData?.locations) continue;
+            for (const loc of page.rawData.locations) {
+              items.push({ loc, sourcePageImageUrl: page.imageUrl });
+            }
+          }
+          return items;
+        })();
 
     // Save characters and generate reference images
-    for (const [, { char, sourcePageImageUrl }] of charMap) {
+    for (const { char, sourcePageImageUrl } of charsToProcess) {
       const charId = crypto.randomUUID();
       try {
         // Save to Firestore first
@@ -121,7 +134,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     }
 
     // Save locations and generate reference images
-    for (const [, { loc, sourcePageImageUrl }] of locMap) {
+    for (const { loc, sourcePageImageUrl } of locsToProcess) {
       const locId = crypto.randomUUID();
       try {
         await adminDb.collection("locations").doc(locId).set({
