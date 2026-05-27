@@ -28,9 +28,19 @@ export type AppHomeCategory = {
   order: number;
 };
 
+export type AppHomeFreeColoringPage = {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  series: string;
+  imageUrl: string;
+  backgroundColor: string;
+};
+
 export type AppHomeDocument = {
   newArrivalBooks: AppHomeNewArrivalBook[];
   trendingBooks: AppHomeTrendingBook[];
   categories: AppHomeCategory[];
+  freeColoringPages?: AppHomeFreeColoringPage[];
   updatedAt?: unknown;
 };
