@@ -7,6 +7,7 @@
  */
 
 import { resolveR2Url as normalizeImageUrl } from "../r2";
+import { getLangfuse } from "../langfuse";
 
 export type LLMMessage = {
   role: "system" | "user" | "assistant";
@@ -21,6 +22,8 @@ export type LLMOptions = {
   maxTokens?: number;
   temperature?: number;
   jsonMode?: boolean;
+  /** Langfuse trace metadata for cost tracking */
+  trace?: { caller?: string; entityType?: string; entityId?: string };
 };
 
 export type LLMResponse = {
@@ -89,6 +92,29 @@ export async function chatCompletion(
         completionTokens: result.usage.completion_tokens,
       }
     : undefined;
+
+  // Log to Langfuse
+  const lf = getLangfuse();
+  if (lf && usage) {
+    const trace = lf.trace({
+      name: options.trace?.caller || "chatCompletion",
+      metadata: {
+        entityType: options.trace?.entityType,
+        entityId: options.trace?.entityId,
+      },
+    });
+    trace.generation({
+      name: "chatCompletion",
+      model: deployment,
+      input: messages,
+      output: content,
+      usage: {
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        totalTokens: usage.promptTokens + usage.completionTokens,
+      },
+    });
+  }
 
   return { content, usage };
 }

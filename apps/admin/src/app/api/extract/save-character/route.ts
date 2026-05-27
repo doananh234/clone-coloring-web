@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { generateCharacterReference } from "@/lib/ai";
 import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
+import { flushLangfuse } from "@/lib/langfuse";
 
 async function downloadImage(url: string): Promise<Buffer | null> {
   try {
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
           sourceImageUrl: sourceImageUrl || undefined,
           characterName: name,
           characterInfo: visualDna?.distinguishingFeatures?.join(", ") || "",
+          trace: { caller: "extract/save-character", entityType: "character" },
         });
         const buffer = Buffer.from(img.base64, "base64");
         const key = `assets/characters/${docRef.id}/reference.png`;
@@ -111,6 +113,8 @@ export async function POST(req: NextRequest) {
       updates.updatedAt = FieldValue.serverTimestamp();
       await adminDb.collection("characters").doc(docRef.id).update(updates);
     }
+
+    await flushLangfuse();
 
     return NextResponse.json({
       success: true,

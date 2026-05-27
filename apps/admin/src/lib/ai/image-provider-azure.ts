@@ -8,7 +8,9 @@ import type {
   ImageGenerationOptions,
   GeneratedImage,
   ColorizeOptions,
+  ImageUsage,
 } from "./image-provider-types";
+import { getLangfuse } from "../langfuse";
 
 function getConfig() {
   const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
@@ -29,7 +31,55 @@ function parseBase64Response(result: Record<string, unknown>): GeneratedImage {
   const data = result.data as Array<{ b64_json?: string }> | undefined;
   const base64 = data?.[0]?.b64_json;
   if (!base64) throw new Error("No image data in Azure response");
-  return { base64, dataUrl: `data:image/png;base64,${base64}` };
+
+  // Extract token usage if available (gpt-image-2 returns usage)
+  const rawUsage = result.usage as
+    | { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+    | undefined;
+  const usage: ImageUsage | undefined = rawUsage
+    ? {
+        promptTokens: rawUsage.prompt_tokens,
+        completionTokens: rawUsage.completion_tokens,
+        totalTokens: rawUsage.total_tokens,
+      }
+    : undefined;
+
+  return { base64, dataUrl: `data:image/png;base64,${base64}`, usage };
+}
+
+function logImageToLangfuse(
+  operation: string,
+  model: string,
+  prompt: string,
+  usage: ImageUsage | undefined,
+  options?: ImageGenerationOptions,
+) {
+  const lf = getLangfuse();
+  if (!lf) {
+    console.log(`[langfuse] Skipped — not configured (${operation})`);
+    return;
+  }
+  console.log(`[langfuse] Logging ${operation} — tokens: ${JSON.stringify(usage)}`);
+  const trace = lf.trace({
+    name: options?.trace?.caller || `azure/${operation}`,
+    metadata: {
+      entityType: options?.trace?.entityType,
+      entityId: options?.trace?.entityId,
+      imageSize: options?.size || "1024x1024",
+    },
+  });
+  trace.generation({
+    name: operation,
+    model,
+    input: prompt,
+    usage: usage
+      ? {
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
+          totalTokens: usage.totalTokens,
+        }
+      : undefined,
+  });
 }
 
 export const azureImageProvider: ImageProviderInterface = {
@@ -62,7 +112,9 @@ export const azureImageProvider: ImageProviderInterface = {
       throw new Error(`Azure image generation error (${res.status}): ${err}`);
     }
 
-    return parseBase64Response(await res.json());
+    const image = parseBase64Response(await res.json());
+    logImageToLangfuse("generateImage", deployment, prompt, image.usage, options);
+    return image;
   },
 
   async editImage(
@@ -73,14 +125,20 @@ export const azureImageProvider: ImageProviderInterface = {
     const { endpoint, apiKey, deployment, apiVersion } = getConfig();
     const { size = "1024x1024", n = 1, referenceImageUrls } = options;
 
-    // Download primary image
-    const imageRes = await fetch(imageUrl);
-    if (!imageRes.ok) throw new Error(`Failed to download source image (${imageRes.status})`);
-    const imageBuffer = Buffer.from(await imageRes.arrayBuffer());
+    // Download or decode primary image
+    let imageBuffer: Buffer;
+    if (imageUrl.startsWith("data:")) {
+      const base64 = imageUrl.split(",")[1];
+      imageBuffer = Buffer.from(base64, "base64");
+    } else {
+      const imageRes = await fetch(imageUrl);
+      if (!imageRes.ok) throw new Error(`Failed to download source image (${imageRes.status})`);
+      imageBuffer = Buffer.from(await imageRes.arrayBuffer());
+    }
 
     // Build multipart form data
     const formData = new FormData();
-    formData.append("image[]", new Blob([imageBuffer], { type: "image/png" }), "page.png");
+    formData.append("image[]", new Blob([new Uint8Array(imageBuffer)], { type: "image/png" }), "page.png");
 
     // Add style reference images
     if (referenceImageUrls?.length) {
@@ -119,6 +177,8 @@ export const azureImageProvider: ImageProviderInterface = {
       throw new Error(`Azure image edit error (${res.status}): ${err}`);
     }
 
-    return parseBase64Response(await res.json());
+    const image = parseBase64Response(await res.json());
+    logImageToLangfuse("editImage", deployment, prompt, image.usage, options);
+    return image;
   },
 };

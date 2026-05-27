@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateColoringPage } from "@/lib/ai";
+import { flushLangfuse } from "@/lib/langfuse";
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +20,10 @@ export async function POST(req: NextRequest) {
       characterReferenceImageUrls,
       locationReferenceImageUrls,
       artStyle,
+      trace: { caller: "generate/coloring-page" },
     });
+
+    await flushLangfuse();
 
     return NextResponse.json({
       success: true,

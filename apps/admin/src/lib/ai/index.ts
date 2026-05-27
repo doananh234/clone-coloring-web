@@ -53,6 +53,14 @@ export {
   buildDirectiveFromProperties,
   COLORING_STYLE_EXTRACTION_PROMPT,
   buildColorizationDirective,
+  CLONE_EXTRACTION_PROMPT,
+  buildReproductionPrompt,
+  buildColorizationPrompt,
+  buildCharacterExtractionPrompt,
+  buildLocationExtractionPrompt,
+  buildCategoryIconPrompt,
+  buildRedesignStrengthPrefix,
+  REPRODUCE_STRENGTH_PREFIX,
 } from "./prompts";
 
 // Art Style Types

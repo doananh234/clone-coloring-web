@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
 import { colorizeImage } from "@/lib/ai/image-provider";
+import { flushLangfuse } from "@/lib/langfuse";
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
     );
     const img = await colorizeImage(resolveR2Url(imageUrl), style.colorizationDirective, {
       referenceImageUrls,
+      trace: { caller: "coloring-styles/colorize" },
     });
 
     // Upload colored result to R2
@@ -121,6 +123,8 @@ export async function POST(req: NextRequest) {
         });
       }
     }
+
+    await flushLangfuse();
 
     return NextResponse.json({ success: true, coloredUrl });
   } catch (error) {

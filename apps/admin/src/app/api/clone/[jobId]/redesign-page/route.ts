@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { editImage } from "@/lib/ai";
+import { buildRedesignStrengthPrefix } from "@/lib/ai/prompts";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
+import { flushLangfuse } from "@/lib/langfuse";
 import type { CloneJob } from "@/lib/ai/clone-types";
 
 export const maxDuration = 120;
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // Prepend strength guidance based on changePercent
     const pct = changePercent || 30;
-    const strengthPrefix = `Modify this image by approximately ${pct}%. Keep ${100 - pct}% of the original unchanged.`;
+    const strengthPrefix = buildRedesignStrengthPrefix(pct);
 
     const fullPrompt = `${strengthPrefix}\n\n${basePrompt}`;
 
@@ -56,7 +58,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const originalImageUrl = resolveR2Url(page.imageUrl);
 
     // Image-to-image: use original as base + prompt with strength guidance
-    const img = await editImage(originalImageUrl, fullPrompt);
+    const img = await editImage(originalImageUrl, fullPrompt, {
+      trace: { caller: "clone/redesign-page", entityType: "cloneJob", entityId: jobId },
+    });
 
     // Upload result to R2
     const r2Config = getR2Config();
@@ -85,6 +89,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       pages: updatedPages,
       updatedAt: new Date().toISOString(),
     });
+
+    await flushLangfuse();
 
     return NextResponse.json({
       success: true,

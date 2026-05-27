@@ -59,12 +59,14 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
         const data = await res.json();
         if (data.success) {
           setJob(data.job);
-          // Resume at appropriate step
-          if (data.job.status === "entities_ready") setCurrentStep(5);
-          else if (data.job.status === "reproduced") setCurrentStep(4);
-          else if (data.job.status === "confirmed") setCurrentStep(4);
-          else if (data.job.status === "analyzed") setCurrentStep(3);
-          else if (data.job.status === "extracted") setCurrentStep(1);
+          // Resume at appropriate step based on job status
+          const s = data.job.status;
+          if (s === "entities_ready") setCurrentStep(5);
+          else if (s === "reproduced") setCurrentStep(4);
+          else if (s === "confirmed") setCurrentStep(4);
+          else if (s === "analyzed") setCurrentStep(3);
+          else if (s === "analyzing" || s === "error") setCurrentStep(2); // back to analyze to retry/skip
+          else if (s === "extracted") setCurrentStep(1);
         }
       } catch (err) {
         console.error("Failed to load clone job:", err);
@@ -95,6 +97,8 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
     if (step === 2)
       return (
         s === "analyzed" ||
+        s === "analyzing" ||
+        s === "error" ||
         s === "confirmed" ||
         s === "entities_ready" ||
         s === "reproduced"

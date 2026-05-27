@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { generateLocationReference } from "@/lib/ai";
 import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
+import { flushLangfuse } from "@/lib/langfuse";
 
 async function downloadImage(url: string): Promise<Buffer | null> {
   try {
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
         const img = await generateLocationReference(locationPrompt, {
           sourceImageUrl: sourceImageUrl || undefined,
           locationName: name,
+          trace: { caller: "extract/save-location", entityType: "location" },
         });
         const buffer = Buffer.from(img.base64, "base64");
         const key = `assets/locations/${docRef.id}/reference.png`;
@@ -110,6 +112,8 @@ export async function POST(req: NextRequest) {
       updates.updatedAt = FieldValue.serverTimestamp();
       await adminDb.collection("locations").doc(docRef.id).update(updates);
     }
+
+    await flushLangfuse();
 
     return NextResponse.json({
       success: true,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { buildReproductionPrompt } from "@/lib/ai/clone-prompt-builder";
+import { buildReproductionPrompt } from "@/lib/ai/prompts";
 import type { CloneJob, ClonePageRawData } from "@/lib/ai/clone-types";
 
 type RouteParams = { params: Promise<{ jobId: string; pageNumber: string }> };

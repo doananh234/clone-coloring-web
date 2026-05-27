@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { editImage } from "@/lib/ai";
+import { REPRODUCE_STRENGTH_PREFIX } from "@/lib/ai/prompts";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
+import { flushLangfuse } from "@/lib/langfuse";
 import type { CloneJob } from "@/lib/ai/clone-types";
 
 export const maxDuration = 300;
@@ -11,8 +13,7 @@ type RouteParams = { params: Promise<{ jobId: string }> };
 type EntityRef = { id: string; name: string; referenceImageUrl: string };
 type EntityMap = { characters: EntityRef[]; locations: EntityRef[] };
 
-const STRENGTH_PREFIX =
-  "Modify this image by approximately 30%. Keep 70% of the original unchanged.\n\n";
+const STRENGTH_PREFIX = REPRODUCE_STRENGTH_PREFIX;
 
 /**
  * Reproduce a single page: image-to-image edit from original/redesigned + prompt.
@@ -27,7 +28,9 @@ async function reproducePage(
   r2Config: ReturnType<typeof getR2Config>,
 ) {
   const fullPrompt = `${STRENGTH_PREFIX}${prompt}`;
-  const img = await editImage(resolveR2Url(sourceImageUrl), fullPrompt);
+  const img = await editImage(resolveR2Url(sourceImageUrl), fullPrompt, {
+    trace: { caller: "clone/reproduce", entityType: "book", entityId: bookId },
+  });
 
   const base64 = img.base64 || img.dataUrl?.split(",")[1] || "";
   const buffer = Buffer.from(base64, "base64");
@@ -219,6 +222,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const succeeded = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
+
+    await flushLangfuse();
 
     return NextResponse.json({
       success: true,

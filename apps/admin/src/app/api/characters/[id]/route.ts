@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { generateCharacterReference } from "@/lib/ai";
 import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
+import { flushLangfuse } from "@/lib/langfuse";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -42,6 +43,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         sourceImageUrl: character.sourceImageUrl || undefined,
         characterName: character.name,
         characterInfo: character.visualDna?.distinguishingFeatures?.join(", ") || "",
+        trace: { caller: "characters/regenerate", entityType: "character", entityId: id },
       });
       const buffer = Buffer.from(img.base64, "base64");
       const r2Config = getR2Config();
@@ -54,11 +56,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         body: buffer,
         contentType: "image/png",
       });
-      data.referenceImageUrl = url;
+      data.referenceImageUrl = `${url}?v=${Date.now()}`;
     }
 
     data.updatedAt = FieldValue.serverTimestamp();
     await adminDb.collection("characters").doc(id).update(data);
+
+    await flushLangfuse();
+
     return NextResponse.json({ success: true, referenceImageUrl: data.referenceImageUrl || "" });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

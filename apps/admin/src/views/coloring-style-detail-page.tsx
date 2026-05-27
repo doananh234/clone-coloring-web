@@ -27,7 +27,7 @@ function resolveUrl(url: string | undefined | null): string {
   if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
   return url;
 }
-import { buildColorizationPrompt } from "@/lib/ai/colorization-prompt-template";
+import { buildColorizationPrompt } from "@/lib/ai/prompts";
 import { appNavigate } from "@/lib/navigate";
 import type { ColoringStyleEntity } from "@/lib/ai/coloring-style-types";
 

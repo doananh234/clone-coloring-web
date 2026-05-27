@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { visionAnalyzeJSON } from "@/lib/ai/llm-provider";
-import { CLONE_EXTRACTION_PROMPT } from "@/lib/ai/clone-extraction-prompt";
-import { buildReproductionPrompt } from "@/lib/ai/clone-prompt-builder";
+import { CLONE_EXTRACTION_PROMPT, buildReproductionPrompt } from "@/lib/ai/prompts";
+import { flushLangfuse } from "@/lib/langfuse";
 import type { CloneJob, ClonePageRawData } from "@/lib/ai/clone-types";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
@@ -19,7 +19,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
 
     const job = doc.data() as CloneJob;
 
-    if (job.status !== "extracted" && job.status !== "analyzed") {
+    // Allow retry from extracted, analyzed, analyzing (stale), or error states
+    const allowedStatuses = ["extracted", "analyzed", "analyzing", "error"];
+    if (!allowedStatuses.includes(job.status)) {
       return NextResponse.json(
         { error: `Cannot analyze job in status: ${job.status}` },
         { status: 400 },
@@ -53,7 +55,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
         const extracted = await visionAnalyzeJSON<Omit<ClonePageRawData, "reproductionPrompt">>(
           page.imageUrl,
           CLONE_EXTRACTION_PROMPT,
-          { maxTokens: 4000, temperature: 0.3 },
+          { maxTokens: 4000, temperature: 0.3, trace: { caller: "clone/analyze", entityType: "cloneJob", entityId: jobId } },
         );
 
         // Build reproduction prompt from structured data
@@ -111,6 +113,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
 
     // Re-read final state
     const finalDoc = await docRef.get();
+
+    await flushLangfuse();
+
     return NextResponse.json({ success: true, job: finalDoc.data() });
   } catch (error) {
     console.error("[clone/analyze] Error:", error);

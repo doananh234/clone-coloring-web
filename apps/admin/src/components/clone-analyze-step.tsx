@@ -70,6 +70,10 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
     setSelectedPage(page.pageNumber);
     if (page.rawData) {
       setEditingRawData(JSON.stringify(page.rawData, null, 2));
+    } else if (page.error) {
+      setEditingRawData(JSON.stringify({ error: page.error }, null, 2));
+    } else {
+      setEditingRawData("{}");
     }
   };
 
@@ -101,14 +105,20 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
   const navigatePage = useCallback(
     (direction: -1 | 1) => {
       if (selectedPage === null) return;
-      const analyzedPages = job.pages.filter((p) => p.status === "analyzed");
-      const idx = analyzedPages.findIndex((p) => p.pageNumber === selectedPage);
+      const reviewablePages = job.pages.filter(
+        (p) => p.status === "analyzed" || p.status === "error",
+      );
+      const idx = reviewablePages.findIndex((p) => p.pageNumber === selectedPage);
       const nextIdx = idx + direction;
-      if (nextIdx >= 0 && nextIdx < analyzedPages.length) {
-        const nextPage = analyzedPages[nextIdx];
+      if (nextIdx >= 0 && nextIdx < reviewablePages.length) {
+        const nextPage = reviewablePages[nextIdx];
         setSelectedPage(nextPage.pageNumber);
         if (nextPage.rawData) {
           setEditingRawData(JSON.stringify(nextPage.rawData, null, 2));
+        } else if (nextPage.error) {
+          setEditingRawData(JSON.stringify({ error: nextPage.error }, null, 2));
+        } else {
+          setEditingRawData("{}");
         }
       }
     },
@@ -116,7 +126,9 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
   );
 
   const analyzedCount = job.pages.filter((p) => p.status === "analyzed").length;
+  const errorCount = job.pages.filter((p) => p.status === "error").length;
   const allAnalyzed = analyzedCount === job.totalPages;
+  const allProcessed = analyzedCount + errorCount === job.totalPages;
   const currentPage =
     selectedPage !== null ? job.pages.find((p) => p.pageNumber === selectedPage) : null;
 
@@ -124,21 +136,28 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
     <div className="space-y-4">
       {/* Progress header */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Analyzed {analyzedCount} of {job.totalPages} pages
-        </p>
+        <div className="text-sm text-muted-foreground">
+          <span>Analyzed {analyzedCount} of {job.totalPages} pages</span>
+          {errorCount > 0 && (
+            <span className="ml-2 text-red-500">({errorCount} failed)</span>
+          )}
+        </div>
         <div className="flex gap-2">
           {allAnalyzed && <AnalyzeCreateStyleMenu pages={job.pages} router={router} />}
-          {!allAnalyzed && (
-            <button
-              onClick={startAnalysis}
-              disabled={analyzing}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-            >
-              {analyzing && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
-              {analyzing ? `Analyzing page ${job.analyzedPages + 1}...` : "Start Analysis"}
-            </button>
-          )}
+          <button
+            onClick={startAnalysis}
+            disabled={analyzing}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          >
+            {analyzing && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
+            {analyzing
+              ? `Analyzing...`
+              : errorCount > 0
+                ? `Retry Failed (${errorCount})`
+                : allAnalyzed
+                  ? "Re-analyze All"
+                  : "Start Analysis"}
+          </button>
         </div>
       </div>
 
@@ -156,15 +175,15 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
           {job.pages.map((page) => (
             <button
               key={page.pageNumber}
-              onClick={() => page.status === "analyzed" && openPageReview(page)}
-              disabled={page.status !== "analyzed"}
+              onClick={() => (page.status === "analyzed" || page.status === "error") && openPageReview(page)}
+              disabled={page.status === "pending" || page.status === "analyzing"}
               className={`group relative aspect-[3/4] overflow-hidden rounded-md border-2 transition-all ${
                 page.status === "analyzed"
                   ? "cursor-pointer border-green-500 hover:ring-1 hover:ring-green-500"
                   : page.status === "analyzing"
                     ? "border-primary"
                     : page.status === "error"
-                      ? "border-destructive"
+                      ? "cursor-pointer border-destructive hover:ring-1 hover:ring-destructive"
                       : "border-muted"
               }`}
             >
@@ -262,10 +281,10 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
         </button>
         <button
           onClick={onNext}
-          disabled={!allAnalyzed}
+          disabled={!allProcessed && !allAnalyzed}
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
-          Next →
+          {errorCount > 0 ? `Next (skip ${errorCount} errors) →` : "Next →"}
         </button>
       </div>
     </div>

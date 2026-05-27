@@ -6736,6 +6736,7 @@ __metadata:
     eslint: "npm:^9.0.0"
     firebase: "npm:^11"
     firebase-admin: "npm:^13.9.0"
+    langfuse: "npm:^3.38.20"
     next: "npm:^16.2.6"
     next-themes: "npm:^0.4.6"
     pdf-lib: "npm:^1.17.1"
@@ -10001,6 +10002,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"langfuse-core@npm:^3.38.20":
+  version: 3.38.20
+  resolution: "langfuse-core@npm:3.38.20"
+  dependencies:
+    mustache: "npm:^4.2.0"
+  checksum: 10c0/c102d700dd1843d8177ca0941cb25d4f656777a808d3203d5dd2ebfc45fc843d956e179e79567a5de79055f24b5feeeeb68c08a0447ab275da055de6cf363d80
+  languageName: node
+  linkType: hard
+
+"langfuse@npm:^3.38.20":
+  version: 3.38.20
+  resolution: "langfuse@npm:3.38.20"
+  dependencies:
+    langfuse-core: "npm:^3.38.20"
+  checksum: 10c0/0c0a080d2d366bcb00eba364b9b534befe0fb8f50374e06b03ba518be4bdcee769e1b557d2eb274424f3b6426c2c560d0f423ac09c0928bc5542cd5ede03d9f5
+  languageName: node
+  linkType: hard
+
 "levn@npm:^0.4.1":
   version: 0.4.1
   resolution: "levn@npm:0.4.1"
@@ -10574,6 +10593,15 @@ __metadata:
   bin:
     msw: cli/index.js
   checksum: 10c0/f6e6ca17c8e7fe4618381ce6352178a54d3b4c7abc23326db5937edf8bb91fcc259b2b6445983d30e0296ad262c01f789f2701adc166d4628d420eeafdcfdcf0
+  languageName: node
+  linkType: hard
+
+"mustache@npm:^4.2.0":
+  version: 4.2.0
+  resolution: "mustache@npm:4.2.0"
+  bin:
+    mustache: bin/mustache
+  checksum: 10c0/1f8197e8a19e63645a786581d58c41df7853da26702dbc005193e2437c98ca49b255345c173d50c08fe4b4dbb363e53cb655ecc570791f8deb09887248dd34a2
   languageName: node
   linkType: hard
 

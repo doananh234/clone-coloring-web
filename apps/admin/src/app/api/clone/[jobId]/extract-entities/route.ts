@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { generateCharacterReference, generateLocationReference } from "@/lib/ai";
 import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
+import { flushLangfuse } from "@/lib/langfuse";
 import type { CloneJob, ExtractedCharacter, ExtractedLocation } from "@/lib/ai/clone-types";
 
 export const maxDuration = 300;
@@ -98,6 +99,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           characterName: char.name,
           characterInfo:
             (char.visualDna as Record<string, string[]>)?.distinguishingFeatures?.join(", ") || "",
+          trace: { caller: "clone/extract-entities", entityType: "character", entityId: charId },
         });
         const buffer = Buffer.from(img.base64, "base64");
         const key = `assets/characters/${charId}/reference.png`;
@@ -157,6 +159,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         const img = await generateLocationReference(loc.locationPrompt, {
           sourceImageUrl: sourcePageImageUrl || undefined,
           locationName: loc.name,
+          trace: { caller: "clone/extract-entities", entityType: "location", entityId: locId },
         });
         const buffer = Buffer.from(img.base64, "base64");
         const key = `assets/locations/${locId}/reference.png`;
@@ -211,6 +214,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const succeeded = results.filter((r) => r.status === "success").length;
     const failed = results.filter((r) => r.status === "error").length;
 
+    await flushLangfuse();
     return NextResponse.json({
       success: true,
       total: results.length,

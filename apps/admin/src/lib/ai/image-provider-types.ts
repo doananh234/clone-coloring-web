@@ -8,11 +8,20 @@ export type ImageGenerationOptions = {
   size?: "1024x1024" | "1024x1792" | "1792x1024";
   quality?: "standard" | "hd";
   n?: number;
+  /** Langfuse trace metadata for cost tracking */
+  trace?: { caller?: string; entityType?: string; entityId?: string };
+};
+
+export type ImageUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
 };
 
 export type GeneratedImage = {
   base64: string;
   dataUrl: string;
+  usage?: ImageUsage;
 };
 
 export type ColorizeOptions = ImageGenerationOptions & {
