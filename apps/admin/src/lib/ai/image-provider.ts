@@ -1,8 +1,8 @@
 /**
  * Image Provider — unified facade for image generation and editing.
  *
- * Delegates to Azure OpenAI or Google Gemini based on IMAGE_PROVIDER env var.
- * Default: "azure". Set IMAGE_PROVIDER=gemini to switch.
+ * Delegates to Azure OpenAI, Google Gemini, Vertex AI, or Diaflow based on IMAGE_PROVIDER env var.
+ * Default: "azure". Set IMAGE_PROVIDER=diaflow for Diaflow.
  *
  * All callers import from this file — never from provider-specific files.
  */
@@ -26,8 +26,17 @@ export type { ImageGenerationOptions, GeneratedImage, ColorizeOptions };
 function getProvider(): ImageProviderInterface {
   const provider = process.env.IMAGE_PROVIDER || "azure";
 
+  if (provider === "diaflow") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./image-provider-diaflow").diaflowImageProvider;
+  }
+
+  if (provider === "vertex") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./image-provider-vertex").vertexImageProvider;
+  }
+
   if (provider === "gemini") {
-    // Dynamic require to avoid loading unused provider
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./image-provider-gemini").geminiImageProvider;
   }

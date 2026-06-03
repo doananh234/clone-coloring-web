@@ -126,6 +126,12 @@ export async function textPrompt(
   prompt: string,
   options?: LLMOptions & { systemPrompt?: string },
 ): Promise<string> {
+  if (process.env.LLM_PROVIDER === "diaflow") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { diaflowTextPrompt } = require("./image-provider-diaflow");
+    return diaflowTextPrompt(prompt, options);
+  }
+
   const messages: LLMMessage[] = [];
   if (options?.systemPrompt) {
     messages.push({ role: "system", content: options.systemPrompt });
@@ -143,6 +149,12 @@ export async function visionAnalyze(
   prompt: string,
   options?: LLMOptions & { systemPrompt?: string },
 ): Promise<string> {
+  if (process.env.LLM_PROVIDER === "diaflow") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { diaflowVisionAnalyze } = require("./image-provider-diaflow");
+    return diaflowVisionAnalyze(imageUrl, prompt, options);
+  }
+
   // Resolve relative R2 paths to full URLs
   const resolvedUrl = normalizeImageUrl(imageUrl);
 
@@ -169,6 +181,12 @@ export async function visionAnalyzeJSON<T = unknown>(
   prompt: string,
   options?: Omit<LLMOptions, "jsonMode"> & { systemPrompt?: string },
 ): Promise<T> {
+  if (process.env.LLM_PROVIDER === "diaflow") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { diaflowVisionAnalyzeJSON } = require("./image-provider-diaflow");
+    return diaflowVisionAnalyzeJSON(imageUrl, prompt, options);
+  }
+
   const content = await visionAnalyze(imageUrl, prompt, {
     ...options,
     jsonMode: true,

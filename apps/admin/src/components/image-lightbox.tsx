@@ -13,6 +13,7 @@ import {
   faEllipsis,
 } from "@fortawesome/pro-regular-svg-icons";
 import type { ImageItem } from "./image-grid";
+import { ImageComparison } from "./image-comparison";
 
 type ImageLightboxProps = {
   images: ImageItem[];
@@ -98,35 +99,6 @@ export function ImageLightbox({
         showCloseButton={false}
         className="!max-w-4xl !border !bg-white !p-0 sm:!max-w-4xl !rounded-xl !gap-0"
       >
-        {/* B&W / Colored toggle tabs */}
-        {hasColoredVersion && (
-          <div className="flex border-b bg-gray-50 rounded-t-xl">
-            <button
-              type="button"
-              onClick={() => setViewMode("bw")}
-              className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-                viewMode === "bw"
-                  ? "border-b-2 border-primary text-primary bg-white"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              B&W Original
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("colored")}
-              className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-                viewMode === "colored"
-                  ? "border-b-2 border-purple-500 text-purple-600 bg-white"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <FontAwesomeIcon icon={faDroplet} className="mr-1.5 h-3 w-3" />
-              Colored
-            </button>
-          </div>
-        )}
-
         {/* Image area */}
         <div className="relative flex min-h-[60vh] items-center">
           <button
@@ -142,17 +114,27 @@ export function ImageLightbox({
           </button>
 
           <div className="flex flex-1 items-center justify-center p-8">
-            <img
-              src={displayUrl}
-              alt=""
-              className="max-h-[65vh] max-w-full rounded-lg object-contain shadow-sm"
-              onError={(e) => {
-                const el = e.target as HTMLImageElement;
-                el.style.display = "none";
-                el.parentElement!.innerHTML =
-                  '<p class="text-gray-400 text-sm">Image failed to load</p>';
-              }}
-            />
+            {hasColoredVersion ? (
+              <ImageComparison
+                beforeSrc={resolveUrl(image.url)}
+                afterSrc={resolveUrl(image.coloredUrl)}
+                beforeAlt="B&W Original"
+                afterAlt="Colorized"
+                className="h-[65vh] aspect-square rounded-lg shadow-sm"
+              />
+            ) : (
+              <img
+                src={displayUrl}
+                alt=""
+                className="max-h-[65vh] max-w-full rounded-lg object-contain shadow-sm"
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  el.style.display = "none";
+                  el.parentElement!.innerHTML =
+                    '<p class="text-gray-400 text-sm">Image failed to load</p>';
+                }}
+              />
+            )}
           </div>
 
           <button

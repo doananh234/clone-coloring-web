@@ -18,6 +18,7 @@ import {
 } from "@fortawesome/pro-regular-svg-icons";
 import { DetailCard } from "@/components/detail-card";
 import { PreviewableImage } from "@/components/global-image-preview";
+import { ImageComparison } from "@/components/image-comparison";
 
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
 function resolveUrl(url: string | undefined | null): string {
@@ -349,14 +350,14 @@ export function ColoringStyleDetailPage({ coloringStyleId }: { coloringStyleId: 
                 </pre>
               </details>
             )}
-            {testResultUrl && (
-              <div className="overflow-hidden rounded-lg border">
-                <PreviewableImage
-                  src={testResultUrl}
-                  alt="Test colorization result"
-                  className="w-full object-cover"
-                />
-              </div>
+            {testResultUrl && testImage && (
+              <ImageComparison
+                beforeSrc={testImage}
+                afterSrc={testResultUrl}
+                beforeAlt="Original B&W"
+                afterAlt="Colorized result"
+                className="rounded-lg border"
+              />
             )}
           </div>
         </div>
