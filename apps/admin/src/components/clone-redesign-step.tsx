@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -238,38 +238,136 @@ function PageRedesignCard({
   const isDone = state.status === "done";
   const isError = state.status === "error";
 
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPos, setPreviewPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const openTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  const computePosition = useCallback(() => {
+    if (!anchorRef.current) return null;
+    const rect = anchorRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const POPOVER_W = 680;
+    const POPOVER_H = 480;
+    const MARGIN = 12;
+
+    let left = rect.right + MARGIN;
+    if (left + POPOVER_W > vw - MARGIN) {
+      left = rect.left - POPOVER_W - MARGIN;
+    }
+    if (left < MARGIN) {
+      left = Math.max(MARGIN, (vw - POPOVER_W) / 2);
+    }
+
+    let top = rect.top + rect.height / 2 - POPOVER_H / 2;
+    if (top < MARGIN) top = MARGIN;
+    if (top + POPOVER_H > vh - MARGIN) top = Math.max(MARGIN, vh - POPOVER_H - MARGIN);
+
+    return { top, left };
+  }, []);
+
+  const openPreview = useCallback(() => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    if (openTimerRef.current !== null || previewOpen) return;
+    openTimerRef.current = window.setTimeout(() => {
+      const pos = computePosition();
+      if (pos) {
+        setPreviewPos(pos);
+        setPreviewOpen(true);
+      }
+      openTimerRef.current = null;
+    }, 150);
+  }, [computePosition, previewOpen]);
+
+  const closePreview = useCallback(() => {
+    if (openTimerRef.current !== null) {
+      window.clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    if (closeTimerRef.current !== null) return;
+    closeTimerRef.current = window.setTimeout(() => {
+      setPreviewOpen(false);
+      closeTimerRef.current = null;
+    }, 100);
+  }, []);
+
+  useEffect(() => {
+    if (!previewOpen) return;
+    function handleScroll() {
+      setPreviewOpen(false);
+    }
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [previewOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (openTimerRef.current !== null) window.clearTimeout(openTimerRef.current);
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
   return (
     <div className="rounded-lg border">
       {/* Header row */}
       <div className="flex items-center gap-3 p-3">
-        {/* Original thumbnail */}
-        <div className="h-16 w-12 shrink-0 overflow-hidden rounded border bg-muted">
-          <img
-            src={resolveUrl(page.imageUrl)}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        </div>
-
-        {/* Arrow + Redesigned thumbnail */}
-        <span className="text-xs text-muted-foreground">→</span>
-        <div className="h-16 w-12 shrink-0 overflow-hidden rounded border bg-muted">
-          {isDone && state.url ? (
+        {/* Thumbnail group (original + arrow + redesigned) — hoverable */}
+        <div
+          ref={anchorRef}
+          className="flex items-center gap-3 cursor-zoom-in"
+          onMouseEnter={openPreview}
+          onMouseLeave={closePreview}
+        >
+          {/* Original thumbnail */}
+          <div className="h-16 w-12 shrink-0 overflow-hidden rounded border bg-muted">
             <img
-              src={resolveUrl(state.url)}
+              src={resolveUrl(page.imageUrl)}
               alt=""
               className="h-full w-full object-cover"
             />
-          ) : isGenerating ? (
-            <div className="flex h-full items-center justify-center">
-              <FontAwesomeIcon icon={faSpinner} spin className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center text-[9px] text-muted-foreground">
-              {isError ? "Error" : "—"}
-            </div>
-          )}
+          </div>
+
+          {/* Arrow + Redesigned thumbnail */}
+          <span className="text-xs text-muted-foreground">→</span>
+          <div className="h-16 w-12 shrink-0 overflow-hidden rounded border bg-muted">
+            {isDone && state.url ? (
+              <img
+                src={resolveUrl(state.url)}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : isGenerating ? (
+              <div className="flex h-full items-center justify-center">
+                <FontAwesomeIcon icon={faSpinner} spin className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center text-[9px] text-muted-foreground">
+                {isError ? "Error" : "—"}
+              </div>
+            )}
+          </div>
         </div>
+
+        {previewOpen && previewPos && (
+          <PagePreviewPopover
+            pageNumber={index + 1}
+            originalUrl={resolveUrl(page.imageUrl)}
+            redesignedUrl={isDone && state.url ? resolveUrl(state.url) : undefined}
+            status={state.status as "idle" | "generating" | "done" | "error"}
+            top={previewPos.top}
+            left={previewPos.left}
+            onMouseEnter={openPreview}
+            onMouseLeave={closePreview}
+          />
+        )}
 
         {/* Info */}
         <div className="min-w-0 flex-1">
@@ -324,6 +422,96 @@ function PageRedesignCard({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// --- Hover preview popover ---
+
+function PagePreviewPopover({
+  pageNumber,
+  originalUrl,
+  redesignedUrl,
+  status,
+  top,
+  left,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  pageNumber: number;
+  originalUrl: string;
+  redesignedUrl: string | undefined;
+  status: "idle" | "generating" | "done" | "error";
+  top: number;
+  left: number;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
+  const badge =
+    status === "done"
+      ? { label: "Redesigned", className: "text-green-600" }
+      : status === "generating"
+        ? { label: "Generating…", className: "text-blue-600" }
+        : status === "error"
+          ? { label: "Failed", className: "text-red-500" }
+          : { label: "Not redesigned yet", className: "text-muted-foreground" };
+
+  return (
+    <div
+      className="fixed z-50 w-[680px] rounded-lg border bg-popover shadow-xl"
+      style={{ top, left }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <div className="flex items-center justify-between border-b px-4 py-2.5">
+        <p className="text-sm font-semibold">Page {pageNumber}</p>
+        <span className={`text-xs font-medium ${badge.className}`}>{badge.label}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 p-3">
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Original
+          </p>
+          <div className="aspect-[3/4] w-full overflow-hidden rounded-md border bg-muted">
+            <img
+              src={originalUrl}
+              alt={`Page ${pageNumber} original`}
+              className="h-full w-full object-contain"
+              onError={(e) => {
+                const el = e.currentTarget as HTMLImageElement;
+                el.style.display = "none";
+              }}
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Redesigned
+          </p>
+          <div className="flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-md border bg-muted">
+            {status === "done" && redesignedUrl ? (
+              <img
+                src={redesignedUrl}
+                alt={`Page ${pageNumber} redesigned`}
+                className="h-full w-full object-contain"
+                onError={(e) => {
+                  const el = e.currentTarget as HTMLImageElement;
+                  el.style.display = "none";
+                }}
+              />
+            ) : status === "generating" ? (
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <FontAwesomeIcon icon={faSpinner} spin className="h-5 w-5" />
+                <span className="text-xs">Generating…</span>
+              </div>
+            ) : status === "error" ? (
+              <span className="text-xs text-red-500">Failed — try again</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">Not redesigned yet</span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
