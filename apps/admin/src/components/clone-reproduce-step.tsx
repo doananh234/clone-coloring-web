@@ -17,6 +17,7 @@ import {
 import { notify } from "@vx/core-uikit/notifications";
 import type { CloneJob } from "@/lib/ai/clone-types";
 import type { CategoryEntity } from "@/crud/categories";
+import { PagePreviewPopover, usePreviewHover } from "./page-preview-popover";
 
 interface CloneReproduceStepProps {
   job: CloneJob;
@@ -296,69 +297,17 @@ export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepPr
           const isRegenerated = !!pageOverrides[i];
 
           return (
-            <div key={i} className="flex items-center gap-3 rounded-lg border p-3">
-              {/* Original thumbnail */}
-              <div className="shrink-0 text-center">
-                <div className="h-14 w-10 overflow-hidden rounded border bg-muted">
-                  <img src={resolveUrl(page.imageUrl)} alt="" className="h-full w-full object-cover" />
-                </div>
-                <p className="mt-0.5 text-[8px] text-muted-foreground">Original</p>
-              </div>
-
-              <span className="text-[10px] text-muted-foreground">→</span>
-
-              {/* Current result */}
-              <div className="shrink-0 text-center">
-                <div
-                  className={`h-14 w-10 overflow-hidden rounded border bg-muted ${
-                    isRedesigned ? "border-amber-300" : isRegenerated ? "border-green-400" : ""
-                  }`}
-                >
-                  {status === "generating" ? (
-                    <div className="flex h-full items-center justify-center">
-                      <FontAwesomeIcon icon={faSpinner} spin className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                  ) : currentUrl ? (
-                    <img src={resolveUrl(currentUrl)} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-[8px] text-muted-foreground">
-                      Pending
-                    </div>
-                  )}
-                </div>
-                <p
-                  className={`mt-0.5 text-[8px] ${
-                    isRegenerated
-                      ? "text-green-600"
-                      : isRedesigned
-                        ? "text-amber-600"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  {isRegenerated ? "Regenerated" : isRedesigned ? "Redesigned" : status === "error" ? "Error" : "—"}
-                </p>
-              </div>
-
-              {/* Info */}
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium">Page {i + 1}</p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground line-clamp-1">
-                  {page.rawData?.scene?.description || page.rawData?.reproductionPrompt?.slice(0, 80) || "—"}
-                </p>
-              </div>
-
-              {/* Regenerate button */}
-              {status !== "generating" && (
-                <button
-                  className="shrink-0 rounded p-1.5 hover:bg-muted disabled:opacity-40"
-                  title="Regenerate with AI"
-                  onClick={() => regeneratePage(i)}
-                  disabled={generatingAll}
-                >
-                  <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+            <ReproducePageRow
+              key={i}
+              page={page}
+              index={i}
+              status={status}
+              currentUrl={currentUrl}
+              isRedesigned={isRedesigned}
+              isRegenerated={isRegenerated}
+              disabled={generatingAll}
+              onRegenerate={() => regeneratePage(i)}
+            />
           );
         })}
       </div>
@@ -403,6 +352,159 @@ export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepPr
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// --- Per-page row with hover preview ---
+
+function ReproducePageRow({
+  page,
+  index,
+  status,
+  currentUrl,
+  isRedesigned,
+  isRegenerated,
+  disabled,
+  onRegenerate,
+}: {
+  page: CloneJob["pages"][number];
+  index: number;
+  status: "idle" | "generating" | "done" | "error";
+  currentUrl: string;
+  isRedesigned: boolean;
+  isRegenerated: boolean;
+  disabled: boolean;
+  onRegenerate: () => void;
+}) {
+  const { anchorRef, open: previewOpen, position: previewPos, openPreview, closePreview } =
+    usePreviewHover();
+
+  const resultLabel = isRegenerated
+    ? "Regenerated"
+    : isRedesigned
+      ? "Redesigned"
+      : status === "error"
+        ? "Error"
+        : "—";
+
+  const badge =
+    status === "generating"
+      ? { text: "Generating…", className: "text-blue-600" }
+      : isRegenerated
+        ? { text: "Regenerated", className: "text-green-600" }
+        : isRedesigned
+          ? { text: "Redesigned", className: "text-amber-600" }
+          : status === "error"
+            ? { text: "Failed", className: "text-red-500" }
+            : { text: "Pending", className: "text-muted-foreground" };
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border p-3">
+      {/* Hover anchor wraps both thumbnails + arrow */}
+      <div
+        ref={anchorRef}
+        className="flex items-center gap-3 cursor-zoom-in"
+        onMouseEnter={openPreview}
+        onMouseLeave={closePreview}
+      >
+        {/* Original thumbnail */}
+        <div className="shrink-0 text-center">
+          <div className="h-14 w-10 overflow-hidden rounded border bg-muted">
+            <img src={resolveUrl(page.imageUrl)} alt="" className="h-full w-full object-cover" />
+          </div>
+          <p className="mt-0.5 text-[8px] text-muted-foreground">Original</p>
+        </div>
+
+        <span className="text-[10px] text-muted-foreground">→</span>
+
+        {/* Current result */}
+        <div className="shrink-0 text-center">
+          <div
+            className={`h-14 w-10 overflow-hidden rounded border bg-muted ${
+              isRedesigned ? "border-amber-300" : isRegenerated ? "border-green-400" : ""
+            }`}
+          >
+            {status === "generating" ? (
+              <div className="flex h-full items-center justify-center">
+                <FontAwesomeIcon icon={faSpinner} spin className="h-3 w-3 text-muted-foreground" />
+              </div>
+            ) : currentUrl ? (
+              <img src={resolveUrl(currentUrl)} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-[8px] text-muted-foreground">
+                Pending
+              </div>
+            )}
+          </div>
+          <p
+            className={`mt-0.5 text-[8px] ${
+              isRegenerated
+                ? "text-green-600"
+                : isRedesigned
+                  ? "text-amber-600"
+                  : "text-muted-foreground"
+            }`}
+          >
+            {resultLabel}
+          </p>
+        </div>
+      </div>
+
+      {previewOpen && previewPos && (
+        <PagePreviewPopover
+          title={`Page ${index + 1}`}
+          badge={badge}
+          leftLabel="Original"
+          leftUrl={resolveUrl(page.imageUrl)}
+          rightLabel="Current Result"
+          rightSlot={
+            status === "generating" ? (
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <FontAwesomeIcon icon={faSpinner} spin className="h-5 w-5" />
+                <span className="text-xs">Generating…</span>
+              </div>
+            ) : currentUrl ? (
+              <img
+                src={resolveUrl(currentUrl)}
+                alt={`Page ${index + 1} result`}
+                className="h-full w-full object-contain"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+            ) : status === "error" ? (
+              <span className="text-xs text-red-500">Failed — try again</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">No result yet</span>
+            )
+          }
+          top={previewPos.top}
+          left={previewPos.left}
+          onMouseEnter={openPreview}
+          onMouseLeave={closePreview}
+        />
+      )}
+
+      {/* Info */}
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium">Page {index + 1}</p>
+        <p className="mt-0.5 text-[10px] text-muted-foreground line-clamp-1">
+          {page.rawData?.scene?.description || page.rawData?.reproductionPrompt?.slice(0, 80) || "—"}
+        </p>
+      </div>
+
+      {/* Regenerate button */}
+      {status !== "generating" && (
+        <button
+          className="shrink-0 rounded p-1.5 hover:bg-muted disabled:opacity-40"
+          title="Regenerate with AI"
+          onClick={onRegenerate}
+          disabled={disabled}
+        >
+          <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }

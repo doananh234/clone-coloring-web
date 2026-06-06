@@ -1,19 +1,18 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSpinner,
   faRotate,
   faSparkles,
-  faChevronDown,
-  faChevronUp,
   faDroplet,
   faPaintbrushPencil,
 } from "@fortawesome/pro-regular-svg-icons";
 import { notify } from "@vx/core-uikit/notifications";
 import type { CloneJob, CloneJobPage } from "@/lib/ai/clone-types";
+import { PagePreviewPopover, usePreviewHover } from "./page-preview-popover";
 
 const CHANGE_OPTIONS = [
   { value: 30, label: "30% — Small changes" },
@@ -54,12 +53,6 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
       ]),
     ),
   );
-  const [prompts, setPrompts] = useState<Record<number, string>>(
-    Object.fromEntries(
-      job.pages.map((p, i) => [i, p.redesignPrompt || p.rawData?.reproductionPrompt || ""]),
-    ),
-  );
-  const [expandedPage, setExpandedPage] = useState<number | null>(null);
 
   const doneCount = Object.values(pageStates).filter((s) => s.status === "done").length;
 
@@ -76,7 +69,6 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             pageIndex,
-            prompt: prompts[pageIndex] || undefined,
             changePercent,
           }),
         });
@@ -101,7 +93,7 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
         }));
       }
     },
-    [job.id, prompts, changePercent],
+    [job.id, changePercent],
   );
 
   async function handleGenerateAll() {
@@ -126,8 +118,8 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
-        Redesign each page using the original image + analyzed prompt. Edit prompts for small
-        changes before generating.
+        Generate a refreshed variation of each page. Pick a change level, then redesign one page
+        at a time or batch them all.
       </p>
 
       {/* Controls bar */}
@@ -182,10 +174,6 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
             page={page}
             index={i}
             state={pageStates[i] || { status: "idle" }}
-            prompt={prompts[i] || ""}
-            onPromptChange={(val) => setPrompts((prev) => ({ ...prev, [i]: val }))}
-            expanded={expandedPage === i}
-            onToggleExpand={() => setExpandedPage(expandedPage === i ? null : i)}
             onRedesign={() => redesignPage(i)}
             disabled={generatingAll}
           />
@@ -217,20 +205,12 @@ function PageRedesignCard({
   page,
   index,
   state,
-  prompt,
-  onPromptChange,
-  expanded,
-  onToggleExpand,
   onRedesign,
   disabled,
 }: {
   page: CloneJobPage;
   index: number;
   state: { status: string; url?: string };
-  prompt: string;
-  onPromptChange: (val: string) => void;
-  expanded: boolean;
-  onToggleExpand: () => void;
   onRedesign: () => void;
   disabled: boolean;
 }) {
@@ -238,82 +218,17 @@ function PageRedesignCard({
   const isDone = state.status === "done";
   const isError = state.status === "error";
 
-  const anchorRef = useRef<HTMLDivElement>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewPos, setPreviewPos] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
-  const openTimerRef = useRef<number | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
+  const { anchorRef, open: previewOpen, position: previewPos, openPreview, closePreview } =
+    usePreviewHover();
 
-  const computePosition = useCallback(() => {
-    if (!anchorRef.current) return null;
-    const rect = anchorRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const POPOVER_W = 680;
-    const POPOVER_H = 480;
-    const MARGIN = 12;
-
-    let left = rect.right + MARGIN;
-    if (left + POPOVER_W > vw - MARGIN) {
-      left = rect.left - POPOVER_W - MARGIN;
-    }
-    if (left < MARGIN) {
-      left = Math.max(MARGIN, (vw - POPOVER_W) / 2);
-    }
-
-    let top = rect.top + rect.height / 2 - POPOVER_H / 2;
-    if (top < MARGIN) top = MARGIN;
-    if (top + POPOVER_H > vh - MARGIN) top = Math.max(MARGIN, vh - POPOVER_H - MARGIN);
-
-    return { top, left };
-  }, []);
-
-  const openPreview = useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    if (openTimerRef.current !== null || previewOpen) return;
-    openTimerRef.current = window.setTimeout(() => {
-      const pos = computePosition();
-      if (pos) {
-        setPreviewPos(pos);
-        setPreviewOpen(true);
-      }
-      openTimerRef.current = null;
-    }, 150);
-  }, [computePosition, previewOpen]);
-
-  const closePreview = useCallback(() => {
-    if (openTimerRef.current !== null) {
-      window.clearTimeout(openTimerRef.current);
-      openTimerRef.current = null;
-    }
-    if (closeTimerRef.current !== null) return;
-    closeTimerRef.current = window.setTimeout(() => {
-      setPreviewOpen(false);
-      closeTimerRef.current = null;
-    }, 100);
-  }, []);
-
-  useEffect(() => {
-    if (!previewOpen) return;
-    function handleScroll() {
-      setPreviewOpen(false);
-    }
-    window.addEventListener("scroll", handleScroll, true);
-    return () => window.removeEventListener("scroll", handleScroll, true);
-  }, [previewOpen]);
-
-  useEffect(() => {
-    return () => {
-      if (openTimerRef.current !== null) window.clearTimeout(openTimerRef.current);
-      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
-    };
-  }, []);
+  const badge =
+    state.status === "done"
+      ? { text: "Redesigned", className: "text-green-600" }
+      : state.status === "generating"
+        ? { text: "Generating…", className: "text-blue-600" }
+        : state.status === "error"
+          ? { text: "Failed", className: "text-red-500" }
+          : { text: "Not redesigned yet", className: "text-muted-foreground" };
 
   return (
     <div className="rounded-lg border">
@@ -358,10 +273,32 @@ function PageRedesignCard({
 
         {previewOpen && previewPos && (
           <PagePreviewPopover
-            pageNumber={index + 1}
-            originalUrl={resolveUrl(page.imageUrl)}
-            redesignedUrl={isDone && state.url ? resolveUrl(state.url) : undefined}
-            status={state.status as "idle" | "generating" | "done" | "error"}
+            title={`Page ${index + 1}`}
+            badge={badge}
+            leftLabel="Original"
+            leftUrl={resolveUrl(page.imageUrl)}
+            rightLabel="Redesigned"
+            rightSlot={
+              isDone && state.url ? (
+                <img
+                  src={resolveUrl(state.url)}
+                  alt={`Page ${index + 1} redesigned`}
+                  className="h-full w-full object-contain"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              ) : isGenerating ? (
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <FontAwesomeIcon icon={faSpinner} spin className="h-5 w-5" />
+                  <span className="text-xs">Generating…</span>
+                </div>
+              ) : isError ? (
+                <span className="text-xs text-red-500">Failed — try again</span>
+              ) : (
+                <span className="text-xs text-muted-foreground">Not redesigned yet</span>
+              )
+            }
             top={previewPos.top}
             left={previewPos.left}
             onMouseEnter={openPreview}
@@ -386,17 +323,6 @@ function PageRedesignCard({
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={onToggleExpand}
-            className="rounded p-1.5 hover:bg-muted"
-            title="Edit prompt"
-          >
-            <FontAwesomeIcon
-              icon={expanded ? faChevronUp : faChevronDown}
-              className="h-3 w-3 text-muted-foreground"
-            />
-          </button>
-          <button
-            type="button"
             onClick={onRedesign}
             disabled={disabled || isGenerating}
             className="rounded p-1.5 hover:bg-muted disabled:opacity-40"
@@ -404,112 +330,6 @@ function PageRedesignCard({
           >
             <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
           </button>
-        </div>
-      </div>
-
-      {/* Expanded prompt editor */}
-      {expanded && (
-        <div className="border-t px-3 py-2.5">
-          <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-            Prompt (edit for small changes)
-          </label>
-          <textarea
-            className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-            rows={4}
-            value={prompt}
-            onChange={(e) => onPromptChange(e.target.value)}
-            disabled={isGenerating}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// --- Hover preview popover ---
-
-function PagePreviewPopover({
-  pageNumber,
-  originalUrl,
-  redesignedUrl,
-  status,
-  top,
-  left,
-  onMouseEnter,
-  onMouseLeave,
-}: {
-  pageNumber: number;
-  originalUrl: string;
-  redesignedUrl: string | undefined;
-  status: "idle" | "generating" | "done" | "error";
-  top: number;
-  left: number;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-}) {
-  const badge =
-    status === "done"
-      ? { label: "Redesigned", className: "text-green-600" }
-      : status === "generating"
-        ? { label: "Generating…", className: "text-blue-600" }
-        : status === "error"
-          ? { label: "Failed", className: "text-red-500" }
-          : { label: "Not redesigned yet", className: "text-muted-foreground" };
-
-  return (
-    <div
-      className="fixed z-50 w-[680px] rounded-lg border bg-popover shadow-xl"
-      style={{ top, left }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-    >
-      <div className="flex items-center justify-between border-b px-4 py-2.5">
-        <p className="text-sm font-semibold">Page {pageNumber}</p>
-        <span className={`text-xs font-medium ${badge.className}`}>{badge.label}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3 p-3">
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Original
-          </p>
-          <div className="aspect-[3/4] w-full overflow-hidden rounded-md border bg-muted">
-            <img
-              src={originalUrl}
-              alt={`Page ${pageNumber} original`}
-              className="h-full w-full object-contain"
-              onError={(e) => {
-                const el = e.currentTarget as HTMLImageElement;
-                el.style.display = "none";
-              }}
-            />
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Redesigned
-          </p>
-          <div className="flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-md border bg-muted">
-            {status === "done" && redesignedUrl ? (
-              <img
-                src={redesignedUrl}
-                alt={`Page ${pageNumber} redesigned`}
-                className="h-full w-full object-contain"
-                onError={(e) => {
-                  const el = e.currentTarget as HTMLImageElement;
-                  el.style.display = "none";
-                }}
-              />
-            ) : status === "generating" ? (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <FontAwesomeIcon icon={faSpinner} spin className="h-5 w-5" />
-                <span className="text-xs">Generating…</span>
-              </div>
-            ) : status === "error" ? (
-              <span className="text-xs text-red-500">Failed — try again</span>
-            ) : (
-              <span className="text-xs text-muted-foreground">Not redesigned yet</span>
-            )}
-          </div>
         </div>
       </div>
     </div>

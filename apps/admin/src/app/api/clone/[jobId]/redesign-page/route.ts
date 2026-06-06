@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { editImage } from "@/lib/ai";
-import { buildRedesignStrengthPrefix } from "@/lib/ai/prompts";
+import { buildRedesignPrompt } from "@/lib/ai/prompts";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
 import { flushLangfuse } from "@/lib/langfuse";
 import type { CloneJob } from "@/lib/ai/clone-types";
@@ -11,17 +11,16 @@ export const maxDuration = 120;
 type RouteParams = { params: Promise<{ jobId: string }> };
 
 /**
- * Redesign a single page: use original image + prompt (with optional edits)
- * to generate a new version via image-to-image editing.
+ * Redesign a single page: use original image + a structured KEEP/MAY/DO NOT
+ * template (no scene re-description) to generate a refreshed variation.
  */
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
     const body = await req.json();
-    const { pageIndex, prompt, changePercent } = body as {
+    const { pageIndex, changePercent } = body as {
       pageIndex: number;
-      prompt?: string;
-      changePercent?: number; // 10, 20, or 50
+      changePercent?: number;
     };
 
     if (pageIndex === undefined || pageIndex === null) {
@@ -42,22 +41,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 });
     }
 
-    // Use the reproduction prompt from analysis, allow override
-    const basePrompt = prompt || page.rawData?.reproductionPrompt || "";
-    if (!basePrompt) {
-      return NextResponse.json({ error: "No prompt available for this page" }, { status: 400 });
-    }
-
-    // Prepend strength guidance based on changePercent
     const pct = changePercent || 30;
-    const strengthPrefix = buildRedesignStrengthPrefix(pct);
-
-    const fullPrompt = `${strengthPrefix}\n\n${basePrompt}`;
+    const fullPrompt = buildRedesignPrompt(pct);
 
     // Resolve the original page image URL
     const originalImageUrl = resolveR2Url(page.imageUrl);
 
-    // Image-to-image: use original as base + prompt with strength guidance
+    // Image-to-image: original as anchor + template-only instruction (no scene re-description)
     const img = await editImage(originalImageUrl, fullPrompt, {
       trace: { caller: "clone/redesign-page", entityType: "cloneJob", entityId: jobId },
     });
@@ -82,7 +72,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     updatedPages[pageIndex] = {
       ...updatedPages[pageIndex],
       redesignedUrl: url,
-      redesignPrompt: basePrompt,
+      redesignPrompt: "",
     } as typeof updatedPages[number] & { redesignedUrl: string; redesignPrompt: string };
 
     await docRef.update({
