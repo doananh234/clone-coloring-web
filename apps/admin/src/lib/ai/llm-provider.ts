@@ -184,7 +184,7 @@ export async function visionAnalyzeJSON<T = unknown>(
   if (process.env.LLM_PROVIDER === "diaflow") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { diaflowVisionAnalyzeJSON } = require("./image-provider-diaflow");
-    return diaflowVisionAnalyzeJSON(imageUrl, prompt, options);
+    return diaflowVisionAnalyzeJSON(normalizeImageUrl(imageUrl), prompt, options);
   }
 
   const content = await visionAnalyze(imageUrl, prompt, {
