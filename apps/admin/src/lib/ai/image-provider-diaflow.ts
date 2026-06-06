@@ -422,6 +422,37 @@ export async function diaflowVisionAnalyzeJSON<T = unknown>(
   prompt: string,
   options?: DiaflowLLMOptions & { systemPrompt?: string },
 ): Promise<T> {
-  const content = await diaflowVisionAnalyze(imageUrl, prompt, options);
-  return JSON.parse(content) as T;
+  const raw = await diaflowVisionAnalyze(imageUrl, prompt, options);
+
+  // Strip markdown code fences the LLM may wrap around JSON
+  let cleaned = raw.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+  }
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch (err) {
+    // Attempt to repair truncated JSON (missing closing braces/brackets)
+    let repaired = cleaned;
+    const opens = (repaired.match(/[{[]/g) || []).length;
+    const closes = (repaired.match(/[}\]]/g) || []).length;
+    if (opens > closes) {
+      // Remove trailing partial key/value (e.g. truncated mid-string)
+      repaired = repaired.replace(/,?\s*"[^"]*"?\s*:?\s*"?[^"{}[\]]*$/, "");
+      for (let i = 0; i < opens - closes; i++) {
+        const lastOpen = repaired.lastIndexOf("{") > repaired.lastIndexOf("[") ? "}" : "]";
+        repaired += lastOpen;
+      }
+    }
+    try {
+      return JSON.parse(repaired) as T;
+    } catch {
+      throw new Error(
+        `Diaflow returned invalid JSON (possibly truncated). ` +
+        `Parse error: ${err instanceof Error ? err.message : err}\n` +
+        `Raw content (first 500 chars): ${raw.slice(0, 500)}`
+      );
+    }
+  }
 }
