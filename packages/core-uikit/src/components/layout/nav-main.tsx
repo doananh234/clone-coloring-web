@@ -37,7 +37,7 @@ function usePathname(): string {
     const origPush = window.history.pushState.bind(window.history);
     window.history.pushState = (...args: Parameters<typeof origPush>) => {
       origPush(...args);
-      update();
+      setTimeout(update, 0);
     };
     return () => {
       window.removeEventListener("popstate", update);
