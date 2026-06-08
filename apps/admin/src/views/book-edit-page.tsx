@@ -1,16 +1,20 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useFirestoreGetOne, useFirestoreMutation } from "@vx/core-uikit/firebase";
 import { useFirestore } from "@vx/core-uikit/firebase";
 import { Button, Input, Textarea, Switch, Label, Badge, Combobox } from "@vx/core-uikit/components";
+import { notifyError } from "@vx/core-uikit/notifications";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faFloppyDisk } from "@fortawesome/pro-regular-svg-icons";
+import { faArrowLeft, faFloppyDisk, faSparkles, faSpinner } from "@fortawesome/pro-regular-svg-icons";
 import { DetailCard } from "@/components/detail-card";
 import { ImageGrid, type ImageItem } from "@/components/image-grid";
+import { BookMetaPreviewModal } from "@/components/book-meta-preview-modal";
 import { ColorField } from "@vx/core-uikit/components";
 import { appNavigate } from "@/lib/navigate";
 import { useForm } from "react-hook-form";
 import type { BookEntity } from "@/crud/books";
+import type { BookMetaGenerationResult } from "@/lib/ai/prompts/book-meta-prompt";
 
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
 
@@ -50,6 +54,40 @@ export function BookEditPage({ bookId }: { bookId: string }) {
   const watchCoverUrl = form.watch("coverUrl") as string;
   const watchThumbnailUrl = form.watch("thumbnailUrl") as string;
   const watchSquareThumbnailUrl = form.watch("squareThumbnailUrl") as string;
+
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedMeta, setGeneratedMeta] = useState<BookMetaGenerationResult | null>(null);
+  const [showMetaPreview, setShowMetaPreview] = useState(false);
+
+  async function handleGenerateMeta() {
+    const thumbnailUrl = watchCoverUrl || watchThumbnailUrl;
+    if (!thumbnailUrl) return;
+
+    setIsGenerating(true);
+    try {
+      const res = await fetch("/api/generate/book-meta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thumbnailUrl }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Generation failed");
+      }
+      setGeneratedMeta(json.data);
+      setShowMetaPreview(true);
+    } catch (err) {
+      notifyError(err instanceof Error ? err.message : t("generateMeta.error"));
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  function handleApplyMeta(selected: Record<string, unknown>) {
+    for (const [key, value] of Object.entries(selected)) {
+      form.setValue(key, value, { shouldDirty: true });
+    }
+  }
 
   function onSubmit(data: Record<string, unknown>) {
     // Remove read-only fields
@@ -96,10 +134,26 @@ export function BookEditPage({ bookId }: { bookId: string }) {
             {tc("edit")}: {book.title}
           </h1>
         </div>
-        <Button type="submit" disabled={mutation.isLoading}>
-          <FontAwesomeIcon icon={faFloppyDisk} className="mr-1.5 h-3.5 w-3.5" />
-          {mutation.isLoading ? tc("loading") : tc("save")}
-        </Button>
+        <div className="flex items-center gap-2">
+          {(watchCoverUrl || watchThumbnailUrl) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGenerateMeta}
+              disabled={isGenerating}
+            >
+              <FontAwesomeIcon
+                icon={isGenerating ? faSpinner : faSparkles}
+                className={`mr-1.5 h-3.5 w-3.5 ${isGenerating ? "animate-spin" : ""}`}
+              />
+              {isGenerating ? t("generateMeta.loading") : t("generateMeta.button")}
+            </Button>
+          )}
+          <Button type="submit" disabled={mutation.isLoading}>
+            <FontAwesomeIcon icon={faFloppyDisk} className="mr-1.5 h-3.5 w-3.5" />
+            {mutation.isLoading ? tc("loading") : tc("save")}
+          </Button>
+        </div>
       </div>
 
       {/* Split Panel */}
@@ -270,6 +324,104 @@ export function BookEditPage({ bookId }: { bookId: string }) {
             </div>
           </DetailCard>
 
+          {/* Discovery */}
+          <DetailCard title={t("generateMeta.discoverySection")}>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">{t("fields.tags")}</Label>
+                <Input
+                  value={((form.watch("tags") as string[]) ?? []).join(", ")}
+                  onChange={(e) =>
+                    form.setValue(
+                      "tags",
+                      e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                      { shouldDirty: true },
+                    )
+                  }
+                  placeholder="tag1, tag2, tag3..."
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.primaryColor")}</Label>
+                  <Input {...form.register("primaryColor")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.secondaryColor")}</Label>
+                  <Input {...form.register("secondaryColor")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.themeStyle")}</Label>
+                  <Input {...form.register("themeStyle")} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.holiday")}</Label>
+                  <Input {...form.register("holiday")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.occasion")}</Label>
+                  <Input {...form.register("occasion")} />
+                </div>
+              </div>
+            </div>
+          </DetailCard>
+
+          {/* Etsy Listing */}
+          <DetailCard title={t("fields.etsyListing")}>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">{t("fields.etsyTitle")}</Label>
+                <Input {...form.register("etsyListing.etsyTitle")} />
+                <p className="text-[10px] text-muted-foreground">
+                  {(String(form.watch("etsyListing.etsyTitle") ?? "")).length}/140
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">{t("fields.etsyDescription")}</Label>
+                <Textarea {...form.register("etsyListing.etsyDescription")} rows={6} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">{t("fields.materials")}</Label>
+                <Input
+                  value={(((form.watch("etsyListing.materials") as unknown) as string[] | undefined) ?? []).join(", ")}
+                  onChange={(e) =>
+                    form.setValue(
+                      "etsyListing.materials" as never,
+                      e.target.value.split(",").map((s) => s.trim()).filter(Boolean) as never,
+                      { shouldDirty: true },
+                    )
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.etsyCategory")}</Label>
+                  <Input {...form.register("etsyListing.etsyCategory")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.subcategory")}</Label>
+                  <Input {...form.register("etsyListing.subcategory")} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.priceSuggestionUsd")}</Label>
+                  <Input type="number" step="0.01" {...form.register("etsyListing.priceSuggestionUsd")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.priceNotes")}</Label>
+                  <Input {...form.register("etsyListing.priceNotes")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">{t("fields.section")}</Label>
+                  <Input {...form.register("etsyListing.section")} />
+                </div>
+              </div>
+            </div>
+          </DetailCard>
+
           {/* Specs + Settings side by side */}
           <div className="grid grid-cols-2 gap-4">
             <DetailCard title={t("fields.specifications")}>
@@ -324,6 +476,17 @@ export function BookEditPage({ bookId }: { bookId: string }) {
           </div>
         </div>
       </div>
+
+      {/* AI Meta Preview Modal */}
+      {generatedMeta && (
+        <BookMetaPreviewModal
+          open={showMetaPreview}
+          onOpenChange={setShowMetaPreview}
+          generatedData={generatedMeta}
+          currentData={form.getValues() as Record<string, unknown>}
+          onApply={handleApplyMeta}
+        />
+      )}
     </form>
   );
 }
