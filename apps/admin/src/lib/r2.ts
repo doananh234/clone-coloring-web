@@ -112,6 +112,7 @@ export async function getPresignedUploadUrl(params: {
  */
 export function resolveR2Url(url: string): string {
   if (!url) return "";
+  if (url.startsWith("data:")) return url;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   const base = (
     process.env.R2_PUBLIC_BASE_URL ||

@@ -145,7 +145,7 @@ export async function textPrompt(
  * Send an image + text prompt for vision analysis. Returns text or JSON.
  */
 export async function visionAnalyze(
-  imageUrl: string,
+  imageUrl: string | string[],
   prompt: string,
   options?: LLMOptions & { systemPrompt?: string },
 ): Promise<string> {
@@ -156,7 +156,11 @@ export async function visionAnalyze(
   }
 
   // Resolve relative R2 paths to full URLs
-  const resolvedUrl = normalizeImageUrl(imageUrl);
+  const urls = Array.isArray(imageUrl) ? imageUrl : [imageUrl];
+  const imageParts: LLMMessagePart[] = urls.map((url) => ({
+    type: "image_url" as const,
+    image_url: { url: normalizeImageUrl(url) },
+  }));
 
   const messages: LLMMessage[] = [];
   if (options?.systemPrompt) {
@@ -165,8 +169,8 @@ export async function visionAnalyze(
   messages.push({
     role: "user",
     content: [
+      ...imageParts,
       { type: "text", text: prompt },
-      { type: "image_url", image_url: { url: resolvedUrl } },
     ],
   });
   const result = await chatCompletion(messages, options);
@@ -177,14 +181,17 @@ export async function visionAnalyze(
  * Vision analyze with structured JSON response.
  */
 export async function visionAnalyzeJSON<T = unknown>(
-  imageUrl: string,
+  imageUrl: string | string[],
   prompt: string,
   options?: Omit<LLMOptions, "jsonMode"> & { systemPrompt?: string },
 ): Promise<T> {
   if (process.env.LLM_PROVIDER === "diaflow") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { diaflowVisionAnalyzeJSON } = require("./image-provider-diaflow");
-    return diaflowVisionAnalyzeJSON(normalizeImageUrl(imageUrl), prompt, options);
+    const urls = Array.isArray(imageUrl)
+      ? imageUrl.map(normalizeImageUrl)
+      : normalizeImageUrl(imageUrl);
+    return diaflowVisionAnalyzeJSON(urls, prompt, options);
   }
 
   const content = await visionAnalyze(imageUrl, prompt, {

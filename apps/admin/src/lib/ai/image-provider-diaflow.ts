@@ -398,15 +398,20 @@ export async function diaflowTextPrompt(
 }
 
 export async function diaflowVisionAnalyze(
-  imageUrl: string,
+  imageUrl: string | string[],
   prompt: string,
   options?: DiaflowLLMOptions & { systemPrompt?: string },
 ): Promise<string> {
   const basePrompt = options?.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
 
-  // Upload image, embed remote path in request string
-  const imagePath = await uploadImage(imageUrl);
-  const request = `image: ${imagePath}\n${basePrompt}`;
+  // Upload image(s), embed remote paths in request string
+  const urls = Array.isArray(imageUrl) ? imageUrl : [imageUrl];
+  const imageParts: string[] = [];
+  for (const url of urls) {
+    const imagePath = await uploadImage(url);
+    imageParts.push(`image: ${imagePath}`);
+  }
+  const request = `${imageParts.join("\n")}\n${basePrompt}`;
   const { extracted } = await runDiaflow({ flow: "text", request });
 
   if (!extracted.content) {
@@ -418,7 +423,7 @@ export async function diaflowVisionAnalyze(
 }
 
 export async function diaflowVisionAnalyzeJSON<T = unknown>(
-  imageUrl: string,
+  imageUrl: string | string[],
   prompt: string,
   options?: DiaflowLLMOptions & { systemPrompt?: string },
 ): Promise<T> {
