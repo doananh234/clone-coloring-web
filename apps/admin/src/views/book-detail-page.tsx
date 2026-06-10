@@ -262,7 +262,8 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
         return;
       }
 
-      await firestoreUpdate(firestore, "books", bookId, { [field]: uploadData.url });
+      const urlWithCacheBust = `${uploadData.url}?v=${Date.now()}`;
+      await firestoreUpdate(firestore, "books", bookId, { [field]: urlWithCacheBust });
       notify.success("Text overlay applied & uploaded");
       refresh();
     } catch {

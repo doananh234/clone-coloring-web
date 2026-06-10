@@ -340,14 +340,14 @@ export const diaflowImageProvider: ImageProviderInterface = {
   async editImage(
     imageUrl: string,
     prompt: string,
-    options: ColorizeOptions = {},
+    options: ColorizeOptions & { imageLabel?: string } = {},
   ): Promise<GeneratedImage> {
-    const { referenceImageUrls } = options;
+    const { referenceImageUrls, imageLabel } = options;
 
     // Upload images, then embed remote paths in the request string
     const parts: string[] = [];
     const characterPath = await uploadImage(imageUrl);
-    parts.push(`B&W image: ${characterPath}`);
+    parts.push(`${imageLabel || "source image"}: ${characterPath}`);
     if (referenceImageUrls?.length) {
       for (const refUrl of referenceImageUrls) {
         const refPath = await uploadImage(refUrl);

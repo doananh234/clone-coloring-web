@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     const blendPrompt =
       prompt ||
-      "This is a colorful illustrated book cover with text overlaid on top. Make the text blend naturally into the illustration style — match the art style for the lettering while keeping the text perfectly readable and correctly spelled. IMPORTANT: Preserve ALL original colors, characters, and illustration details exactly as they are. Only modify how the text integrates visually. Do not convert to black and white or change the color palette.";
+      "This is a colorful illustrated book cover with text overlaid on it. There may be text at the TOP (title/header) and text at the BOTTOM (footer/subtitle). Make ALL text blend naturally into the illustration style — match the art style for the lettering while keeping every piece of text perfectly readable and correctly spelled. IMPORTANT: Preserve ALL original colors, characters, illustration details, AND every text element (both top and bottom) exactly as they are. Only modify how the text integrates visually into the art style. Do not remove any text, do not convert to black and white, do not change the color palette.";
 
     const img = await editImage(dataUrl, blendPrompt);
 
