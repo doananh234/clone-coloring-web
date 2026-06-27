@@ -36,13 +36,3 @@ export interface SourceBook {
   createdAt: string;
 }
 
-export interface JobContext {
-  readonly jobId: string;
-  readonly sourceBookId?: string;
-  readonly resultBookId?: string;
-  isDone(step: CloneStep): boolean;
-  recordRetry(step: CloneStep, attempt: number, error: unknown): Promise<void>;
-  markStepComplete(step: CloneStep): Promise<void>;
-  markComplete(bookId: string): Promise<void>;
-  markFailed(err: unknown): Promise<void>;
-}
