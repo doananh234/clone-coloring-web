@@ -1,0 +1,24 @@
+{
+  "name": "@vx/clone-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./retry": "./src/retry.ts",
+    "./steps": "./src/steps/index.ts",
+    "./job-context": "./src/job-context.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "firebase-admin": "*"
+  },
+  "devDependencies": {
+    "typescript": "*",
+    "vitest": "*"
+  }
+}
