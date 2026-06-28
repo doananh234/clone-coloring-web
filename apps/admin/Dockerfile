@@ -16,15 +16,13 @@ RUN yarn install --immutable
 # --- build ---
 FROM base AS build
 COPY --from=deps /app /app
-# Worker source pulls in admin's lib helpers via relative imports — must copy admin src.
-COPY apps/admin/src apps/admin/src
-COPY apps/admin/tsconfig.json apps/admin/tsconfig.json
-COPY apps/worker apps/worker
-RUN yarn workspace @vx/worker build
+COPY apps/admin apps/admin
+RUN yarn workspace @vx/admin build
 
 # --- runner ---
 FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=build /app /app
-WORKDIR /app/apps/worker
-CMD ["node", "dist/index.js"]
+WORKDIR /app/apps/admin
+EXPOSE 3000
+CMD ["yarn", "start"]

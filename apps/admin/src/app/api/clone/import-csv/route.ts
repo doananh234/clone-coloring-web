@@ -19,9 +19,13 @@ export async function POST(req: NextRequest) {
     const importedFromCsv = `${file.name}@${new Date().toISOString()}`;
     const { rows, invalid } = parseSourceBooksCsv(csvText, importedFromCsv);
 
+    // Only enqueue rows the operator selected in the sheet (Select=TRUE).
+    const selectedRows = rows.filter((r) => r.selectedInCsv);
+    const unselected = rows.length - selectedRows.length;
+
     const newRows: typeof rows = [];
     let skipped = 0;
-    for (const row of rows) {
+    for (const row of selectedRows) {
       const existing = await adminDb.collection("sourceBooks").doc(row.id).get();
       if (existing.exists) {
         skipped++;
@@ -34,6 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         imported: newRows.length,
         skipped,
+        unselected,
         invalid: invalid.length,
         invalidRows: invalid,
         jobIds: [],

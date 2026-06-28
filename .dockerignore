@@ -1,0 +1,16 @@
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/.yarn/cache
+**/.yarn/install-state.gz
+**/.env.local
+**/.env
+**/coverage
+.git
+.github
+docs/superpowers
+.superpowers
+.vscode
+.idea
+*.log
