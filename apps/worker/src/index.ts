@@ -2,11 +2,21 @@ import pino from "pino";
 import { createWorker } from "./queue";
 import "./firestore";
 import { processCloneJob } from "./processor/clone-job-processor";
+import { reconcileStaleJobs } from "./reconciler";
 
 const logger = pino({ transport: { target: "pino-pretty" } });
 
 async function main() {
   logger.info("worker booting");
+
+  try {
+    const recon = await reconcileStaleJobs();
+    if (recon.recovered.length) {
+      logger.info({ recovered: recon.recovered }, "reconciler re-enqueued stale jobs");
+    }
+  } catch (err) {
+    logger.error({ err }, "reconciler failed at boot — continuing");
+  }
 
   const worker = createWorker(async (job) => {
     const cloneJobId = (job.data as { cloneJobId: string }).cloneJobId;
