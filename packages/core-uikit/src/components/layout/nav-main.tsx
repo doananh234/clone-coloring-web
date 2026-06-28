@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "../ui/button";
 import {
   SidebarGroup,
@@ -6,23 +6,35 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "../ui/sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCirclePlus, faEnvelope } from "@fortawesome/pro-regular-svg-icons";
+import { faCirclePlus, faEnvelope, faChevronRight } from "@fortawesome/pro-regular-svg-icons";
 
-type NavItem = {
+type NavSubItem = {
   title: string;
   url: string;
   icon?: React.ReactNode;
 };
 
+type NavItem = {
+  title: string;
+  url: string;
+  icon?: React.ReactNode;
+  subItems?: NavSubItem[];
+};
+
+type LinkComponent = React.ComponentType<{
+  href: string;
+  children?: React.ReactNode;
+  className?: string;
+}>;
+
 type NavMainProps = {
   items: NavItem[];
-  LinkComponent?: React.ComponentType<{
-    href: string;
-    children?: React.ReactNode;
-    className?: string;
-  }>;
+  LinkComponent?: LinkComponent;
 };
 
 function usePathname(): string {
@@ -52,6 +64,60 @@ function isActive(pathname: string, url: string): boolean {
   return pathname === url || pathname.startsWith(url + "/");
 }
 
+function NavItemWithChildren({
+  item,
+  pathname,
+  Link,
+}: {
+  item: NavItem;
+  pathname: string;
+  Link: LinkComponent | "a";
+}) {
+  const subItems = item.subItems ?? [];
+  const childActive = useMemo(
+    () => subItems.some((sub) => isActive(pathname, sub.url)),
+    [subItems, pathname],
+  );
+  const [open, setOpen] = useState<boolean>(childActive);
+
+  useEffect(() => {
+    if (childActive) setOpen(true);
+  }, [childActive]);
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={item.title}
+        data-active={childActive || undefined}
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+      >
+        {item.icon}
+        <span>{item.title}</span>
+        <FontAwesomeIcon
+          icon={faChevronRight}
+          className={`ml-auto transition-transform duration-200 ${open ? "rotate-90" : ""}`}
+        />
+      </SidebarMenuButton>
+      {open && (
+        <SidebarMenuSub>
+          {subItems.map((sub) => (
+            <SidebarMenuSubItem key={sub.title}>
+              <SidebarMenuSubButton
+                isActive={isActive(pathname, sub.url)}
+                render={<Link href={sub.url} />}
+              >
+                {sub.icon}
+                <span>{sub.title}</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          ))}
+        </SidebarMenuSub>
+      )}
+    </SidebarMenuItem>
+  );
+}
+
 export function NavMain({ items, LinkComponent }: NavMainProps) {
   const Link = LinkComponent || "a";
   const pathname = usePathname();
@@ -79,18 +145,27 @@ export function NavMain({ items, LinkComponent }: NavMainProps) {
           </SidebarMenuItem>
         </SidebarMenu>
         <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton
-                tooltip={item.title}
-                data-active={isActive(pathname, item.url) || undefined}
-                render={<Link href={item.url} />}
-              >
-                {item.icon}
-                <span>{item.title}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          {items.map((item) =>
+            item.subItems && item.subItems.length > 0 ? (
+              <NavItemWithChildren
+                key={item.title}
+                item={item}
+                pathname={pathname}
+                Link={Link}
+              />
+            ) : (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  tooltip={item.title}
+                  data-active={isActive(pathname, item.url) || undefined}
+                  render={<Link href={item.url} />}
+                >
+                  {item.icon}
+                  <span>{item.title}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ),
+          )}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

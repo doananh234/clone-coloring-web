@@ -38,26 +38,24 @@ const data = {
   },
   navMain: [
     { title: "Books", url: "/books", icon: <FontAwesomeIcon icon={faBookOpen} /> },
-    { title: "Categories", url: "/categories", icon: <FontAwesomeIcon icon={faFolder} /> },
-    { title: "Characters", url: "/characters", icon: <FontAwesomeIcon icon={faUser} /> },
-    { title: "Locations", url: "/locations", icon: <FontAwesomeIcon icon={faMapPin} /> },
-    { title: "Art Styles", url: "/art-styles", icon: <FontAwesomeIcon icon={faPalette} /> },
-    {
-      title: "Coloring Styles",
-      url: "/coloring-styles",
-      icon: <FontAwesomeIcon icon={faDroplet} />,
-    },
-    { title: "Clone", url: "/clone", icon: <FontAwesomeIcon icon={faCopy} /> },
-    { title: "App Home", url: "/app-home", icon: <FontAwesomeIcon icon={faHouse} /> },
-    { title: "Wallets", url: "/wallets", icon: <FontAwesomeIcon icon={faWallet} /> },
-    { title: "Credit Ledger", url: "/credit-ledger", icon: <FontAwesomeIcon icon={faReceipt} /> },
-  ],
-  navSecondary: [
+    { title: "Clone Book", url: "/clone", icon: <FontAwesomeIcon icon={faCopy} /> },
     {
       title: "Settings",
       url: "#",
       icon: <FontAwesomeIcon icon={faGear} />,
+      subItems: [
+        { title: "Categories", url: "/categories", icon: <FontAwesomeIcon icon={faFolder} /> },
+        { title: "Characters", url: "/characters", icon: <FontAwesomeIcon icon={faUser} /> },
+        { title: "Locations", url: "/locations", icon: <FontAwesomeIcon icon={faMapPin} /> },
+        { title: "Art Styles", url: "/art-styles", icon: <FontAwesomeIcon icon={faPalette} /> },
+        { title: "Coloring Styles", url: "/coloring-styles", icon: <FontAwesomeIcon icon={faDroplet} /> },
+        { title: "App Home", url: "/app-home", icon: <FontAwesomeIcon icon={faHouse} /> },
+        { title: "Wallets", url: "/wallets", icon: <FontAwesomeIcon icon={faWallet} /> },
+        { title: "Credit Ledger", url: "/credit-ledger", icon: <FontAwesomeIcon icon={faReceipt} /> },
+      ],
     },
+  ],
+  navSecondary: [
     {
       title: "Get Help",
       url: "#",
