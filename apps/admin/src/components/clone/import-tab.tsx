@@ -7,6 +7,7 @@ import { toast } from "sonner";
 interface DryRunResult {
   imported: number;
   skipped: number;
+  unselected: number;
   invalid: number;
   invalidRows: Array<{ line: number; reason: string }>;
 }
@@ -77,11 +78,19 @@ export function ImportTab() {
 
       {dry && (
         <div className="rounded-lg border p-6 space-y-3">
-          <div className="flex gap-6 text-sm">
+          <div className="flex flex-wrap gap-6 text-sm">
             <span>New: <strong>{dry.imported}</strong></span>
             <span>Duplicates: <strong>{dry.skipped}</strong></span>
+            <span title="Rows with Select=FALSE were skipped — they don't get queued.">
+              Unselected: <strong>{dry.unselected ?? 0}</strong>
+            </span>
             <span>Invalid: <strong>{dry.invalid}</strong></span>
           </div>
+          {dry.imported === 0 && (dry.unselected ?? 0) > 0 && (
+            <p className="text-sm text-amber-600">
+              ⚠️ All rows have <code>Select=FALSE</code>. Set <code>Select=TRUE</code> in your CSV for the rows you want to import.
+            </p>
+          )}
           {dry.invalidRows.length > 0 && (
             <details className="text-sm">
               <summary className="cursor-pointer">Invalid rows ({dry.invalidRows.length})</summary>

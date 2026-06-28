@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       imported: newRows.length,
       skipped,
+      unselected,
       invalid: invalid.length,
       invalidRows: invalid,
       jobIds,
