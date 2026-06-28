@@ -1,6 +1,7 @@
 import pino from "pino";
 import { createWorker } from "./queue";
 import "./firestore";
+import { processCloneJob } from "./processor/clone-job-processor";
 
 const logger = pino({ transport: { target: "pino-pretty" } });
 
@@ -8,7 +9,9 @@ async function main() {
   logger.info("worker booting");
 
   const worker = createWorker(async (job) => {
-    logger.info({ jobId: job.id, data: job.data }, "received job (processor not wired yet)");
+    const cloneJobId = (job.data as { cloneJobId: string }).cloneJobId;
+    logger.info({ jobId: job.id, cloneJobId }, "processing job");
+    await processCloneJob(cloneJobId);
   });
 
   worker.on("ready", () => logger.info("worker ready, concurrency=1"));
