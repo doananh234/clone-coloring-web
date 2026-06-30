@@ -20,6 +20,7 @@ COPY --from=deps /app /app
 COPY apps/admin/src apps/admin/src
 COPY apps/admin/tsconfig.json apps/admin/tsconfig.json
 COPY apps/worker apps/worker
+RUN yarn workspace @vx/db prisma generate
 RUN yarn workspace @vx/worker build
 
 # --- runner ---
@@ -27,4 +28,4 @@ FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=build /app /app
 WORKDIR /app/apps/worker
-CMD ["node", "dist/index.js"]
+CMD ["node", "--env-file=.env", "--import", "tsx", "src/index.ts"]

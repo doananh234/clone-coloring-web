@@ -1,22 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { adminStorage } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { generateCategoryIcon } from "@/lib/ai";
+import { prisma } from "@vx/db";
+import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
+import { generateCategoryIcon } from "@vx/server-core/ai";
 
-async function uploadToStorage(base64Data: string, categoryId: string): Promise<string> {
-  const bucket = adminStorage.bucket();
-  const filename = `category-icons/${categoryId}/icon-${Date.now()}.png`;
+async function uploadIcon(base64Data: string, categoryId: string): Promise<string> {
   const buffer = Buffer.from(base64Data, "base64");
-
-  const file = bucket.file(filename);
-  await file.save(buffer, {
-    metadata: { contentType: "image/png" },
-    public: true,
+  const r2Config = getR2Config();
+  const r2Client = createR2Client(r2Config);
+  const key = `category-icons/${categoryId}/icon-${Date.now()}.png`;
+  const { url } = await uploadToR2({
+    client: r2Client,
+    config: r2Config,
+    key,
+    body: buffer,
+    contentType: "image/png",
   });
-
-  const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-  return publicUrl;
+  return resolveR2Url(url);
 }
 
 export async function POST(req: NextRequest) {
@@ -45,11 +44,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "previewBase64 required" }, { status: 400 });
       }
 
-      const imageUrl = await uploadToStorage(previewBase64, categoryId);
+      const imageUrl = await uploadIcon(previewBase64, categoryId);
 
-      await adminDb.collection("categories").doc(categoryId).update({
-        iconUrl: imageUrl,
-        updatedAt: FieldValue.serverTimestamp(),
+      await prisma.category.update({
+        where: { id: categoryId },
+        data: { iconUrl: imageUrl },
       });
 
       return NextResponse.json({ success: true, imageUrl });

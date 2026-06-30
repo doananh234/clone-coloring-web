@@ -11,7 +11,7 @@ import {
 } from "@fortawesome/pro-regular-svg-icons";
 import { cn } from "@vx/core-uikit/utils";
 import { notify } from "@vx/core-uikit/notifications";
-import type { CloneJob, ExtractedCharacter, ExtractedLocation } from "@/lib/ai/clone-types";
+import type { CloneJob, ExtractedCharacter, ExtractedLocation } from "@vx/server-core/ai/clone-types";
 
 interface CloneExtractStepProps {
   job: CloneJob;

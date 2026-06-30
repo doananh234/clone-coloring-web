@@ -1,38 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { visionAnalyzeJSON } from "@/lib/ai/llm-provider";
-import { CLONE_EXTRACTION_PROMPT, buildReproductionPrompt } from "@/lib/ai/prompts";
-import { flushLangfuse } from "@/lib/langfuse";
-import type { CloneJob, ClonePageRawData } from "@/lib/ai/clone-types";
+import { prisma } from "@vx/db";
+import { visionAnalyzeJSON } from "@vx/server-core/ai/llm-provider";
+import { CLONE_EXTRACTION_PROMPT, buildReproductionPrompt } from "@vx/server-core/ai/prompts";
+import { flushLangfuse } from "@vx/server-core/langfuse";
+import type { CloneJobPage, ClonePageRawData } from "@vx/server-core/ai/clone-types";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
 export async function POST(_req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
-    const docRef = adminDb.collection("cloneJobs").doc(jobId);
-    const doc = await docRef.get();
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
-    if (!doc.exists) {
+    if (!row) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    const job = doc.data() as CloneJob;
-
     // Allow retry from extracted, analyzed, analyzing (stale), or error states
     const allowedStatuses = ["extracted", "analyzed", "analyzing", "error"];
-    if (!allowedStatuses.includes(job.status)) {
+    if (!allowedStatuses.includes(row.status)) {
       return NextResponse.json(
-        { error: `Cannot analyze job in status: ${job.status}` },
+        { error: `Cannot analyze job in status: ${row.status}` },
         { status: 400 },
       );
     }
 
     // Set job status to analyzing
-    await docRef.update({ status: "analyzing", updatedAt: new Date().toISOString() });
+    await prisma.cloneJob.update({ where: { id: jobId }, data: { status: "analyzing" } });
 
     let analyzedCount = 0;
-    const updatedPages = [...job.pages];
+    const updatedPages: CloneJobPage[] = [...((row.pages as CloneJobPage[]) || [])];
 
     for (let i = 0; i < updatedPages.length; i++) {
       const page = updatedPages[i];
@@ -46,9 +43,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
       try {
         // Update page status to analyzing
         updatedPages[i] = { ...page, status: "analyzing" };
-        await docRef.update({
-          pages: updatedPages,
-          updatedAt: new Date().toISOString(),
+        await prisma.cloneJob.update({
+          where: { id: jobId },
+          data: { pages: updatedPages as any },
         });
 
         // Call vision AI — URL resolved centrally by visionAnalyzeJSON
@@ -83,10 +80,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
         updatedPages[i] = { ...page, status: "analyzed", rawData };
 
         // Progressive update so clients can poll for progress
-        await docRef.update({
-          pages: updatedPages,
-          analyzedPages: analyzedCount,
-          updatedAt: new Date().toISOString(),
+        await prisma.cloneJob.update({
+          where: { id: jobId },
+          data: { pages: updatedPages as any, analyzedPages: analyzedCount },
         });
       } catch (pageError) {
         console.error(`[clone/analyze] Page ${page.pageNumber} failed:`, pageError);
@@ -95,9 +91,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
           status: "error",
           error: pageError instanceof Error ? pageError.message : String(pageError),
         };
-        await docRef.update({
-          pages: updatedPages,
-          updatedAt: new Date().toISOString(),
+        await prisma.cloneJob.update({
+          where: { id: jobId },
+          data: { pages: updatedPages as any },
         });
       }
     }
@@ -105,18 +101,14 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     // Final status — only "analyzed" if every page succeeded
     const finalStatus = updatedPages.every((p) => p.status === "analyzed") ? "analyzed" : "error";
 
-    await docRef.update({
-      status: finalStatus,
-      analyzedPages: analyzedCount,
-      updatedAt: new Date().toISOString(),
+    const final = await prisma.cloneJob.update({
+      where: { id: jobId },
+      data: { status: finalStatus, analyzedPages: analyzedCount },
     });
-
-    // Re-read final state
-    const finalDoc = await docRef.get();
 
     await flushLangfuse();
 
-    return NextResponse.json({ success: true, job: finalDoc.data() });
+    return NextResponse.json({ success: true, job: final });
   } catch (error) {
     console.error("[clone/analyze] Error:", error);
     return NextResponse.json(

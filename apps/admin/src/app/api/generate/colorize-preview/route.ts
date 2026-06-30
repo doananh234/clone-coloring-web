@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { colorizeImage } from "@/lib/ai/image-provider";
-import { resolveR2Url } from "@/lib/r2";
+import { prisma } from "@vx/db";
+import { colorizeImage } from "@vx/server-core/ai/image-provider";
+import { resolveR2Url } from "@vx/server-core/r2";
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,11 +18,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const styleDoc = await adminDb.collection("coloringStyles").doc(coloringStyleId).get();
-    if (!styleDoc.exists) {
+    const style = await prisma.coloringStyle.findUnique({ where: { id: coloringStyleId } });
+    if (!style) {
       return NextResponse.json({ error: "Coloring style not found" }, { status: 404 });
     }
-    const style = styleDoc.data()!;
 
     if (!style.colorizationDirective) {
       return NextResponse.json(
@@ -31,7 +30,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const referenceImageUrls = (style.referenceImages || []).map((r: { url: string }) =>
+    const referenceImageUrls = ((style.referenceImages as { url: string }[]) || []).map((r) =>
       resolveR2Url(r.url),
     );
     const img = await colorizeImage(resolveR2Url(imageUrl), style.colorizationDirective, {

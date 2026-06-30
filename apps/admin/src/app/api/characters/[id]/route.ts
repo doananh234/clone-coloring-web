@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { generateCharacterReference } from "@/lib/ai";
-import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
-import { flushLangfuse } from "@/lib/langfuse";
+import { prisma } from "@vx/db";
+import { generateCharacterReference } from "@vx/server-core/ai";
+import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
+import { flushLangfuse } from "@vx/server-core/langfuse";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const doc = await adminDb.collection("characters").doc(id).get();
-    if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ id: doc.id, ...doc.data() });
+    const character = await prisma.character.findUnique({ where: { id } });
+    if (!character) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(character);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
@@ -24,9 +23,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Handle reference image regeneration (with optional redesign prompt)
     if (regenerateReference) {
-      const doc = await adminDb.collection("characters").doc(id).get();
-      if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
-      const character = doc.data()!;
+      const character = await prisma.character.findUnique({ where: { id } });
+      if (!character) return NextResponse.json({ error: "Not found" }, { status: 404 });
       const basePrompt = character.characterPrompt;
       if (!basePrompt)
         return NextResponse.json(
@@ -39,10 +37,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         ? `${basePrompt}\n\nADDITIONAL REDESIGN INSTRUCTIONS: ${redesignPrompt}`
         : basePrompt;
 
+      const visualDna = (character.visualDna as any) || {};
+      const extra = (character.data as any) || {};
       const img = await generateCharacterReference(prompt, {
-        sourceImageUrl: character.sourceImageUrl || undefined,
+        sourceImageUrl: extra.sourceImageUrl || undefined,
         characterName: character.name,
-        characterInfo: character.visualDna?.distinguishingFeatures?.join(", ") || "",
+        characterInfo: visualDna.distinguishingFeatures?.join(", ") || "",
         trace: { caller: "characters/regenerate", entityType: "character", entityId: id },
       });
       const buffer = Buffer.from(img.base64, "base64");
@@ -59,8 +59,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data.referenceImageUrl = `${url}?v=${Date.now()}`;
     }
 
-    data.updatedAt = FieldValue.serverTimestamp();
-    await adminDb.collection("characters").doc(id).update(data);
+    await prisma.character.update({ where: { id }, data });
 
     await flushLangfuse();
 
@@ -73,7 +72,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    await adminDb.collection("characters").doc(id).delete();
+    await prisma.character.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

@@ -4,9 +4,11 @@
 **/.turbo
 **/.yarn/cache
 **/.yarn/install-state.gz
-**/.env.local
-**/.env
 **/coverage
+apps/admin/src/**/*.js
+apps/admin/src/**/*.js.map
+apps/admin/src/**/*.d.ts
+apps/admin/src/**/*.d.ts.map
 .git
 .github
 docs/superpowers

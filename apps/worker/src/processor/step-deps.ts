@@ -4,14 +4,19 @@ import {
   createR2Client,
   uploadToR2 as r2Upload,
   resolveR2Url,
-} from "../../../admin/src/lib/r2";
-import { renderPdfToImages } from "../../../admin/src/lib/pdf-renderer";
-import { visionAnalyzeJSON } from "../../../admin/src/lib/ai/llm-provider";
-import { CLONE_EXTRACTION_PROMPT, buildReproductionPrompt } from "../../../admin/src/lib/ai/prompts";
+} from "@vx/server-core/r2";
+import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
+import { visionAnalyzeJSON } from "@vx/server-core/ai/llm-provider";
+import {
+  CLONE_EXTRACTION_PROMPT,
+  buildReproductionPrompt,
+  buildRedesignPrompt,
+} from "@vx/server-core/ai/prompts";
 import {
   generateCharacterReference,
   generateLocationReference,
-} from "../../../admin/src/lib/ai";
+  editImage,
+} from "@vx/server-core/ai";
 
 const r2Config = getR2Config();
 const r2Client = createR2Client(r2Config);
@@ -62,16 +67,17 @@ async function analyzePage(imageUrl: string, jobId: string): Promise<unknown> {
 }
 
 async function generatePage(args: {
-  prompt: string;
+  prompt: string;                // kept for signature compat; ignored
   sourceImageUrl: string;
   pageNumber: number;
   jobId: string;
+  changePercent?: number;        // optional; defaults to 30 to match manual reproduce
 }): Promise<{ base64: string }> {
-  return generateCharacterReference(args.prompt, {
-    sourceImageUrl: args.sourceImageUrl,
-    characterName: `page-${args.pageNumber}`,
+  const fullPrompt = buildRedesignPrompt(args.changePercent ?? 30);
+  const img = await editImage(resolveR2Url(args.sourceImageUrl), fullPrompt, {
     trace: { caller: "worker/reproduce", entityType: "cloneJob", entityId: args.jobId },
   });
+  return { base64: img.base64 || img.dataUrl?.split(",")[1] || "" };
 }
 
 export const downloadDeps = { fetchPdf, uploadToR2 };

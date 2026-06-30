@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { generateCharacterReference, generateLocationReference } from "@/lib/ai";
-import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
+import { prisma } from "@vx/db";
+import { generateCharacterReference, generateLocationReference } from "@vx/server-core/ai";
+import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
 
 interface RegenerateResult {
   id: string;
@@ -24,22 +23,22 @@ export async function POST(req: NextRequest) {
 
     // Collect characters missing reference images
     if (entityType === "all" || entityType === "characters") {
-      const charSnap = await adminDb.collection("characters").get();
-      const missingChars = charSnap.docs.filter((doc) => {
-        const data = doc.data();
-        return !data.referenceImageUrl && data.characterPrompt;
-      });
+      const allChars = await prisma.character.findMany();
+      const missingChars = allChars.filter(
+        (c) => !c.referenceImageUrl && c.characterPrompt,
+      );
 
-      for (const doc of missingChars) {
-        const character = doc.data();
+      for (const character of missingChars) {
         try {
-          const img = await generateCharacterReference(character.characterPrompt, {
-            sourceImageUrl: character.sourceImageUrl || undefined,
+          const visualDna = (character.visualDna as any) || {};
+          const extra = (character.data as any) || {};
+          const img = await generateCharacterReference(character.characterPrompt!, {
+            sourceImageUrl: extra.sourceImageUrl || undefined,
             characterName: character.name,
-            characterInfo: character.visualDna?.distinguishingFeatures?.join(", ") || "",
+            characterInfo: visualDna.distinguishingFeatures?.join(", ") || "",
           });
           const buffer = Buffer.from(img.base64, "base64");
-          const key = `assets/characters/${doc.id}/reference.png`;
+          const key = `assets/characters/${character.id}/reference.png`;
           const { url } = await uploadToR2({
             client: r2Client,
             config: r2Config,
@@ -47,12 +46,12 @@ export async function POST(req: NextRequest) {
             body: buffer,
             contentType: "image/png",
           });
-          await adminDb.collection("characters").doc(doc.id).update({
-            referenceImageUrl: url,
-            updatedAt: FieldValue.serverTimestamp(),
+          await prisma.character.update({
+            where: { id: character.id },
+            data: { referenceImageUrl: url },
           });
           results.push({
-            id: doc.id,
+            id: character.id,
             name: character.name,
             type: "character",
             success: true,
@@ -60,7 +59,7 @@ export async function POST(req: NextRequest) {
           });
         } catch (error) {
           results.push({
-            id: doc.id,
+            id: character.id,
             name: character.name,
             type: "character",
             success: false,
@@ -72,21 +71,20 @@ export async function POST(req: NextRequest) {
 
     // Collect locations missing reference images
     if (entityType === "all" || entityType === "locations") {
-      const locSnap = await adminDb.collection("locations").get();
-      const missingLocs = locSnap.docs.filter((doc) => {
-        const data = doc.data();
-        return !data.referenceImageUrl && data.locationPrompt;
-      });
+      const allLocs = await prisma.location.findMany();
+      const missingLocs = allLocs.filter(
+        (l) => !l.referenceImageUrl && l.locationPrompt,
+      );
 
-      for (const doc of missingLocs) {
-        const location = doc.data();
+      for (const location of missingLocs) {
         try {
-          const img = await generateLocationReference(location.locationPrompt, {
-            sourceImageUrl: location.sourceImageUrl || undefined,
+          const extra = (location.data as any) || {};
+          const img = await generateLocationReference(location.locationPrompt!, {
+            sourceImageUrl: extra.sourceImageUrl || undefined,
             locationName: location.name,
           });
           const buffer = Buffer.from(img.base64, "base64");
-          const key = `assets/locations/${doc.id}/reference.png`;
+          const key = `assets/locations/${location.id}/reference.png`;
           const { url } = await uploadToR2({
             client: r2Client,
             config: r2Config,
@@ -94,12 +92,12 @@ export async function POST(req: NextRequest) {
             body: buffer,
             contentType: "image/png",
           });
-          await adminDb.collection("locations").doc(doc.id).update({
-            referenceImageUrl: url,
-            updatedAt: FieldValue.serverTimestamp(),
+          await prisma.location.update({
+            where: { id: location.id },
+            data: { referenceImageUrl: url },
           });
           results.push({
-            id: doc.id,
+            id: location.id,
             name: location.name,
             type: "location",
             success: true,
@@ -107,7 +105,7 @@ export async function POST(req: NextRequest) {
           });
         } catch (error) {
           results.push({
-            id: doc.id,
+            id: location.id,
             name: location.name,
             type: "location",
             success: false,

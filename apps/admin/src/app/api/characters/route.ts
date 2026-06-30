@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { prisma } from "@vx/db";
 
 export async function GET() {
   try {
-    const snap = await adminDb.collection("characters").orderBy("name").get();
-    const characters = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const characters = await prisma.character.findMany({
+      orderBy: { name: "asc" },
+    });
     return NextResponse.json({ data: characters });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

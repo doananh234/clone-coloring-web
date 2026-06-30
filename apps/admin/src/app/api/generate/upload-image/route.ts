@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
+import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
 
 export async function POST(req: NextRequest) {
   try {

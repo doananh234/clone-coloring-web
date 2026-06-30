@@ -23,6 +23,7 @@ import type {
   ImageUsage,
 } from "./image-provider-types";
 import { getLangfuse } from "../langfuse";
+import { awaitDiaflowSlot } from "./diaflow-rate-limiter";
 
 // --- Types ---
 
@@ -118,7 +119,7 @@ async function pollOnce(sessionId: string, token: string, apiUrl: string): Promi
 
     if (TRANSIENT_STATUS_CODES.includes(res.status)) {
       lastError = new Error(`Diaflow poll transient error (${res.status})`);
-      await sleep(3000);
+      await sleep(30000);
       continue;
     }
 
@@ -397,11 +398,11 @@ export async function diaflowTextPrompt(
   return extracted.content;
 }
 
-export async function diaflowVisionAnalyze(
+async function visionAnalyzeInternal(
   imageUrl: string | string[],
   prompt: string,
   options?: DiaflowLLMOptions & { systemPrompt?: string },
-): Promise<string> {
+): Promise<{ content: string; sessionId: string }> {
   const basePrompt = options?.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
 
   // Upload image(s), embed remote paths in request string
@@ -412,52 +413,170 @@ export async function diaflowVisionAnalyze(
     imageParts.push(`image: ${imagePath}`);
   }
   const request = `${imageParts.join("\n")}\n${basePrompt}`;
-  const { extracted } = await runDiaflow({ flow: "text", request });
+  const { sessionId, extracted } = await runDiaflow({ flow: "text", request });
 
   if (!extracted.content) {
-    throw new Error("Diaflow returned no content in result");
+    throw new Error(`Diaflow returned no content in result (session: ${sessionId})`);
   }
 
-  logDiaflowToLangfuse("visionAnalyze", prompt, undefined, options);
-  return extracted.content;
+  return { content: extracted.content, sessionId };
 }
+
+export async function diaflowVisionAnalyze(
+  imageUrl: string | string[],
+  prompt: string,
+  options?: DiaflowLLMOptions & { systemPrompt?: string },
+): Promise<string> {
+  const { content } = await visionAnalyzeInternal(imageUrl, prompt, options);
+  logDiaflowToLangfuse("visionAnalyze", prompt, undefined, options);
+  return content;
+}
+
+/**
+ * Repair JSON that was truncated mid-stream (Diaflow caps long responses).
+ *
+ * Strategy: single-pass scan to find the last position where the prefix is a
+ * complete sequence of values, then close the still-open `{`/`[` containers.
+ * Mid-string and mid-key truncations are discarded back to the previous comma
+ * or container close.
+ */
+function repairTruncatedJson(input: string): string {
+  const stack: string[] = [];
+  let inString = false;
+  let escape = false;
+  // Position such that input.slice(0, lastSafe) is a closeable prefix
+  // (every value before it is complete; bracket stack is unambiguous).
+  let lastSafe = 0;
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+
+    if (escape) { escape = false; continue; }
+    if (inString) {
+      if (ch === "\\") { escape = true; continue; }
+      if (ch === "\"") { inString = false; }
+      continue;
+    }
+
+    if (ch === "\"") { inString = true; continue; }
+    if (ch === "{" || ch === "[") { stack.push(ch); continue; }
+    if (ch === "}" || ch === "]") { stack.pop(); lastSafe = i + 1; continue; }
+    if (ch === "," && stack.length > 0) {
+      // A value just completed before this comma. Cutting here and closing
+      // open containers produces valid JSON minus the (incomplete) next value.
+      lastSafe = i;
+    }
+  }
+
+  if (!inString && stack.length === 0) return input;
+
+  let repaired = input.slice(0, lastSafe).replace(/[\s,]+$/, "");
+
+  // Recompute the bracket stack on the truncated prefix and close it.
+  const finalStack: string[] = [];
+  let inS = false;
+  let esc = false;
+  for (let i = 0; i < repaired.length; i++) {
+    const ch = repaired[i];
+    if (esc) { esc = false; continue; }
+    if (inS) {
+      if (ch === "\\") esc = true;
+      else if (ch === "\"") inS = false;
+      continue;
+    }
+    if (ch === "\"") inS = true;
+    else if (ch === "{" || ch === "[") finalStack.push(ch);
+    else if (ch === "}" || ch === "]") finalStack.pop();
+  }
+  for (let i = finalStack.length - 1; i >= 0; i--) {
+    repaired += finalStack[i] === "{" ? "}" : "]";
+  }
+  return repaired;
+}
+
+/**
+ * Parse a Diaflow text response as JSON, with one repair attempt and one
+ * full retry of the Diaflow call.
+ *
+ * Per-attempt sequence:
+ *   1. Strip markdown code fences.
+ *   2. Try `JSON.parse(cleaned)`. Return on success.
+ *   3. Try `JSON.parse(repairTruncatedJson(cleaned))` — closes unterminated
+ *      strings/brackets (covers the "AI missed a closing char" case).
+ *   4. If both fail, re-call Diaflow once more (attempt 2).
+ *
+ * Only after both attempts have failed do we throw with full trace info.
+ */
+const MAX_PARSE_ATTEMPTS = 2;
 
 export async function diaflowVisionAnalyzeJSON<T = unknown>(
   imageUrl: string | string[],
   prompt: string,
   options?: DiaflowLLMOptions & { systemPrompt?: string },
 ): Promise<T> {
-  const raw = await diaflowVisionAnalyze(imageUrl, prompt, options);
+  let lastFailure: { sessionId: string; raw: string; parseError: string } | null = null;
 
-  // Strip markdown code fences the LLM may wrap around JSON
-  let cleaned = raw.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
-  }
+  for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {
+    const { content: raw, sessionId } = await visionAnalyzeInternal(imageUrl, prompt, options);
+    logDiaflowToLangfuse("visionAnalyzeJSON", prompt, undefined, options);
 
-  try {
-    return JSON.parse(cleaned) as T;
-  } catch (err) {
-    // Attempt to repair truncated JSON (missing closing braces/brackets)
-    let repaired = cleaned;
-    const opens = (repaired.match(/[{[]/g) || []).length;
-    const closes = (repaired.match(/[}\]]/g) || []).length;
-    if (opens > closes) {
-      // Remove trailing partial key/value (e.g. truncated mid-string)
-      repaired = repaired.replace(/,?\s*"[^"]*"?\s*:?\s*"?[^"{}[\]]*$/, "");
-      for (let i = 0; i < opens - closes; i++) {
-        const lastOpen = repaired.lastIndexOf("{") > repaired.lastIndexOf("[") ? "}" : "]";
-        repaired += lastOpen;
+    let cleaned = raw.trim();
+    if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+    }
+
+    // (a) Direct parse
+    try {
+      return JSON.parse(cleaned) as T;
+    } catch (err) {
+      lastFailure = {
+        sessionId,
+        raw,
+        parseError: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    // (b) Repair (close unterminated string + missing `}` / `]`) and reparse
+    const repaired = repairTruncatedJson(cleaned);
+    if (repaired !== cleaned) {
+      try {
+        const parsed = JSON.parse(repaired) as T;
+        console.warn("[Diaflow] Response auto-repaired (closed truncation)", {
+          sessionId,
+          attempt,
+          rawLength: raw.length,
+          repairedLength: repaired.length,
+          droppedChars: raw.length - repaired.length,
+        });
+        return parsed;
+      } catch {
+        /* fall through to retry / final throw */
       }
     }
-    try {
-      return JSON.parse(repaired) as T;
-    } catch {
-      throw new Error(
-        `Diaflow returned invalid JSON (possibly truncated). ` +
-        `Parse error: ${err instanceof Error ? err.message : err}\n` +
-        `Raw content (first 500 chars): ${raw.slice(0, 500)}`
-      );
+
+    if (attempt < MAX_PARSE_ATTEMPTS) {
+      console.warn("[Diaflow] Parse + repair failed, retrying Diaflow call once", {
+        sessionId,
+        attempt,
+        rawLength: raw.length,
+        parseError: lastFailure.parseError,
+      });
     }
   }
+
+  // Both attempts exhausted
+  const { sessionId, raw, parseError } = lastFailure!;
+  console.error("[Diaflow] Invalid JSON after retry", {
+    sessionId,
+    parseError,
+    rawLength: raw.length,
+    prompt: prompt.slice(0, 300),
+    rawContent: raw,
+  });
+  throw new Error(
+    `Diaflow returned invalid JSON after ${MAX_PARSE_ATTEMPTS} attempts. ` +
+    `Last session: ${sessionId} | Raw length: ${raw.length} chars | ` +
+    `Parse error: ${parseError}\n` +
+    `Raw content (first 500 chars): ${raw.slice(0, 500)}`,
+  );
 }

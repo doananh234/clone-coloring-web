@@ -13,7 +13,7 @@ import {
   faDroplet,
   faPaintbrushPencil,
 } from "@fortawesome/pro-regular-svg-icons";
-import type { CloneJob, CloneJobPage } from "@/lib/ai/clone-types";
+import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 interface CloneAnalyzeStepProps {
   job: CloneJob;

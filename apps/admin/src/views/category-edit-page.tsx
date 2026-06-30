@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useFirestoreGetOne, useFirestoreMutation } from "@vx/core-uikit/firebase";
-import { useFirestore } from "@vx/core-uikit/firebase";
+import { useRestGetOne, useRestMutation } from "@vx/core-uikit/api";
 import { Button, Input, Textarea, Switch, Label } from "@vx/core-uikit/components";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -25,21 +24,19 @@ export function CategoryEditPage({ categoryId }: { categoryId: string }) {
   const { t } = useTranslation("categories");
   const { t: tc } = useTranslation("common");
   const router = useRouter();
-  const firestore = useFirestore();
 
-  const { data: category, isLoading } = useFirestoreGetOne<CategoryEntity>({
+  const { data: category, isLoading } = useRestGetOne<CategoryEntity>({
     entityName: "categories",
-    collectionPath: "categories",
-    docId: categoryId,
-    firestore,
+    url: "/api/categories/:id",
+    pathParams: { id: categoryId },
+    enabled: !!categoryId,
   });
 
-  const mutation = useFirestoreMutation<CategoryEntity>({
+  const mutation = useRestMutation<CategoryEntity>({
     entityName: "categories",
-    collectionPath: "categories",
+    url: "/api/categories/:id",
     method: "PUT",
-    docId: categoryId,
-    firestore,
+    pathParams: { id: categoryId },
   });
 
   const form = useForm<Record<string, unknown>>({

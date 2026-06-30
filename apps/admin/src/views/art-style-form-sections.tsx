@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Input, Textarea, Card, CardContent } from "@vx/core-uikit/components";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/pro-regular-svg-icons";
-import type { ArtStyleEntity } from "@/lib/ai/art-style-types";
+import type { ArtStyleEntity } from "@vx/server-core/ai/art-style-types";
 import {
   STROKE_WEIGHT_MIN,
   STROKE_WEIGHT_MAX,
@@ -30,7 +30,7 @@ import {
   BORDER_STYLE_OPTIONS,
   ORIENTATION_OPTIONS,
   COLORING_TIME_OPTIONS,
-} from "@/lib/ai/art-style-types";
+} from "@vx/server-core/ai/art-style-types";
 
 type FormData = Omit<ArtStyleEntity, "id" | "createdAt" | "updatedAt">;
 

@@ -83,12 +83,7 @@ export const categoryFields: FieldConfig[] = [
 export const categoryCrud = createCrudPages<CategoryEntity>({
   entityName: "categories",
   basePath: "/categories",
-  dataSource: {
-    type: "firestore",
-    collection: "categories",
-    orderBy: { field: "index", direction: "asc" },
-    searchFields: ["displayName", "name"],
-  },
+  apiUrl: "/api/categories",
   fields: categoryFields,
   namespace: "categories",
   navigate: appNavigate,

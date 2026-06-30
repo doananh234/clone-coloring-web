@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { editImage } from "@/lib/ai/image-provider";
+import { editImage } from "@vx/server-core/ai/image-provider";
 
 export async function POST(req: NextRequest) {
   try {

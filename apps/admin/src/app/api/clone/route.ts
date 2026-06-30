@@ -1,36 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
-import { renderPdfToImages } from "@/lib/pdf-renderer";
-import type { CloneJob, CloneJobPage } from "@/lib/ai/clone-types";
+import { prisma } from "@vx/db";
+import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
+import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
+import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 // Next.js App Router: long timeout for large PDF processing
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const snap = await adminDb
-      .collection("cloneJobs")
-      .orderBy("createdAt", "desc")
-      .limit(50)
-      .get();
+    const url = new URL(req.url);
+    const status = url.searchParams.get("status");
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 200), 1000);
 
-    const jobs = snap.docs.map((doc) => {
-      const data = doc.data();
+    const where = status && status !== "all" ? { status } : undefined;
+
+    const [rows, grouped] = await Promise.all([
+      prisma.cloneJob.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      }),
+      prisma.cloneJob.groupBy({
+        by: ["status"],
+        _count: { _all: true },
+      }),
+    ]);
+
+    const counts: Record<string, number> = { all: 0 };
+    for (const g of grouped) {
+      counts[g.status] = g._count._all;
+      counts.all += g._count._all;
+    }
+
+    const jobs = rows.map((row) => {
+      const extra = (row.data as any) || {};
       return {
-        id: doc.id,
-        name: data.name,
-        status: data.status,
-        totalPages: data.totalPages,
-        analyzedPages: data.analyzedPages,
-        bookId: data.bookId || null,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        totalPages: row.totalPages,
+        analyzedPages: row.analyzedPages,
+        bookId: row.bookId || null,
+        sourceBookId: extra.sourceBookId ?? null,
+        currentStep: extra.currentStep ?? null,
+        failedStep: extra.failedStep ?? null,
+        retryHistory: extra.retryHistory ?? [],
+        thumbnailUrl: extra.thumbnailUrl ?? null,
+        brand: extra.brand ?? null,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
       };
     });
 
-    return NextResponse.json({ success: true, data: jobs });
+    return NextResponse.json({ success: true, data: jobs, counts });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
@@ -127,7 +151,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Create clone job in Firestore
+    // Create clone job in Postgres
     const job: CloneJob = {
       id: jobId,
       name: jobName,
@@ -141,7 +165,18 @@ export async function POST(req: NextRequest) {
       updatedAt: now,
     };
 
-    await adminDb.collection("cloneJobs").doc(jobId).set(job);
+    await prisma.cloneJob.create({
+      data: {
+        id: jobId,
+        name: jobName,
+        status: "extracted",
+        sourceFileName,
+        sourcePdfUrl: `/${pdfKey}`,
+        totalPages: pages.length,
+        analyzedPages: 0,
+        pages: pages as any,
+      },
+    });
 
     return NextResponse.json({ success: true, job });
   } catch (error) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { visionAnalyzeJSON, EXTRACTION_PROMPT } from "@/lib/ai";
+import { visionAnalyzeJSON, EXTRACTION_PROMPT } from "@vx/server-core/ai";
 
 export async function POST(req: NextRequest) {
   try {

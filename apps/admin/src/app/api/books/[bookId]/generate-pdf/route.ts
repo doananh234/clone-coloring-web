@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { prisma } from "@vx/db";
 import { PDFDocument } from "pdf-lib";
-import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
+import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ bookId: string }> }) {
   try {
     const { bookId } = await params;
-    const bookDoc = await adminDb.collection("books").doc(bookId).get();
-    if (!bookDoc.exists) {
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
 
-    const book = bookDoc.data()!;
-    const pages: { id: string; url: string }[] = book.coloringPages || [];
+    const pages: { id: string; url: string }[] = (book.coloringPages as any[]) || [];
 
     if (pages.length === 0) {
       return NextResponse.json({ error: "No coloring pages to include" }, { status: 400 });
@@ -88,9 +86,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ bo
     });
 
     // Update book
-    await adminDb.collection("books").doc(bookId).update({
-      pdfUrl,
-      updatedAt: FieldValue.serverTimestamp(),
+    await prisma.book.update({
+      where: { id: bookId },
+      data: { pdfUrl },
     });
 
     return NextResponse.json({

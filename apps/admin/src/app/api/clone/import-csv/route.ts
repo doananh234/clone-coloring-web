@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { prisma } from "@vx/db";
 import { cloneQueue } from "@/lib/queue/clone-queue";
 import { parseSourceBooksCsv } from "@/lib/csv/parse-source-books";
 import crypto from "node:crypto";
@@ -19,26 +19,28 @@ export async function POST(req: NextRequest) {
     const importedFromCsv = `${file.name}@${new Date().toISOString()}`;
     const { rows, invalid } = parseSourceBooksCsv(csvText, importedFromCsv);
 
-    // Only enqueue rows the operator selected in the sheet (Select=TRUE).
-    const selectedRows = rows.filter((r) => r.selectedInCsv);
-    const unselected = rows.length - selectedRows.length;
-
+    // Dedupe across ALL rows (not just selected) so Select=FALSE rows still get
+    // imported as `pending` and the operator can promote them later.
     const newRows: typeof rows = [];
     let skipped = 0;
-    for (const row of selectedRows) {
-      const existing = await adminDb.collection("sourceBooks").doc(row.id).get();
-      if (existing.exists) {
+    for (const row of rows) {
+      const existing = await prisma.sourceBook.findUnique({ where: { id: row.id } });
+      if (existing) {
         skipped++;
       } else {
         newRows.push(row);
       }
     }
 
+    const queuedCount = newRows.filter((r) => r.selectedInCsv).length;
+    const pendingCount = newRows.length - queuedCount;
+
     if (dryRun) {
       return NextResponse.json({
-        imported: newRows.length,
+        imported: queuedCount,
+        pending: pendingCount,
         skipped,
-        unselected,
+        unselected: 0, // legacy
         invalid: invalid.length,
         invalidRows: invalid,
         jobIds: [],
@@ -46,37 +48,77 @@ export async function POST(req: NextRequest) {
     }
 
     const jobIds: string[] = [];
+    const pendingJobIds: string[] = [];
     for (const row of newRows) {
       const jobId = crypto.randomUUID();
-      const now = new Date().toISOString();
-      await adminDb.collection("sourceBooks").doc(row.id).set(row);
-      await adminDb.collection("cloneJobs").doc(jobId).set({
-        id: jobId,
-        name: row.fileName.replace(/\.pdf$/i, "") || row.id,
-        status: "queued",
-        sourceBookId: row.id,
-        sourcePdfUrl: row.sourcePdfUrl,
-        sourceFileName: row.fileName,
-        totalPages: 0,
-        analyzedPages: 0,
-        pages: [],
-        createdAt: now,
-        updatedAt: now,
+      const status = row.selectedInCsv ? "queued" : "pending";
+
+      // Map CSV row to SourceBook scalar columns plus catch-all `data`
+      const sourceBookData: Record<string, unknown> = { ...row };
+      const knownFields = [
+        "id",
+        "fileName",
+        "fileSize",
+        "topicName",
+        "thumbnailUrl",
+        "thumbnailPreview",
+        "bookUrl",
+        "selected",
+        "removed",
+        "niche",
+        "priority",
+        "importedFromCsv",
+      ];
+      const sourceBookCols: Record<string, unknown> = {};
+      const extraSource: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(sourceBookData)) {
+        if (knownFields.includes(k)) sourceBookCols[k] = v;
+        else extraSource[k] = v;
+      }
+
+      await prisma.sourceBook.create({
+        data: {
+          id: row.id,
+          ...sourceBookCols,
+          data: extraSource,
+        } as any,
       });
-      jobIds.push(jobId);
+
+      await prisma.cloneJob.create({
+        data: {
+          id: jobId,
+          name: row.fileName.replace(/\.pdf$/i, "") || row.id,
+          status,
+          sourcePdfUrl: row.sourcePdfUrl,
+          sourceFileName: row.fileName,
+          totalPages: 0,
+          analyzedPages: 0,
+          pages: [],
+          data: {
+            sourceBookId: row.id,
+            // Denormalize for fast UI rendering without a second read.
+            thumbnailUrl: row.thumbnailUrl || null,
+            brand: row.brand || null,
+          },
+        },
+      });
+      (row.selectedInCsv ? jobIds : pendingJobIds).push(jobId);
     }
 
+    // Only enqueue the selected ones into BullMQ; pending stay idle.
     for (const jobId of jobIds) {
       await cloneQueue.add("process", { cloneJobId: jobId }, { jobId });
     }
 
     return NextResponse.json({
-      imported: newRows.length,
+      imported: jobIds.length,
+      pending: pendingJobIds.length,
       skipped,
-      unselected,
+      unselected: 0,
       invalid: invalid.length,
       invalidRows: invalid,
       jobIds,
+      pendingJobIds,
     });
   } catch (err) {
     return NextResponse.json(

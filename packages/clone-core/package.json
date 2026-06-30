@@ -15,7 +15,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "firebase-admin": "*"
+    "@vx/db": "workspace:*"
   },
   "devDependencies": {
     "typescript": "*",

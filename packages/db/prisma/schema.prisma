@@ -1,0 +1,212 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Singleton app config (Firestore: collection "app")
+model App {
+  id        String   @id @default("default")
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+model Book {
+  id                 String   @id @default(cuid())
+  title              String
+  subtitle           String?
+  description        String?
+  price              String?
+  originalPrice      String?
+  discount           String?
+  category           String?
+  categoryId         String?
+  badge              String?
+  backgroundColor    String?
+  tryoutPage         String?
+  coverUrl           String   @default("")
+  pdfUrl             String?
+  squareThumbnailUrl String?
+  thumbnailUrl       String?
+  summaryPages       Json     @default("[]")
+  coloringPages      Json     @default("[]")
+  isPublic           Boolean  @default(false)
+  data               Json     @default("{}")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([categoryId])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  displayName String?
+  description String?
+  iconUrl     String?
+  iconPrompt  String?
+  isPublic    Boolean  @default(false)
+  index       Int?
+  books       Json     @default("[]")
+  data        Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Character {
+  id                String   @id @default(cuid())
+  name              String
+  type              String?
+  role              String?
+  visualDna         Json     @default("{}")
+  characterPrompt   String?
+  tags              String[] @default([])
+  referenceImageUrl String?
+  sourceBookId      String?
+  data              Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([sourceBookId])
+}
+
+model Location {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  visualDescription String?
+  locationPrompt    String?
+  atmosphere        Json     @default("{}")
+  props             String[] @default([])
+  tags              String[] @default([])
+  referenceImageUrl String?
+  sourceBookId      String?
+  data              Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([sourceBookId])
+}
+
+model ArtStyle {
+  id                  String   @id @default(cuid())
+  name                String
+  description         String?
+  thumbnailUrl        String?
+  referenceImages     Json     @default("[]")
+  lineWork            Json     @default("{}")
+  composition         Json     @default("{}")
+  formAndShape        Json     @default("{}")
+  moodAndAtmosphere   Json     @default("{}")
+  patternAndTexture   Json     @default("{}")
+  technical           Json     @default("{}")
+  generationDirective String?
+  tags                String[] @default([])
+  sourceBookId        String?
+  data                Json     @default("{}")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model ColoringStyle {
+  id                    String   @id @default(cuid())
+  name                  String
+  description           String?
+  thumbnailUrl          String?
+  referenceImages       Json     @default("[]")
+  medium                Json     @default("{}")
+  colorPalette          Json     @default("{}")
+  shadingAndLighting    Json     @default("{}")
+  fillBehavior          Json     @default("{}")
+  overallFeel           Json     @default("{}")
+  colorizationDirective String?
+  tags                  String[] @default([])
+  sourceBookId          String?
+  data                  Json     @default("{}")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// CSV-imported source book metadata
+model SourceBook {
+  id               String   @id
+  fileName         String?
+  fileSize         String?
+  topicName        String?
+  thumbnailUrl     String?
+  thumbnailPreview String?
+  bookUrl          String?
+  selected         Boolean  @default(false)
+  removed          Boolean  @default(false)
+  niche            String?
+  priority         String?
+  importedFromCsv  String?
+  data             Json     @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Purchase {
+  id        String   @id @default(cuid())
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Wallet {
+  id        String   @id
+  balance   Int      @default(0)
+  currency  String   @default("USD")
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id        String   @id
+  email     String?  @unique
+  name      String?
+  role      String   @default("user")
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CreditLedger {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Int
+  type        String
+  description String?
+  data        Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Long-running clone pipeline job
+model CloneJob {
+  id             String   @id @default(cuid())
+  name           String
+  status         String   @default("pending")
+  sourceFileName String?
+  sourcePdfUrl   String?
+  totalPages     Int      @default(0)
+  analyzedPages  Int      @default(0)
+  pages          Json     @default("[]")
+  bookData       Json?
+  entityMap      Json?
+  bookId         String?
+  resultBookId   String?
+  error          String?
+  data           Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}

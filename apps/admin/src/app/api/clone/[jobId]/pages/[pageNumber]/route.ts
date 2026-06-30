@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { buildReproductionPrompt } from "@/lib/ai/prompts";
-import type { CloneJob, ClonePageRawData } from "@/lib/ai/clone-types";
+import { prisma } from "@vx/db";
+import { buildReproductionPrompt } from "@vx/server-core/ai/prompts";
+import type { CloneJobPage, ClonePageRawData } from "@vx/server-core/ai/clone-types";
 
 type RouteParams = { params: Promise<{ jobId: string; pageNumber: string }> };
 
@@ -21,15 +21,14 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "rawData required" }, { status: 400 });
     }
 
-    const docRef = adminDb.collection("cloneJobs").doc(jobId);
-    const doc = await docRef.get();
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
-    if (!doc.exists) {
+    if (!row) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    const job = doc.data() as CloneJob;
-    const pageIndex = job.pages.findIndex((p) => p.pageNumber === pageNum);
+    const pages = (row.pages as CloneJobPage[]) || [];
+    const pageIndex = pages.findIndex((p) => p.pageNumber === pageNum);
 
     if (pageIndex === -1) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 });
@@ -38,16 +37,16 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     // Rebuild reproduction prompt from edited data
     const reproductionPrompt = buildReproductionPrompt(rawData);
 
-    const updatedPages = [...job.pages];
+    const updatedPages = [...pages];
     updatedPages[pageIndex] = {
       ...updatedPages[pageIndex],
       rawData: { ...rawData, reproductionPrompt },
       status: "analyzed",
     };
 
-    await docRef.update({
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
+    await prisma.cloneJob.update({
+      where: { id: jobId },
+      data: { pages: updatedPages as any },
     });
 
     return NextResponse.json({ success: true, page: updatedPages[pageIndex] });

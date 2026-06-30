@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Input, Label } from "@vx/core-uikit/components";
 import { ArtStylePicker } from "@/components/art-style-picker";
-import type { ArtStyleEntity } from "@/lib/ai/art-style-types";
+import type { ArtStyleEntity } from "@vx/server-core/ai/art-style-types";
 import { notify } from "@vx/core-uikit/notifications";
 import { cn } from "@vx/core-uikit/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

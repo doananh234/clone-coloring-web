@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
-import { colorizeImage } from "@/lib/ai/image-provider";
-import { flushLangfuse } from "@/lib/langfuse";
+import { prisma } from "@vx/db";
+import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
+import { colorizeImage } from "@vx/server-core/ai/image-provider";
+import { flushLangfuse } from "@vx/server-core/langfuse";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,12 +21,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "coloringStyleId is required" }, { status: 400 });
     }
 
-    // Load coloring style from Firestore
-    const styleDoc = await adminDb.collection("coloringStyles").doc(coloringStyleId).get();
-    if (!styleDoc.exists) {
+    // Load coloring style from Postgres
+    const style = await prisma.coloringStyle.findUnique({ where: { id: coloringStyleId } });
+    if (!style) {
       return NextResponse.json({ error: "Coloring style not found" }, { status: 404 });
     }
-    const style = styleDoc.data()!;
 
     if (!style.colorizationDirective) {
       return NextResponse.json(
@@ -37,7 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Colorize the image with style reference images as visual anchor
-    const referenceImageUrls = (style.referenceImages || []).map((r: { url: string }) =>
+    const referenceImageUrls = ((style.referenceImages as { url: string }[]) || []).map((r) =>
       resolveR2Url(r.url),
     );
     const img = await colorizeImage(resolveR2Url(imageUrl), style.colorizationDirective, {
@@ -69,12 +67,10 @@ export async function POST(req: NextRequest) {
 
     // If bookId+pageId, update the matching entry in book's coloringPages array
     if (bookId && pageId) {
-      const bookRef = adminDb.collection("books").doc(bookId);
-      const bookDoc = await bookRef.get();
+      const book = await prisma.book.findUnique({ where: { id: bookId } });
 
-      if (bookDoc.exists) {
-        const bookData = bookDoc.data()!;
-        let coloringPages = bookData.coloringPages || [];
+      if (book) {
+        let coloringPages = (book.coloringPages as any[]) || [];
 
         // Migrate legacy orphan entries: merge {pageId, coloredUrl} back into real pages
         type PageEntry = {
@@ -106,7 +102,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Find existing entry by `id` and set coloredUrl
-        // Append cache-bust param so Firestore value changes even when R2 key is the same
+        // Append cache-bust param so value changes even when R2 key is the same
         const coloredUrlWithBust = `${coloredUrl}?v=${Date.now()}`;
         const existingIdx = coloringPages.findIndex((p: PageEntry) => p.id === pageId);
 
@@ -117,9 +113,9 @@ export async function POST(req: NextRequest) {
           console.warn(`[colorize] Page ${pageId} not found in book ${bookId} coloringPages`);
         }
 
-        await bookRef.update({
-          coloringPages,
-          updatedAt: FieldValue.serverTimestamp(),
+        await prisma.book.update({
+          where: { id: bookId },
+          data: { coloringPages },
         });
       }
     }

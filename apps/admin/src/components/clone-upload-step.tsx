@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCloudArrowUp, faFilePdf, faSpinner } from "@fortawesome/pro-regular-svg-icons";
-import type { CloneJob } from "@/lib/ai/clone-types";
+import type { CloneJob } from "@vx/server-core/ai/clone-types";
 
 interface CloneUploadStepProps {
   onUploaded: (job: CloneJob) => void;

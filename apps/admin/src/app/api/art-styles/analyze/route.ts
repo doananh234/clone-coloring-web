@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { visionAnalyzeJSON } from "@/lib/ai/llm-provider";
-import { ART_STYLE_EXTRACTION_PROMPT } from "@/lib/ai/prompts";
+import { visionAnalyzeJSON } from "@vx/server-core/ai/llm-provider";
+import { ART_STYLE_EXTRACTION_PROMPT } from "@vx/server-core/ai/prompts";
 
 export async function POST(req: NextRequest) {
   try {

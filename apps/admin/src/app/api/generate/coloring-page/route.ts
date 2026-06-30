@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateColoringPage } from "@/lib/ai";
-import { flushLangfuse } from "@/lib/langfuse";
+import { generateColoringPage } from "@vx/server-core/ai";
+import { flushLangfuse } from "@vx/server-core/langfuse";
 
 export async function POST(req: NextRequest) {
   try {

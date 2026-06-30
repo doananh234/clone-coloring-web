@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { generateCharacterReference, generateLocationReference } from "@/lib/ai";
-import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
-import { flushLangfuse } from "@/lib/langfuse";
-import type { CloneJob, ExtractedCharacter, ExtractedLocation } from "@/lib/ai/clone-types";
+import { prisma } from "@vx/db";
+import { generateCharacterReference, generateLocationReference } from "@vx/server-core/ai";
+import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
+import { flushLangfuse } from "@vx/server-core/langfuse";
+import type {
+  CloneJobPage,
+  ExtractedCharacter,
+  ExtractedLocation,
+} from "@vx/server-core/ai/clone-types";
 
 export const maxDuration = 300;
 
@@ -31,17 +34,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       locations?: SelectedLoc[];
     };
 
-    const docRef = adminDb.collection("cloneJobs").doc(jobId);
-    const doc = await docRef.get();
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
-    if (!doc.exists) {
+    if (!row) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    const job = doc.data() as CloneJob;
+    const pages = (row.pages as CloneJobPage[]) || [];
     const r2Config = getR2Config();
     const r2Client = createR2Client(r2Config);
-    const now = new Date().toISOString();
     const results: SavedEntity[] = [];
 
     // Use client-selected characters, or fallback to all from job
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       ? selectedChars
       : (() => {
           const items: SelectedChar[] = [];
-          for (const page of job.pages) {
+          for (const page of pages) {
             if (!page.rawData?.characters) continue;
             for (const char of page.rawData.characters) {
               items.push({ char, sourcePageImageUrl: page.imageUrl });
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       ? selectedLocs
       : (() => {
           const items: SelectedLoc[] = [];
-          for (const page of job.pages) {
+          for (const page of pages) {
             if (!page.rawData?.locations) continue;
             for (const loc of page.rawData.locations) {
               items.push({ loc, sourcePageImageUrl: page.imageUrl });
@@ -74,24 +75,27 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // Save characters and generate reference images
     for (const { char, sourcePageImageUrl } of charsToProcess) {
-      const charId = crypto.randomUUID();
+      let charId = "";
       try {
-        // Save to Firestore first
-        await adminDb.collection("characters").doc(charId).set({
-          name: char.name,
-          type: char.type || "character",
-          role: char.role || "main_character",
-          visualDna: char.visualDna || {},
-          characterPrompt: char.characterPrompt,
-          referenceImageUrl: "",
-          sourceImageUrl: sourcePageImageUrl,
-          tags: char.tags || [],
-          sourceBookId: "",
-          sourcePageId: "",
-          cloneJobId: jobId,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
+        // Save to Postgres first
+        const created = await prisma.character.create({
+          data: {
+            name: char.name,
+            type: char.type || "character",
+            role: char.role || "main_character",
+            visualDna: (char.visualDna || {}) as any,
+            characterPrompt: char.characterPrompt,
+            referenceImageUrl: "",
+            tags: char.tags || [],
+            sourceBookId: null,
+            data: {
+              sourceImageUrl: sourcePageImageUrl,
+              sourcePageId: "",
+              cloneJobId: jobId,
+            },
+          },
         });
+        charId = created.id;
 
         // Generate reference image
         const img = await generateCharacterReference(char.characterPrompt, {
@@ -111,9 +115,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           contentType: "image/png",
         });
 
-        await adminDb.collection("characters").doc(charId).update({
-          referenceImageUrl: url,
-          updatedAt: FieldValue.serverTimestamp(),
+        await prisma.character.update({
+          where: { id: charId },
+          data: { referenceImageUrl: url },
         });
 
         results.push({
@@ -137,24 +141,27 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // Save locations and generate reference images
     for (const { loc, sourcePageImageUrl } of locsToProcess) {
-      const locId = crypto.randomUUID();
+      let locId = "";
       try {
-        await adminDb.collection("locations").doc(locId).set({
-          name: loc.name,
-          description: loc.description || "",
-          visualDescription: loc.visualDescription || "",
-          locationPrompt: loc.locationPrompt,
-          atmosphere: loc.atmosphere || {},
-          props: loc.props || [],
-          referenceImageUrl: "",
-          sourceImageUrl: sourcePageImageUrl,
-          tags: loc.tags || [],
-          sourceBookId: "",
-          sourcePageId: "",
-          cloneJobId: jobId,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
+        const created = await prisma.location.create({
+          data: {
+            name: loc.name,
+            description: loc.description || "",
+            visualDescription: loc.visualDescription || "",
+            locationPrompt: loc.locationPrompt,
+            atmosphere: loc.atmosphere || {},
+            props: loc.props || [],
+            referenceImageUrl: "",
+            tags: loc.tags || [],
+            sourceBookId: null,
+            data: {
+              sourceImageUrl: sourcePageImageUrl,
+              sourcePageId: "",
+              cloneJobId: jobId,
+            },
+          },
         });
+        locId = created.id;
 
         const img = await generateLocationReference(loc.locationPrompt, {
           sourceImageUrl: sourcePageImageUrl || undefined,
@@ -171,9 +178,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           contentType: "image/png",
         });
 
-        await adminDb.collection("locations").doc(locId).update({
-          referenceImageUrl: url,
-          updatedAt: FieldValue.serverTimestamp(),
+        await prisma.location.update({
+          where: { id: locId },
+          data: { referenceImageUrl: url },
         });
 
         results.push({
@@ -205,10 +212,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         .map((r) => ({ id: r.id, name: r.name, referenceImageUrl: r.referenceImageUrl })),
     };
 
-    await docRef.update({
-      entityMap,
-      status: "entities_ready",
-      updatedAt: now,
+    await prisma.cloneJob.update({
+      where: { id: jobId },
+      data: {
+        entityMap: entityMap as any,
+        status: "entities_ready",
+      },
     });
 
     const succeeded = results.filter((r) => r.status === "success").length;

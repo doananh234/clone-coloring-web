@@ -1,4 +1,4 @@
-import type { Firestore } from "firebase-admin/firestore";
+import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 
 export interface RenderDeps {
@@ -9,12 +9,10 @@ export interface RenderDeps {
 
 export async function stepRender(
   ctx: JobContext,
-  db: Firestore,
+  db: PrismaClient,
   deps: RenderDeps,
 ): Promise<void> {
-  const ref = db.collection("cloneJobs").doc(ctx.jobId);
-  const snap = await ref.get();
-  const job = snap.data() as { sourcePdfUrl?: string };
+  const job = await db.cloneJob.findUnique({ where: { id: ctx.jobId } });
   if (!job?.sourcePdfUrl) throw new Error("stepRender requires sourcePdfUrl on cloneJob");
 
   const pdfKey = job.sourcePdfUrl.replace(/^\//, "");
@@ -33,10 +31,10 @@ export async function stepRender(
     pages.push({ pageNumber: r.pageNumber, imageUrl: `/${pageKey}`, status: "pending" });
   }
 
-  await ref.update({
-    pages,
-    totalPages: pages.length,
-    updatedAt: new Date().toISOString(),
+  await db.cloneJob.update({
+    where: { id: ctx.jobId },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: { pages: pages as any, totalPages: pages.length },
   });
   await ctx.markStepComplete("render");
 }

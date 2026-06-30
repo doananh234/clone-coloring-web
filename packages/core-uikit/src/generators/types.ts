@@ -1,7 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import type { ZodType } from "zod";
 import type React from "react";
-import type { FirestoreDataSource } from "../firebase/types";
 
 export type FieldConfig = {
   name: string;
@@ -35,8 +34,7 @@ export type FieldConfig = {
 export type CrudPagesConfig<T> = {
   entityName: string;
   basePath: string;
-  apiUrl?: string;
-  dataSource?: FirestoreDataSource;
+  apiUrl: string;
   fields: FieldConfig[];
   /** i18n namespace for this entity (e.g. "users"). Field labels use t(`fields.${field.name}`) from this namespace. */
   namespace?: string;

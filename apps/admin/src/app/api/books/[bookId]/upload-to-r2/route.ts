@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
-import { FieldValue } from "firebase-admin/firestore";
+import { prisma } from "@vx/db";
+import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 
 async function downloadImage(url: string): Promise<Buffer | null> {
   try {
@@ -21,11 +20,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ bo
     const r2Config = getR2Config();
     const r2Client = createR2Client(r2Config);
 
-    const doc = await adminDb.collection("books").doc(bookId).get();
-    if (!doc.exists) {
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
-    const book = doc.data()!;
 
     const results: { field: string; url: string }[] = [];
     const errors: string[] = [];
@@ -52,10 +50,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ bo
     }
 
     // Upload coloring pages
-    if (book.coloringPages?.length) {
+    const coloringPages = (book.coloringPages as any[]) || [];
+    if (coloringPages.length) {
       const updatedPages = [];
-      for (let i = 0; i < book.coloringPages.length; i++) {
-        const page = book.coloringPages[i];
+      for (let i = 0; i < coloringPages.length; i++) {
+        const page = coloringPages[i];
         if (!page.url) {
           updatedPages.push(page);
           continue;
@@ -82,10 +81,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ bo
       updates.coloringPages = updatedPages;
     }
 
-    // Update Firestore with new R2 keys
+    // Update with new R2 keys
     if (Object.keys(updates).length > 0) {
-      updates.updatedAt = FieldValue.serverTimestamp();
-      await adminDb.collection("books").doc(bookId).update(updates);
+      await prisma.book.update({ where: { id: bookId }, data: updates });
     }
 
     return NextResponse.json({

@@ -41,15 +41,18 @@ export function parseSourceBooksCsv(csvText: string, importedFromCsv: string): P
       invalid.push({ line, reason: "missing book url" });
       return;
     }
+    const niche = row.Niche?.trim();
+    const priority = row.Priority?.trim();
     rows.push({
       id: row._id.trim(),
       fileName: (row.fileName ?? "").trim(),
-      fileSize: Number(row.fileSize ?? 0) || 0,
+      fileSize: String(row.fileSize ?? "").trim(),
       brand: (row["topicName (Brand)"] ?? "").trim(),
       thumbnailUrl: (row.thumbnailUrl ?? "").trim(),
       sourcePdfUrl: row["book url"].trim(),
-      niche: row.Niche?.trim() || undefined,
-      priority: row.Priority?.trim() || undefined,
+      // Only include niche/priority if non-empty — Firestore rejects undefined.
+      ...(niche ? { niche } : {}),
+      ...(priority ? { priority } : {}),
       selectedInCsv: (row.Select ?? "").trim().toUpperCase() === "TRUE",
       importedFromCsv,
       createdAt: now,

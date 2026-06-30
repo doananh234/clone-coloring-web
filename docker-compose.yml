@@ -25,6 +25,24 @@ services:
       timeout: 3s
       retries: 5
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: vx-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: coloring
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   admin:
     build:
       context: .
@@ -35,10 +53,13 @@ services:
       - apps/admin/.env.local
     environment:
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/coloring
     ports:
       - "3000:3000"
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
 
   worker:
@@ -51,8 +72,12 @@ services:
       - apps/worker/.env
     environment:
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/coloring
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
 
-volumes: {}
+volumes:
+  postgres_data:

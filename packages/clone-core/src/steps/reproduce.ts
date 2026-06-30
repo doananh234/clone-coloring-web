@@ -1,4 +1,4 @@
-import type { Firestore } from "firebase-admin/firestore";
+import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 
 interface JobPage {
@@ -22,19 +22,21 @@ export interface ReproduceDeps {
 
 export async function stepReproduce(
   ctx: JobContext,
-  db: Firestore,
+  db: PrismaClient,
   deps: ReproduceDeps,
 ): Promise<void> {
-  const ref = db.collection("cloneJobs").doc(ctx.jobId);
-  const snap = await ref.get();
-  const job = snap.data() as { pages: JobPage[] };
+  const job = await db.cloneJob.findUnique({ where: { id: ctx.jobId } });
+  if (!job) throw new Error(`cloneJob ${ctx.jobId} missing`);
+  const pages = (job.pages as JobPage[] | null | undefined) ?? [];
 
-  const updatedPages = [...job.pages];
+  const updatedPages = [...pages];
   for (let i = 0; i < updatedPages.length; i++) {
     const page = updatedPages[i];
     if (page.redesignedUrl) continue;
+    if (!page.imageUrl) continue;
+    // prompt is no longer required — generatePage uses buildRedesignPrompt(30)
+    // and ignores the passed-in prompt. We still pass it for signature compat.
     const prompt = page.rawData?.reproductionPrompt ?? "";
-    if (!prompt) continue;
 
     const sourceImageUrl = deps.resolveR2Url(page.imageUrl);
     const img = await deps.generatePage({
@@ -50,9 +52,10 @@ export async function stepReproduce(
       contentType: "image/png",
     });
     updatedPages[i] = { ...page, redesignedUrl: url };
-    await ref.update({
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
+    await db.cloneJob.update({
+      where: { id: ctx.jobId },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { pages: updatedPages as any },
     });
   }
 

@@ -2,8 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useFirestore } from "@vx/core-uikit/firebase";
-import { useFirestoreGetAll } from "@vx/core-uikit/firebase";
+import { useRestGetAll } from "@vx/core-uikit/api";
 import { Combobox, Label, Input } from "@vx/core-uikit/components";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -15,7 +14,7 @@ import {
   faChevronUp,
 } from "@fortawesome/pro-regular-svg-icons";
 import { notify } from "@vx/core-uikit/notifications";
-import type { CloneJob } from "@/lib/ai/clone-types";
+import type { CloneJob } from "@vx/server-core/ai/clone-types";
 import type { CategoryEntity } from "@/crud/categories";
 import { PagePreviewPopover, usePreviewHover } from "./page-preview-popover";
 
@@ -37,7 +36,6 @@ function resolveUrl(url: string | undefined | null): string {
 
 export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepProps) {
   const router = useRouter();
-  const firestore = useFirestore();
   const [bookId, setBookId] = useState<string | null>(job.bookId || null);
   const [creating, setCreating] = useState(false);
   const [metaOpen, setMetaOpen] = useState(false);
@@ -51,13 +49,11 @@ export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepPr
   const [badge, setBadge] = useState("");
   const [price, setPrice] = useState("");
 
-  const { data: categories } = useFirestoreGetAll<CategoryEntity>({
+  const { data: categories } = useRestGetAll<CategoryEntity>({
     entityName: "categoriesForClone",
-    collectionPath: "categories",
-    orderByField: "index",
-    orderByDirection: "asc",
-    pageSize: 100,
-    firestore,
+    url: "/api/categories",
+    page: 1,
+    limit: 100,
   });
 
   // Each page: redesigned URL is the "init result", can be overridden by AI regeneration

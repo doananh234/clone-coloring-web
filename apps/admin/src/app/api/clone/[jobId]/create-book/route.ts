@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import type { CloneJob } from "@/lib/ai/clone-types";
+import { prisma } from "@vx/db";
+import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
@@ -22,25 +22,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       };
     };
 
-    const docRef = adminDb.collection("cloneJobs").doc(jobId);
-    const doc = await docRef.get();
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
-    if (!doc.exists) {
+    if (!row) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    const job = doc.data() as CloneJob & { bookId?: string };
-
     // If book already exists and not forced, return it
-    if (job.bookId && !force) {
-      return NextResponse.json({ success: true, bookId: job.bookId, alreadyExists: true });
+    if (row.bookId && !force) {
+      return NextResponse.json({ success: true, bookId: row.bookId, alreadyExists: true });
     }
 
-    const now = new Date().toISOString();
-    const bookId = crypto.randomUUID();
+    const pages = (row.pages as CloneJobPage[]) || [];
 
     // Build coloringPages — use redesigned URLs if available and requested
-    const coloringPages = job.pages
+    const coloringPages = pages
       .filter((p) => p.imageUrl)
       .map((p) => ({
         id: crypto.randomUUID(),
@@ -68,7 +64,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       }));
 
     // Build a story outline summary from all pages
-    const storyOutline = job.pages
+    const storyOutline = pages
       .filter((p) => p.rawData)
       .map((p, i) => ({
         pageNumber: i + 1,
@@ -80,38 +76,40 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // Merge metadata from request > bookData > job defaults
     const m = metadata || {};
-    const bd = job.bookData || ({} as Partial<NonNullable<CloneJob["bookData"]>>);
+    const bd = (row.bookData as Partial<NonNullable<CloneJob["bookData"]>>) || {};
 
-    await adminDb
-      .collection("books")
-      .doc(bookId)
-      .set({
-        title: m.title || bd.title || job.name || "Untitled",
+    const createdBook = await prisma.book.create({
+      data: {
+        title: m.title || bd.title || row.name || "Untitled",
         subtitle: m.subtitle || bd.subtitle || "",
         description: m.description || bd.description || "",
         categoryId: m.categoryId || bd.categoryId || null,
         category: m.category || bd.category || null,
         badge: m.badge || null,
         price: m.price || null,
-        artStyleId: bd.artStyleId || null,
-        status: "draft",
-        coloringPages,
+        coloringPages: coloringPages as any,
         summaryPages: [],
-        specifications: { pages: coloringPages.length },
-        storyOutline,
         isPublic: false,
-        isPremium: false,
-        isConverted: false,
-        isRedesigned: false,
-        isEditionConverted: false,
-        cloneJobId: jobId,
-        createdAt: now,
-        updatedAt: now,
-      });
+        data: {
+          artStyleId: bd.artStyleId || null,
+          status: "draft",
+          specifications: { pages: coloringPages.length },
+          storyOutline,
+          isPremium: false,
+          isConverted: false,
+          isRedesigned: false,
+          isEditionConverted: false,
+          cloneJobId: jobId,
+        },
+      },
+    });
 
-    await docRef.update({ bookId, updatedAt: now });
+    await prisma.cloneJob.update({
+      where: { id: jobId },
+      data: { bookId: createdBook.id },
+    });
 
-    return NextResponse.json({ success: true, bookId });
+    return NextResponse.json({ success: true, bookId: createdBook.id });
   } catch (error) {
     console.error("[clone/create-book] Error:", error);
     return NextResponse.json(

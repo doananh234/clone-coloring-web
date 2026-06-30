@@ -6,6 +6,12 @@
  *         AZURE_LLM_DEPLOYMENT_NAME (default: gpt-4o)
  */
 
+import { createRequire } from "node:module";
+
+// ESM shim — `@vx/server-core` is "type": "module" so the bare `require()`
+// used below to lazy-load the Diaflow provider needs a CJS-compatible require.
+const require = createRequire(import.meta.url);
+
 import { resolveR2Url as normalizeImageUrl } from "../r2";
 import { getLangfuse } from "../langfuse";
 

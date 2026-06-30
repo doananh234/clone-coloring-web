@@ -1,3 +1,10 @@
+import { createRequire } from "node:module";
+
+// `@vx/server-core` is "type": "module" — pdfjs-dist needs CJS require for its
+// legacy main build and for `require.resolve("…/package.json")`. Bind a
+// CJS-compatible require to this module's URL.
+const require = createRequire(import.meta.url);
+
 const RENDER_SCALE = 2; // 2x for crisp output
 const MAX_WIDTH = 1024;
 
@@ -88,20 +95,77 @@ export async function renderPdfToImages(pdfBuffer: ArrayBuffer): Promise<Rendere
   // Polyfill missing browser APIs before importing pdfjs-dist
   ensurePolyfills();
 
+  // CJS helpers must come BEFORE the dynamic import so we can resolve
+  // pdfjs-dist via a real file:// URL. When this module is loaded by tsx
+  // it lives at a `data:text/javascript,...` URL, and Node's ESM resolver
+  // rejects bare specifiers from non-hierarchical bases. require.resolve
+  // (CJS) anchors to the actual on-disk path and always works.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const nodePath = require("node:path") as typeof import("node:path");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { pathToFileURL } = require("node:url") as typeof import("node:url");
+
+  // Legacy build avoids Promise.try (Node 22 lacks it) and is the
+  // officially-recommended build for Node.js environments.
+  const pdfjsEntry = require.resolve("pdfjs-dist/legacy/build/pdf.mjs");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfjsLib = await import("pdfjs-dist/build/pdf.mjs" as any);
+  const pdfjsLib = await import(pathToFileURL(pdfjsEntry).href as any);
+
+  // Standard fonts must be loadable in Node, or glyphs render as empty boxes.
+  // wasmUrl is required for JBig2/JPEG2000-compressed images (common in
+  // scanned/line-art PDFs). Without it, those XObjects are silently dropped
+  // and pages render blank — exactly the symptom for coloring-book PDFs.
+  const pdfjsPkgPath = require.resolve("pdfjs-dist/package.json");
+  const pdfjsRoot = nodePath.dirname(pdfjsPkgPath);
+  const standardFontDataUrl = nodePath.join(pdfjsRoot, "standard_fonts") + nodePath.sep;
+  const wasmUrl = pathToFileURL(nodePath.join(pdfjsRoot, "wasm") + nodePath.sep).href;
+
+  // Use require (createRequire-bound) instead of `await import()` because
+  // tsx loads this module as a data: URL and Node's ESM resolver rejects
+  // bare specifiers from non-hierarchical bases. @napi-rs/canvas is CJS.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const napiCanvas = require("@napi-rs/canvas") as typeof import("@napi-rs/canvas");
+
+  // pdfjs-dist v5 needs a CanvasFactory that knows how to create off-screen
+  // canvases in Node (patterns, transparency groups, tiling all use this).
+  // Without it, complex pages render blank/partial even when the main canvas works.
+  class NodeCanvasFactory {
+    create(width: number, height: number) {
+      const canvas = napiCanvas.createCanvas(Math.max(1, width), Math.max(1, height));
+      return { canvas, context: canvas.getContext("2d") };
+    }
+    reset(
+      canvasAndContext: { canvas: { width: number; height: number } },
+      width: number,
+      height: number,
+    ) {
+      canvasAndContext.canvas.width = Math.max(1, width);
+      canvasAndContext.canvas.height = Math.max(1, height);
+    }
+    destroy(canvasAndContext: {
+      canvas: { width: number; height: number } | null;
+      context: unknown;
+    }) {
+      if (canvasAndContext.canvas) {
+        canvasAndContext.canvas.width = 0;
+        canvasAndContext.canvas.height = 0;
+      }
+      canvasAndContext.canvas = null;
+      canvasAndContext.context = null;
+    }
+  }
+  const canvasFactory = new NodeCanvasFactory();
 
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(pdfBuffer),
-    useSystemFonts: true,
-    disableFontFace: true,
+    standardFontDataUrl,
+    wasmUrl,
+    CanvasFactory: NodeCanvasFactory,
   });
 
   const pdfDoc = await loadingTask.promise;
   const totalPages = pdfDoc.numPages;
   const pages: RenderedPage[] = [];
-
-  const napiCanvas = await import("@napi-rs/canvas");
 
   for (let i = 1; i <= totalPages; i++) {
     const page = await pdfDoc.getPage(i);
@@ -114,10 +178,19 @@ export async function renderPdfToImages(pdfBuffer: ArrayBuffer): Promise<Rendere
     const canvas = napiCanvas.createCanvas(scaledViewport.width, scaledViewport.height);
     const context = canvas.getContext("2d");
 
+    // Paint a solid white background — many PDFs have transparent backgrounds.
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, scaledViewport.width, scaledViewport.height);
+
+    // pdfjs-dist v5 RenderParameters: pass `canvas` AND a `canvasFactory` so
+    // off-screen surfaces use @napi-rs/canvas too (default factory fails in Node).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (page.render as any)({
+      canvas,
       canvasContext: context,
       viewport: scaledViewport,
+      canvasFactory,
+      background: "white",
     }).promise;
 
     const pngBuffer = await canvas.encode("png");

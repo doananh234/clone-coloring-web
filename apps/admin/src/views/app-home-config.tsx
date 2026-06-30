@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { useFirestore } from "@vx/core-uikit/firebase";
-import { useFirestoreGetAll, normalizeTimestamps } from "@vx/core-uikit/firebase";
+import { appApi } from "@vx/core-uikit/api";
 import { SortableList, ItemPickerDialog, Button, Badge } from "@vx/core-uikit/components";
 import { notify } from "@vx/core-uikit/notifications";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -54,16 +52,15 @@ function collectPublicPages(
 }
 
 // ---------------------------------------------------------------------------
-// Hook: load the singleton app/home document
+// Hook: load the singleton app/home document via REST
 // ---------------------------------------------------------------------------
 
-function useAppHomeDoc(firestore: ReturnType<typeof useFirestore>) {
+function useAppHomeDoc() {
   return useQuery({
-    queryKey: ["app-home", "firestore-detail", "app", "home"],
+    queryKey: ["app-home", "rest", "home"],
     queryFn: async () => {
-      const snap = await getDoc(doc(firestore, "app", "home"));
-      if (!snap.exists()) return null;
-      return normalizeTimestamps(snap.data()) as AppHomeDocument;
+      const res = await appApi.get<AppHomeDocument>("/api/app-home");
+      return (res as AppHomeDocument | null) ?? null;
     },
   });
 }
@@ -75,25 +72,21 @@ function useAppHomeDoc(firestore: ReturnType<typeof useFirestore>) {
 function AppHomeConfigPage() {
   const { t } = useTranslation("appHome");
   const { t: tc } = useTranslation("common");
-  const firestore = useFirestore();
   const queryClient = useQueryClient();
 
-  const { data: homeDoc, isLoading } = useAppHomeDoc(firestore);
+  const { data: homeDoc, isLoading } = useAppHomeDoc();
 
-  const { data: allBooks, isLoading: booksLoading } = useFirestoreGetAll<Record<string, unknown>>({
-    entityName: "books",
-    collectionPath: "books",
-    orderByField: "title",
-    pageSize: 500,
+  const { data: booksResp, isLoading: booksLoading } = useQuery({
+    queryKey: ["books", "list-all"],
+    queryFn: () => appApi.getAll<Record<string, unknown> & { id: string }>("/api/books", { page: 1, limit: 500 }),
   });
-  const { data: allCategories, isLoading: catsLoading } = useFirestoreGetAll<
-    Record<string, unknown>
-  >({
-    entityName: "categories",
-    collectionPath: "categories",
-    orderByField: "index",
-    pageSize: 500,
+  const allBooks = booksResp?.data ?? [];
+
+  const { data: catsResp, isLoading: catsLoading } = useQuery({
+    queryKey: ["categories", "list-all"],
+    queryFn: () => appApi.getAll<Record<string, unknown> & { id: string }>("/api/categories", { page: 1, limit: 500 }),
   });
+  const allCategories = catsResp?.data ?? [];
 
   // Local state
   const [newArrivals, setNewArrivals] = useState<AppHomeNewArrivalBook[]>([]);
@@ -126,16 +119,15 @@ function AppHomeConfigPage() {
     setCategories,
   );
 
-  // Save entire document
+  // Save entire document via REST
   const handleSave = useCallback(async () => {
     try {
       setSaving(true);
-      await setDoc(doc(firestore, "app", "home"), {
+      await appApi.put("/api/app-home", {
         newArrivalBooks: newArrivals.map((b, i) => ({ ...b, order: i })),
         trendingBooks: trending.map((b, i) => ({ ...b, rank: i + 1 })),
         categories: categories.map((c, i) => ({ ...c, order: i })),
         freeColoringPages: freePages,
-        updatedAt: serverTimestamp(),
       });
       await queryClient.invalidateQueries({ queryKey: ["app-home"] });
       notify.success(tc("saved"));
@@ -144,7 +136,7 @@ function AppHomeConfigPage() {
     } finally {
       setSaving(false);
     }
-  }, [newArrivals, trending, categories, freePages, firestore, queryClient, tc]);
+  }, [newArrivals, trending, categories, freePages, queryClient, tc]);
 
   // Remove helpers
   const removeNewArrival = (id: string) => setNewArrivals((p) => p.filter((b) => b.id !== id));

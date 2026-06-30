@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { editImage } from "@/lib/ai";
-import { buildRedesignPrompt } from "@/lib/ai/prompts";
-import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
-import { flushLangfuse } from "@/lib/langfuse";
-import type { CloneJob } from "@/lib/ai/clone-types";
+import { prisma } from "@vx/db";
+import { editImage } from "@vx/server-core/ai";
+import { buildRedesignPrompt } from "@vx/server-core/ai/prompts";
+import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
+import { flushLangfuse } from "@vx/server-core/langfuse";
+import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 export const maxDuration = 120;
 
@@ -27,15 +27,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "pageIndex required" }, { status: 400 });
     }
 
-    const docRef = adminDb.collection("cloneJobs").doc(jobId);
-    const doc = await docRef.get();
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
-    if (!doc.exists) {
+    if (!row) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    const job = doc.data() as CloneJob;
-    const page = job.pages[pageIndex];
+    const pages = (row.pages as CloneJobPage[]) || [];
+    const page = pages[pageIndex];
 
     if (!page) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 });
@@ -67,17 +66,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       contentType: "image/png",
     });
 
-    // Save redesigned URL on the page in Firestore
-    const updatedPages = [...job.pages];
+    // Save redesigned URL on the page in Postgres
+    const updatedPages = [...pages];
     updatedPages[pageIndex] = {
       ...updatedPages[pageIndex],
       redesignedUrl: url,
       redesignPrompt: "",
     } as typeof updatedPages[number] & { redesignedUrl: string; redesignPrompt: string };
 
-    await docRef.update({
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
+    await prisma.cloneJob.update({
+      where: { id: jobId },
+      data: { pages: updatedPages as any },
     });
 
     await flushLangfuse();

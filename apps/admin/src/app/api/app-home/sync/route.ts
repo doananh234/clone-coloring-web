@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { prisma } from "@vx/db";
 
 const R2_PUBLIC_BASE_URL =
   process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || process.env.R2_PUBLIC_BASE_URL || "";
@@ -17,63 +16,62 @@ function resolveUrl(url: string | undefined): string {
 export async function POST() {
   try {
     // Fetch all categories
-    const catSnap = await adminDb.collection("categories").orderBy("index").get();
-    const categories = catSnap.docs.map((doc) => {
-      const d = doc.data();
-      return {
-        id: doc.id,
-        name: d.name || "",
-        displayName: d.displayName || "",
-        description: d.description || "",
-        iconUrl: resolveUrl(d.iconUrl),
-        isPublic: d.isPublic ?? true,
-        order: d.index ?? 0,
-      };
+    const categoriesRaw = await prisma.category.findMany({
+      orderBy: { index: "asc" },
     });
+    const categories = categoriesRaw.map((d) => ({
+      id: d.id,
+      name: d.name || "",
+      displayName: d.displayName || "",
+      description: d.description || "",
+      iconUrl: resolveUrl(d.iconUrl || undefined),
+      isPublic: d.isPublic ?? true,
+      order: d.index ?? 0,
+    }));
 
-    // Fetch all books
-    const bookSnap = await adminDb.collection("books").get();
-    const books = bookSnap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((b: Record<string, unknown>) => b.coverUrl);
+    // Fetch all books with cover
+    const booksRaw = await prisma.book.findMany();
+    const books = booksRaw.filter((b) => b.coverUrl);
 
     // Sort by createdAt DESC for new arrivals
-    const sorted = [...books].sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-      const aTime = (a.createdAt as { toMillis?: () => number })?.toMillis?.() || 0;
-      const bTime = (b.createdAt as { toMillis?: () => number })?.toMillis?.() || 0;
-      return bTime - aTime;
-    });
+    const sorted = [...books].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
 
-    const newArrivalBooks = sorted.slice(0, 10).map((b: Record<string, unknown>) => ({
-      id: b.id as string,
-      title: (b.title as string) || "",
-      coverUrl: resolveUrl(b.coverUrl as string),
-      price: (b.price as string) || "",
-      subtitle: (b.subtitle as string) || "",
+    const newArrivalBooks = sorted.slice(0, 10).map((b) => ({
+      id: b.id,
+      title: b.title || "",
+      coverUrl: resolveUrl(b.coverUrl),
+      price: b.price || "",
+      subtitle: b.subtitle || "",
     }));
 
     // Sort by coloring pages count DESC for trending
     const byPages = [...books].sort(
-      (a: Record<string, unknown>, b: Record<string, unknown>) =>
+      (a, b) =>
         ((b.coloringPages as unknown[])?.length || 0) -
         ((a.coloringPages as unknown[])?.length || 0),
     );
 
-    const trendingBooks = byPages.slice(0, 10).map((b: Record<string, unknown>, i: number) => ({
-      id: b.id as string,
+    const trendingBooks = byPages.slice(0, 10).map((b, i) => ({
+      id: b.id,
       rank: i + 1,
-      title: (b.title as string) || "",
-      subtitle: (b.subtitle as string) || "",
-      imageUrl: resolveUrl(b.coverUrl as string),
+      title: b.title || "",
+      subtitle: b.subtitle || "",
+      imageUrl: resolveUrl(b.coverUrl),
       participantCount: String((b.coloringPages as unknown[])?.length || 0),
     }));
 
-    // Write to app/home
-    await adminDb.collection("app").doc("home").set({
+    // Write to app/home — store payload in `data` Json column
+    const payload = {
       categories,
       newArrivalBooks,
       trendingBooks,
-      updatedAt: FieldValue.serverTimestamp(),
+    };
+    await prisma.app.upsert({
+      where: { id: "home" },
+      create: { id: "home", data: payload },
+      update: { data: payload },
     });
 
     return NextResponse.json({

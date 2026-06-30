@@ -11,7 +11,7 @@ import {
   faPaintbrushPencil,
 } from "@fortawesome/pro-regular-svg-icons";
 import { notify } from "@vx/core-uikit/notifications";
-import type { CloneJob, CloneJobPage } from "@/lib/ai/clone-types";
+import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { PagePreviewPopover, usePreviewHover } from "./page-preview-popover";
 
 const CHANGE_OPTIONS = [

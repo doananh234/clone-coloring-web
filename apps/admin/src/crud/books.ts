@@ -194,12 +194,7 @@ export const bookFields: FieldConfig[] = [
 export const bookCrud = createCrudPages<BookEntity>({
   entityName: "books",
   basePath: "/books",
-  dataSource: {
-    type: "firestore",
-    collection: "books",
-    orderBy: { field: "title", direction: "asc" },
-    searchFields: ["title", "category"],
-  },
+  apiUrl: "/api/books",
   fields: bookFields,
   namespace: "books",
   navigate: appNavigate,

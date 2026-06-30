@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { useQuery } from "@tanstack/react-query";
-import { useFirestore, normalizeTimestamps } from "@vx/core-uikit/firebase";
+import { appApi } from "@vx/core-uikit/api";
 import { DataTable, Badge, Button } from "@vx/core-uikit/components";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -47,18 +46,20 @@ type PurchasesViewerProps = {
 
 export function PurchasesViewer({ userId }: PurchasesViewerProps) {
   const { t } = useTranslation("purchases");
-  const firestore = useFirestore();
   const [statusFilter, setStatusFilter] = useState<PurchaseStatus | "all">("all");
 
   const { data: purchases = [], isLoading } = useQuery({
     queryKey: ["purchases", userId],
     queryFn: async () => {
-      const colRef = collection(firestore, `users/${userId}/purchases`);
-      const q = query(colRef, orderBy("createdAt", "desc"));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...normalizeTimestamps(doc.data()),
+      const res = await appApi.getAll<{ id: string; data: Record<string, unknown>; createdAt: string; updatedAt: string }>(
+        "/api/purchases",
+        { page: 1, limit: 500, filters: { userId } },
+      );
+      return res.data.map((row) => ({
+        id: row.id,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        ...(row.data as Omit<Purchase, "id" | "createdAt" | "updatedAt">),
       })) as Purchase[];
     },
   });

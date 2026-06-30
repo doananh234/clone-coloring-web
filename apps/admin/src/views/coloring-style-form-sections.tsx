@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Input, Textarea, Card, CardContent } from "@vx/core-uikit/components";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/pro-regular-svg-icons";
-import type { ColoringStyleEntity } from "@/lib/ai/coloring-style-types";
+import type { ColoringStyleEntity } from "@vx/server-core/ai/coloring-style-types";
 import {
   TECHNIQUE_OPTIONS,
   TEXTURE_OPTIONS,
@@ -21,7 +21,7 @@ import {
   MOOD_OPTIONS,
   AGE_FEEL_OPTIONS,
   FINISH_OPTIONS,
-} from "@/lib/ai/coloring-style-types";
+} from "@vx/server-core/ai/coloring-style-types";
 
 type FormData = Omit<ColoringStyleEntity, "id" | "createdAt" | "updatedAt">;
 

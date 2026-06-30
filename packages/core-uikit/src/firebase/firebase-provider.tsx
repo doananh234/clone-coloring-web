@@ -1,12 +1,10 @@
 import React, { createContext, useContext, useMemo } from "react";
 import { initializeApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
 import { getAuth, type Auth } from "firebase/auth";
 import type { FirebaseConfig } from "./types";
 
 type FirebaseContextValue = {
   app: FirebaseApp;
-  firestore: Firestore;
   auth: Auth;
 };
 
@@ -21,9 +19,8 @@ export function FirebaseProvider({
 }) {
   const value = useMemo(() => {
     const app = initializeApp(config);
-    const firestore = getFirestore(app);
     const auth = getAuth(app);
-    return { app, firestore, auth };
+    return { app, auth };
   }, [config]);
 
   return <FirebaseContext.Provider value={value}>{children}</FirebaseContext.Provider>;

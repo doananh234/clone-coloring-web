@@ -17,6 +17,7 @@ RUN yarn install --immutable
 FROM base AS build
 COPY --from=deps /app /app
 COPY apps/admin apps/admin
+RUN yarn workspace @vx/db prisma generate
 RUN yarn workspace @vx/admin build
 
 # --- runner ---

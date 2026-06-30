@@ -28,9 +28,9 @@ function resolveUrl(url: string | undefined | null): string {
   if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
   return url;
 }
-import { buildColorizationPrompt } from "@/lib/ai/prompts";
+import { buildColorizationPrompt } from "@vx/server-core/ai/prompts";
 import { appNavigate } from "@/lib/navigate";
-import type { ColoringStyleEntity } from "@/lib/ai/coloring-style-types";
+import type { ColoringStyleEntity } from "@vx/server-core/ai/coloring-style-types";
 
 // --- Helpers ---
 

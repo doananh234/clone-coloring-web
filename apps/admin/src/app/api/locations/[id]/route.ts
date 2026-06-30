@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { generateLocationReference } from "@/lib/ai";
-import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
-import { flushLangfuse } from "@/lib/langfuse";
+import { prisma } from "@vx/db";
+import { generateLocationReference } from "@vx/server-core/ai";
+import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
+import { flushLangfuse } from "@vx/server-core/langfuse";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const doc = await adminDb.collection("locations").doc(id).get();
-    if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ id: doc.id, ...doc.data() });
+    const location = await prisma.location.findUnique({ where: { id } });
+    if (!location) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(location);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
@@ -24,9 +23,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Handle reference image regeneration (with optional redesign prompt)
     if (regenerateReference) {
-      const doc = await adminDb.collection("locations").doc(id).get();
-      if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
-      const location = doc.data()!;
+      const location = await prisma.location.findUnique({ where: { id } });
+      if (!location) return NextResponse.json({ error: "Not found" }, { status: 404 });
       const basePrompt = location.locationPrompt;
       if (!basePrompt)
         return NextResponse.json({ error: "No location prompt to generate from" }, { status: 400 });
@@ -36,8 +34,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         ? `${basePrompt}\n\nADDITIONAL REDESIGN INSTRUCTIONS: ${redesignPrompt}`
         : basePrompt;
 
+      const extra = (location.data as any) || {};
       const img = await generateLocationReference(prompt, {
-        sourceImageUrl: location.sourceImageUrl || undefined,
+        sourceImageUrl: extra.sourceImageUrl || undefined,
         locationName: location.name,
         trace: { caller: "locations/regenerate", entityType: "location", entityId: id },
       });
@@ -55,8 +54,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data.referenceImageUrl = `${url}?v=${Date.now()}`;
     }
 
-    data.updatedAt = FieldValue.serverTimestamp();
-    await adminDb.collection("locations").doc(id).update(data);
+    await prisma.location.update({ where: { id }, data });
 
     await flushLangfuse();
 
@@ -69,7 +67,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    await adminDb.collection("locations").doc(id).delete();
+    await prisma.location.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useFirestoreGetOne, useFirestoreMutation } from "@vx/core-uikit/firebase";
-import { useFirestore } from "@vx/core-uikit/firebase";
+import { useRestGetOne, useRestMutation } from "@vx/core-uikit/api";
 import { Button, Input, Textarea, Switch, Label, Badge, Combobox } from "@vx/core-uikit/components";
 import { notifyError } from "@vx/core-uikit/notifications";
 import { useRouter } from "next/navigation";
@@ -14,7 +13,7 @@ import { ColorField } from "@vx/core-uikit/components";
 import { appNavigate } from "@/lib/navigate";
 import { useForm } from "react-hook-form";
 import type { BookEntity } from "@/crud/books";
-import type { BookMetaGenerationResult } from "@/lib/ai/prompts/book-meta-prompt";
+import type { BookMetaGenerationResult } from "@vx/server-core/ai/prompts/book-meta-prompt";
 
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
 
@@ -30,21 +29,19 @@ export function BookEditPage({ bookId }: { bookId: string }) {
   const { t } = useTranslation("books");
   const { t: tc } = useTranslation("common");
   const router = useRouter();
-  const firestore = useFirestore();
 
-  const { data: book, isLoading } = useFirestoreGetOne<BookEntity>({
+  const { data: book, isLoading } = useRestGetOne<BookEntity>({
     entityName: "books",
-    collectionPath: "books",
-    docId: bookId,
-    firestore,
+    url: "/api/books/:id",
+    pathParams: { id: bookId },
+    enabled: !!bookId,
   });
 
-  const mutation = useFirestoreMutation<BookEntity>({
+  const mutation = useRestMutation<BookEntity>({
     entityName: "books",
-    collectionPath: "books",
+    url: "/api/books/:id",
     method: "PUT",
-    docId: bookId,
-    firestore,
+    pathParams: { id: bookId },
   });
 
   const form = useForm<Record<string, unknown>>({

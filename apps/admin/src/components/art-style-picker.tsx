@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button, Badge, Input, Dialog, DialogContent } from "@vx/core-uikit/components";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPalette, faXmark, faMagnifyingGlass } from "@fortawesome/pro-regular-svg-icons";
-import type { ArtStyleEntity } from "@/lib/ai/art-style-types";
+import type { ArtStyleEntity } from "@vx/server-core/ai/art-style-types";
 
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
 function resolveUrl(url: string | undefined | null): string {

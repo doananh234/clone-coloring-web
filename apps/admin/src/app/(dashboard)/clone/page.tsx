@@ -10,11 +10,15 @@ export default function CloneEntryPage() {
     <Tabs defaultValue="queue" className="w-full">
       <TabsList>
         <TabsTrigger value="queue">Queue</TabsTrigger>
+        <TabsTrigger value="unqueue">Unqueue</TabsTrigger>
         <TabsTrigger value="import">Import CSV</TabsTrigger>
         <TabsTrigger value="manual">Manual upload</TabsTrigger>
       </TabsList>
       <TabsContent value="queue">
         <QueueTab />
+      </TabsContent>
+      <TabsContent value="unqueue">
+        <QueueTab defaultFilter="pending" lockedFilter />
       </TabsContent>
       <TabsContent value="import">
         <ImportTab />

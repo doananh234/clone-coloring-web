@@ -1,29 +1,34 @@
-import type { Firestore } from "firebase-admin/firestore";
+import type { PrismaClient } from "@vx/db";
 import { STEP_ORDER, type CloneStep, type RetryRecord } from "./types";
 
-interface CloneJobDoc {
-  id: string;
-  sourceBookId?: string;
-  resultBookId?: string;
+// Fields stored inside the CloneJob.data Json column.
+interface CloneJobDataExtras {
   currentStep?: CloneStep;
   retryHistory?: RetryRecord[];
-  status?: string;
+  sourceBookId?: string;
+  failedStep?: CloneStep | null;
+  startedAt?: string;
+  finishedAt?: string;
+  [k: string]: unknown;
 }
 
 export class JobContext {
   private constructor(
-    private readonly db: Firestore,
+    private readonly db: PrismaClient,
     public readonly jobId: string,
     public readonly sourceBookId: string | undefined,
     public readonly resultBookId: string | undefined,
     private currentStep: CloneStep | undefined,
   ) {}
 
-  static async load(db: Firestore, jobId: string): Promise<JobContext> {
-    const snap = await db.collection("cloneJobs").doc(jobId).get();
-    if (!snap.exists) throw new Error(`cloneJob ${jobId} missing`);
-    const data = snap.data() as CloneJobDoc;
-    return new JobContext(db, jobId, data.sourceBookId, data.resultBookId, data.currentStep);
+  static async load(db: PrismaClient, jobId: string): Promise<JobContext> {
+    const job = await db.cloneJob.findUnique({ where: { id: jobId } });
+    if (!job) throw new Error(`cloneJob ${jobId} missing`);
+    const data = (job.data as CloneJobDataExtras | null | undefined) ?? {};
+    const sourceBookId = data.sourceBookId;
+    const resultBookId = job.resultBookId ?? undefined;
+    const currentStep = data.currentStep;
+    return new JobContext(db, jobId, sourceBookId, resultBookId ?? undefined, currentStep);
   }
 
   isDone(step: CloneStep): boolean {
@@ -33,6 +38,16 @@ export class JobContext {
     return target <= cursor;
   }
 
+  // Read the current `data` JSON blob so we can do a read-modify-write that
+  // preserves other keys not owned by this context.
+  private async readData(): Promise<CloneJobDataExtras> {
+    const job = await this.db.cloneJob.findUnique({
+      where: { id: this.jobId },
+      select: { data: true },
+    });
+    return ((job?.data as CloneJobDataExtras | null | undefined) ?? {}) as CloneJobDataExtras;
+  }
+
   async recordRetry(step: CloneStep, attempt: number, error: unknown): Promise<void> {
     const record: RetryRecord = {
       step,
@@ -40,39 +55,48 @@ export class JobContext {
       error: error instanceof Error ? error.message : String(error),
       at: new Date().toISOString(),
     };
-    const snap = await this.db.collection("cloneJobs").doc(this.jobId).get();
-    const data = (snap.data() as CloneJobDoc | undefined) ?? { id: this.jobId };
-    const retryHistory = [...(data.retryHistory ?? []), record];
-    await this.db.collection("cloneJobs").doc(this.jobId).update({
-      retryHistory,
-      updatedAt: new Date().toISOString(),
+    const prev = await this.readData();
+    const retryHistory = [...(prev.retryHistory ?? []), record];
+    await this.db.cloneJob.update({
+      where: { id: this.jobId },
+      data: { data: { ...prev, retryHistory } as never },
     });
   }
 
   async markStepComplete(step: CloneStep): Promise<void> {
     this.currentStep = step;
-    await this.db.collection("cloneJobs").doc(this.jobId).update({
-      currentStep: step,
-      updatedAt: new Date().toISOString(),
+    const prev = await this.readData();
+    await this.db.cloneJob.update({
+      where: { id: this.jobId },
+      data: { data: { ...prev, currentStep: step } as never },
     });
   }
 
   async markComplete(bookId: string): Promise<void> {
-    await this.db.collection("cloneJobs").doc(this.jobId).update({
-      status: "reproduced",
-      resultBookId: bookId,
-      finishedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    const prev = await this.readData();
+    await this.db.cloneJob.update({
+      where: { id: this.jobId },
+      data: {
+        status: "reproduced",
+        resultBookId: bookId,
+        data: { ...prev, finishedAt: new Date().toISOString() } as never,
+      },
     });
   }
 
   async markFailed(err: unknown): Promise<void> {
-    await this.db.collection("cloneJobs").doc(this.jobId).update({
-      status: "error",
-      failedStep: this.currentStep ?? null,
-      error: err instanceof Error ? err.message : String(err),
-      finishedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    const prev = await this.readData();
+    await this.db.cloneJob.update({
+      where: { id: this.jobId },
+      data: {
+        status: "error",
+        error: err instanceof Error ? err.message : String(err),
+        data: {
+          ...prev,
+          failedStep: this.currentStep ?? null,
+          finishedAt: new Date().toISOString(),
+        } as never,
+      },
     });
   }
 }

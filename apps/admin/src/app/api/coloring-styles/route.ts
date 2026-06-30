@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
+import { prisma } from "@vx/db";
+import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
 
 export async function GET() {
   try {
-    const snap = await adminDb.collection("coloringStyles").orderBy("name").get();
-    const coloringStyles = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const coloringStyles = await prisma.coloringStyle.findMany({
+      orderBy: { name: "asc" },
+    });
     return NextResponse.json({ data: coloringStyles });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
@@ -34,22 +34,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    // Create Firestore doc with empty images initially
-    const docRef = await adminDb.collection("coloringStyles").add({
-      name,
-      description: description || "",
-      referenceImages: [],
-      thumbnailUrl: "",
-      medium: medium || {},
-      colorPalette: colorPalette || {},
-      shadingAndLighting: shadingAndLighting || {},
-      fillBehavior: fillBehavior || {},
-      overallFeel: overallFeel || {},
-      colorizationDirective: colorizationDirective || "",
-      tags: tags || [],
-      sourceBookId: sourceBookId || null,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    // Create Postgres row with empty images initially
+    const created = await prisma.coloringStyle.create({
+      data: {
+        name,
+        description: description || "",
+        referenceImages: [],
+        thumbnailUrl: "",
+        medium: medium || {},
+        colorPalette: colorPalette || {},
+        shadingAndLighting: shadingAndLighting || {},
+        fillBehavior: fillBehavior || {},
+        overallFeel: overallFeel || {},
+        colorizationDirective: colorizationDirective || "",
+        tags: tags || [],
+        sourceBookId: sourceBookId || null,
+      },
     });
 
     // Upload reference images (max 3)
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
           buffer = Buffer.from(arrayBuf);
         }
 
-        const key = `assets/coloring-styles/${docRef.id}/ref-${i}.png`;
+        const key = `assets/coloring-styles/${created.id}/ref-${i}.png`;
         const { url } = await uploadToR2({
           client: r2Client,
           config: r2Config,
@@ -86,19 +86,19 @@ export async function POST(req: NextRequest) {
         referenceImages.push({ url, label: labels[i] || `ref-${i}` });
       }
 
-      // Update doc with uploaded images
-      await adminDb
-        .collection("coloringStyles")
-        .doc(docRef.id)
-        .update({
+      // Update row with uploaded images
+      await prisma.coloringStyle.update({
+        where: { id: created.id },
+        data: {
           referenceImages,
           thumbnailUrl: referenceImages[0]?.url || "",
-        });
+        },
+      });
     }
 
     return NextResponse.json({
       success: true,
-      id: docRef.id,
+      id: created.id,
       referenceImages,
     });
   } catch (error) {

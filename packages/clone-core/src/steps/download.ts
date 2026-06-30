@@ -1,4 +1,4 @@
-import type { Firestore } from "firebase-admin/firestore";
+import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 
 export interface DownloadDeps {
@@ -8,23 +8,30 @@ export interface DownloadDeps {
 
 export async function stepDownload(
   ctx: JobContext,
-  db: Firestore,
+  db: PrismaClient,
   deps: DownloadDeps,
 ): Promise<void> {
   if (!ctx.sourceBookId) {
     throw new Error("stepDownload requires sourceBookId on cloneJob");
   }
-  const srcSnap = await db.collection("sourceBooks").doc(ctx.sourceBookId).get();
-  if (!srcSnap.exists) throw new Error(`sourceBook ${ctx.sourceBookId} missing`);
-  const src = srcSnap.data() as { sourcePdfUrl: string };
+  const src = await db.sourceBook.findUnique({ where: { id: ctx.sourceBookId } });
+  if (!src) throw new Error(`sourceBook ${ctx.sourceBookId} missing`);
 
-  const buffer = await deps.fetchPdf(src.sourcePdfUrl);
+  // sourcePdfUrl is not a top-level field on SourceBook — it lives either in
+  // `bookUrl` or inside the `data` Json blob. Prefer top-level `bookUrl`.
+  const srcData = (src.data as { sourcePdfUrl?: string } | null | undefined) ?? {};
+  const sourcePdfUrl = src.bookUrl ?? srcData.sourcePdfUrl;
+  if (!sourcePdfUrl) {
+    throw new Error(`sourceBook ${ctx.sourceBookId} has no bookUrl / sourcePdfUrl`);
+  }
+
+  const buffer = await deps.fetchPdf(sourcePdfUrl);
   const pdfKey = `assets/clone-jobs/${ctx.jobId}/source.pdf`;
   await deps.uploadToR2({ key: pdfKey, body: buffer, contentType: "application/pdf" });
 
-  await db.collection("cloneJobs").doc(ctx.jobId).update({
-    sourcePdfUrl: `/${pdfKey}`,
-    updatedAt: new Date().toISOString(),
+  await db.cloneJob.update({
+    where: { id: ctx.jobId },
+    data: { sourcePdfUrl: `/${pdfKey}` },
   });
   await ctx.markStepComplete("download");
 }

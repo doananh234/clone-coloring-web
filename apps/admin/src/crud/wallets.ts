@@ -19,12 +19,7 @@ export const walletFields: FieldConfig[] = [
 export const walletCrud = createCrudPages<WalletEntity>({
   entityName: "wallets",
   basePath: "/wallets",
-  dataSource: {
-    type: "firestore",
-    collection: "wallets",
-    orderBy: { field: "updatedAt", direction: "desc" },
-    searchFields: ["id"],
-  },
+  apiUrl: "/api/wallets",
   fields: walletFields,
   namespace: "wallets",
   navigate: appNavigate,

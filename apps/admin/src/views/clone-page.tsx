@@ -28,7 +28,7 @@ import { CloneAnalyzeStep } from "@/components/clone-analyze-step";
 import { CloneRedesignStep } from "@/components/clone-redesign-step";
 import { CloneExtractStep } from "@/components/clone-extract-step";
 import { CloneReproduceStep } from "@/components/clone-reproduce-step";
-import type { CloneJob } from "@/lib/ai/clone-types";
+import type { CloneJob } from "@vx/server-core/ai/clone-types";
 
 const STEPS = [
   { title: "Upload PDF", description: "Drop or browse PDF file", icon: faFilePdf },
@@ -41,6 +41,175 @@ const STEPS = [
 
 interface ClonePageProps {
   existingJobId?: string;
+}
+
+const STEP_LABELS: Record<string, string> = {
+  download: "Downloading source PDF",
+  render: "Rendering pages to images",
+  analyze: "Analyzing pages with AI",
+  "extract-entities": "Extracting characters & locations",
+  reproduce: "Reproducing pages",
+  "create-book": "Creating the new book",
+};
+
+function WorkerProgressBanner({
+  status,
+  currentStep,
+  analyzedPages,
+  totalPages,
+  jobId,
+}: {
+  status: string;
+  currentStep?: string;
+  analyzedPages?: number;
+  totalPages?: number;
+  jobId: string;
+}) {
+  async function handleStart() {
+    try {
+      const res = await fetch(`/api/clone/${jobId}/start`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      notify.success("Started");
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  if (status === "pending") {
+    return (
+      <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <span className="text-lg">⏸</span>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-amber-900">Pending — not started yet</p>
+          <p className="text-xs text-amber-800">
+            Imported from CSV with Select=FALSE. Click Start to queue it for processing.
+          </p>
+        </div>
+        <Button size="sm" onClick={handleStart}>Start</Button>
+      </div>
+    );
+  }
+
+  if (status === "queued") {
+    return (
+      <div className="mb-4 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <span className="text-lg">⏳</span>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-gray-900">Queued — waiting for the worker</p>
+          <p className="text-xs text-gray-700">
+            The worker is busy with another job. This one will pick up automatically.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // status === "running" — `currentStep` is the last COMPLETED step,
+  // so the worker is processing the NEXT one in the pipeline.
+  // Auto pipeline: download → render → analyze → reproduce → create-book.
+  // extract-entities is NOT in the auto chain — user triggers it manually
+  // after the book is ready (fallback below covers manual completion).
+  const nextRunning =
+    currentStep === "create-book" ? null
+    : currentStep === "reproduce" ? "create-book"
+    : currentStep === "analyze" ? "reproduce"
+    : currentStep === "extract-entities" ? "reproduce"
+    : currentStep === "render" ? "analyze"
+    : currentStep === "download" ? "render"
+    : "download";
+
+  const stepLabel = nextRunning ? STEP_LABELS[nextRunning] ?? nextRunning : "Finishing up";
+  const progress =
+    nextRunning === "analyze" && totalPages && totalPages > 0
+      ? `${analyzedPages ?? 0} / ${totalPages} pages`
+      : null;
+
+  return (
+    <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+      <div className="flex items-center gap-3">
+        <span className="relative flex h-3 w-3 shrink-0">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+          <span className="relative inline-flex h-3 w-3 rounded-full bg-blue-500" />
+        </span>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-blue-900">Worker is running</p>
+          <p className="text-xs text-blue-800">
+            <span className="font-medium">{stepLabel}</span>
+            {progress && <span className="ml-2">· {progress}</span>}
+          </p>
+        </div>
+        <span className="text-xs font-mono text-blue-700">{nextRunning ?? "done"}</span>
+      </div>
+    </div>
+  );
+}
+
+function ErrorAlert({
+  error,
+  failedStep,
+  retryHistory,
+  jobId,
+  onRetried,
+}: {
+  error?: string;
+  failedStep?: string;
+  retryHistory?: Array<{ step: string; attempt?: number; error?: string; at?: string }>;
+  jobId: string;
+  onRetried: () => void;
+}) {
+  const totalRetries = retryHistory?.length ?? 0;
+  const stepRetries = failedStep
+    ? (retryHistory ?? []).filter((r) => r.step === failedStep).length
+    : 0;
+
+  async function handleRetry() {
+    try {
+      const res = await fetch(`/api/clone/${jobId}/retry`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      notify.success("Re-enqueued for retry");
+      onRetried();
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4">
+      <div className="flex items-start gap-3">
+        <span className="text-lg leading-none">❌</span>
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-sm font-semibold text-red-900">
+            Clone failed{failedStep ? ` at step "${failedStep}"` : ""}
+            {stepRetries > 0 && ` (${stepRetries}/5 attempts)`}
+          </p>
+          {error && (
+            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-white/70 p-2 text-xs text-red-800">
+              {error}
+            </pre>
+          )}
+          {totalRetries > 0 && retryHistory && (
+            <details className="text-xs text-red-800">
+              <summary className="cursor-pointer">
+                Retry history ({totalRetries})
+              </summary>
+              <ul className="mt-2 space-y-1">
+                {retryHistory.map((r, i) => (
+                  <li key={i} className="border-t border-red-200/60 pt-1 first:border-0">
+                    <span className="font-mono text-red-700/70">{r.at}</span>{" "}
+                    <span className="font-medium">{r.step}</span>
+                    {r.attempt != null && <span> #{r.attempt}</span>}: {r.error}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+        <Button size="sm" onClick={handleRetry}>
+          Retry
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function ClonePage({ existingJobId }: ClonePageProps) {
@@ -67,6 +236,31 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
           else if (s === "analyzed") setCurrentStep(3);
           else if (s === "analyzing" || s === "error") setCurrentStep(2); // back to analyze to retry/skip
           else if (s === "extracted") setCurrentStep(1);
+          // Worker-driven statuses. `currentStep` = last *completed* step,
+          // so the worker is processing the NEXT step. Map that to the
+          // equivalent manual UI step.
+          else if (s === "running" || s === "queued") {
+            const lastDone = (data.job as { currentStep?: string }).currentStep;
+            // Auto pipeline skips extract-entities — analyze → reproduce directly.
+            // extract-entities fallback covers the case where user manually completed it.
+            const nextRunning =
+              lastDone === "create-book" ? null  // nothing left
+              : lastDone === "reproduce" ? "create-book"
+              : lastDone === "analyze" ? "reproduce"
+              : lastDone === "extract-entities" ? "reproduce"
+              : lastDone === "render" ? "analyze"
+              : lastDone === "download" ? "render"
+              : "download"; // not started yet
+            const uiStep =
+              nextRunning === "download" ? 0
+              : nextRunning === "render" ? 1
+              : nextRunning === "analyze" ? 2
+              : nextRunning === "reproduce" ? 4
+              : nextRunning === "create-book" ? 5
+              : 5; // nothing left → end of flow
+            setCurrentStep(uiStep);
+          }
+          else if (s === "pending") setCurrentStep(1); // sit at Preview Pages
         }
       } catch (err) {
         console.error("Failed to load clone job:", err);
@@ -183,6 +377,28 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
 
       {/* Right content */}
       <div className="min-w-0 flex-1">
+        {/* Worker progress banner — shown while a worker-driven job is in flight */}
+        {job && (job.status === "running" || job.status === "queued" || job.status === "pending") && (
+          <WorkerProgressBanner
+            status={job.status}
+            currentStep={(job as { currentStep?: string }).currentStep}
+            analyzedPages={job.analyzedPages}
+            totalPages={job.totalPages}
+            jobId={job.id}
+          />
+        )}
+
+        {/* Error banner — shown whenever the job is in error state */}
+        {job && (job.status === "error" || (job as { failedStep?: string }).failedStep) && (
+          <ErrorAlert
+            error={(job as { error?: string }).error}
+            failedStep={(job as { failedStep?: string }).failedStep}
+            retryHistory={(job as { retryHistory?: Array<{ step: string }> }).retryHistory}
+            jobId={job.id}
+            onRetried={() => router.refresh()}
+          />
+        )}
+
         <div className="rounded-lg border bg-card p-6">
           <h3 className="mb-4 text-base font-semibold">{STEPS[currentStep].title}</h3>
 

@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useFirestoreGetOne } from "@vx/core-uikit/firebase";
-import { useFirestore } from "@vx/core-uikit/firebase";
+import { useRestGetOne } from "@vx/core-uikit/api";
 import { Badge, Button, Separator } from "@vx/core-uikit/components";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -23,17 +22,16 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
   const { t } = useTranslation("categories");
   const { t: tc } = useTranslation("common");
   const router = useRouter();
-  const firestore = useFirestore();
 
   const {
     data: category,
     isLoading,
     refresh,
-  } = useFirestoreGetOne<CategoryEntity>({
+  } = useRestGetOne<CategoryEntity>({
     entityName: "categories",
-    collectionPath: "categories",
-    docId: categoryId,
-    firestore,
+    url: "/api/categories/:id",
+    pathParams: { id: categoryId },
+    enabled: !!categoryId,
   });
 
   if (isLoading || !category) {

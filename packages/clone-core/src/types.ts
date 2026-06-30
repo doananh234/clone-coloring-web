@@ -25,7 +25,7 @@ export interface RetryRecord {
 export interface SourceBook {
   id: string;
   fileName: string;
-  fileSize: number;
+  fileSize: string;
   brand: string;
   thumbnailUrl: string;
   sourcePdfUrl: string;

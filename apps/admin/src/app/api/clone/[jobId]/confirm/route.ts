@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { resolveR2Url } from "@/lib/r2";
-import type { CloneJob, CloneJobBookData } from "@/lib/ai/clone-types";
+import { prisma } from "@vx/db";
+import { resolveR2Url } from "@vx/server-core/r2";
+import type { CloneJobBookData, CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
@@ -16,58 +16,49 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const { jobId } = await params;
     const body = (await req.json()) as ConfirmBody;
 
-    const docRef = adminDb.collection("cloneJobs").doc(jobId);
-    const doc = await docRef.get();
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
-    if (!doc.exists) {
+    if (!row) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    const job = doc.data() as CloneJob;
-    const now = new Date().toISOString();
+    const pages = (row.pages as CloneJobPage[]) || [];
     const savedCharacterIds: string[] = [];
     const savedLocationIds: string[] = [];
 
     // Save characters from selected pages
     for (const pageNum of body.saveCharacters || []) {
-      const page = job.pages.find((p) => p.pageNumber === pageNum);
+      const page = pages.find((p) => p.pageNumber === pageNum);
       if (!page?.rawData?.characters) continue;
 
       for (const char of page.rawData.characters) {
-        const charId = crypto.randomUUID();
-        await adminDb
-          .collection("characters")
-          .doc(charId)
-          .set({
-            id: charId,
+        const created = await prisma.character.create({
+          data: {
             name: char.name,
             type: char.type || "character",
             role: char.role || "main_character",
-            visualDna: char.visualDna || {},
+            visualDna: (char.visualDna || {}) as any,
             characterPrompt: char.characterPrompt,
             tags: char.tags || [],
             sourceBookId: null,
-            sourcePageId: null,
-            sourceImageUrl: resolveR2Url(page.imageUrl),
-            createdAt: now,
-            updatedAt: now,
-          });
-        savedCharacterIds.push(charId);
+            data: {
+              sourcePageId: null,
+              sourceImageUrl: resolveR2Url(page.imageUrl),
+            },
+          },
+        });
+        savedCharacterIds.push(created.id);
       }
     }
 
     // Save locations from selected pages
     for (const pageNum of body.saveLocations || []) {
-      const page = job.pages.find((p) => p.pageNumber === pageNum);
+      const page = pages.find((p) => p.pageNumber === pageNum);
       if (!page?.rawData?.locations) continue;
 
       for (const loc of page.rawData.locations) {
-        const locId = crypto.randomUUID();
-        await adminDb
-          .collection("locations")
-          .doc(locId)
-          .set({
-            id: locId,
+        const created = await prisma.location.create({
+          data: {
             name: loc.name,
             description: loc.description || "",
             visualDescription: loc.visualDescription || "",
@@ -76,18 +67,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             props: loc.props || [],
             tags: loc.tags || [],
             sourceBookId: null,
-            sourcePageId: null,
-            sourceImageUrl: resolveR2Url(page.imageUrl),
-            createdAt: now,
-            updatedAt: now,
-          });
-        savedLocationIds.push(locId);
+            data: {
+              sourcePageId: null,
+              sourceImageUrl: resolveR2Url(page.imageUrl),
+            },
+          },
+        });
+        savedLocationIds.push(created.id);
       }
     }
 
     // Create a book from the cloned pages (persist full generation context)
-    const bookId = crypto.randomUUID();
-    const coloringPages = job.pages
+    const coloringPages = pages
       .filter((p) => p.imageUrl)
       .map((p) => ({
         id: crypto.randomUUID(),
@@ -113,7 +104,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           : undefined,
       }));
 
-    const storyOutline = job.pages
+    const storyOutline = pages
       .filter((p) => p.rawData)
       .map((p, i) => ({
         pageNumber: i + 1,
@@ -123,40 +114,41 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         mood: p.rawData!.environment?.mood || "",
       }));
 
-    await adminDb
-      .collection("books")
-      .doc(bookId)
-      .set({
-        title: body.bookData.title || job.name || "Untitled",
+    const createdBook = await prisma.book.create({
+      data: {
+        title: body.bookData.title || row.name || "Untitled",
         subtitle: body.bookData.subtitle || "",
         description: body.bookData.description || "",
-        artStyleId: body.bookData.artStyleId || null,
-        status: "draft",
-        coloringPages,
+        coloringPages: coloringPages as any,
         summaryPages: [],
-        specifications: { pages: coloringPages.length },
-        storyOutline,
         isPublic: false,
-        isPremium: false,
-        isConverted: false,
-        isRedesigned: false,
-        isEditionConverted: false,
-        cloneJobId: jobId,
-        createdAt: now,
-        updatedAt: now,
-      });
+        data: {
+          artStyleId: body.bookData.artStyleId || null,
+          status: "draft",
+          specifications: { pages: coloringPages.length },
+          storyOutline,
+          isPremium: false,
+          isConverted: false,
+          isRedesigned: false,
+          isEditionConverted: false,
+          cloneJobId: jobId,
+        },
+      },
+    });
 
     // Update clone job status to confirmed with book reference
-    await docRef.update({
-      bookData: body.bookData,
-      bookId,
-      status: "confirmed",
-      updatedAt: now,
+    await prisma.cloneJob.update({
+      where: { id: jobId },
+      data: {
+        bookData: body.bookData as any,
+        bookId: createdBook.id,
+        status: "confirmed",
+      },
     });
 
     return NextResponse.json({
       success: true,
-      bookId,
+      bookId: createdBook.id,
       savedCharacters: savedCharacterIds,
       savedLocations: savedLocationIds,
     });

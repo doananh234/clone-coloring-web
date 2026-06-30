@@ -86,7 +86,10 @@ export type CloneJob = {
     | "confirmed"
     | "entities_ready"
     | "reproduced"
-    | "error";
+    | "error"
+    | "pending"
+    | "queued"
+    | "running";
   sourceFileName: string;
   sourcePdfUrl: string;
   totalPages: number;

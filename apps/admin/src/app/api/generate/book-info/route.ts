@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { textPrompt } from "@/lib/ai/llm-provider";
+import { textPrompt } from "@vx/server-core/ai/llm-provider";
 
 export async function POST(req: NextRequest) {
   try {

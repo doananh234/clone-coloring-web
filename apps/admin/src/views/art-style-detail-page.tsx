@@ -30,7 +30,7 @@ function resolveUrl(url: string | undefined | null): string {
 import { Input, Textarea } from "@vx/core-uikit/components";
 import { PreviewableImage } from "@/components/global-image-preview";
 import { appNavigate } from "@/lib/navigate";
-import type { ArtStyleEntity } from "@/lib/ai/art-style-types";
+import type { ArtStyleEntity } from "@vx/server-core/ai/art-style-types";
 
 // --- Helpers ---
 

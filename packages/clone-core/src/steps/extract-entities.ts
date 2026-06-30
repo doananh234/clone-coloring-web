@@ -1,5 +1,4 @@
-import type { Firestore } from "firebase-admin/firestore";
-import { FieldValue } from "firebase-admin/firestore";
+import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 
 interface ExtractedChar {
@@ -41,17 +40,17 @@ export interface ExtractEntitiesDeps {
 
 export async function stepExtractEntities(
   ctx: JobContext,
-  db: Firestore,
+  db: PrismaClient,
   deps: ExtractEntitiesDeps,
 ): Promise<void> {
-  const ref = db.collection("cloneJobs").doc(ctx.jobId);
-  const snap = await ref.get();
-  const job = snap.data() as { pages: JobPage[] };
+  const job = await db.cloneJob.findUnique({ where: { id: ctx.jobId } });
+  if (!job) throw new Error(`cloneJob ${ctx.jobId} missing`);
+  const pages = (job.pages as JobPage[] | null | undefined) ?? [];
 
   const charsToProcess: Array<{ char: ExtractedChar; sourcePageImageUrl: string }> = [];
   const locsToProcess: Array<{ loc: ExtractedLoc; sourcePageImageUrl: string }> = [];
 
-  for (const page of job.pages) {
+  for (const page of pages) {
     for (const c of page.rawData?.characters ?? []) {
       charsToProcess.push({ char: c, sourcePageImageUrl: page.imageUrl });
     }
@@ -65,18 +64,21 @@ export async function stepExtractEntities(
 
   for (const { char, sourcePageImageUrl } of charsToProcess) {
     const id = deps.randomUUID();
-    await db.collection("characters").doc(id).set({
-      name: char.name,
-      type: char.type || "character",
-      role: char.role || "main_character",
-      visualDna: char.visualDna || {},
-      characterPrompt: char.characterPrompt,
-      referenceImageUrl: "",
-      sourceImageUrl: sourcePageImageUrl,
-      tags: char.tags || [],
-      cloneJobId: ctx.jobId,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    // sourceImageUrl + cloneJobId are not top-level columns — they live in
+    // the `data` Json column for later cleanup and traceability.
+    await db.character.create({
+      data: {
+        id,
+        name: char.name,
+        type: char.type || "character",
+        role: char.role || "main_character",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        visualDna: (char.visualDna ?? {}) as any,
+        characterPrompt: char.characterPrompt,
+        referenceImageUrl: "",
+        tags: char.tags ?? [],
+        data: { sourceImageUrl: sourcePageImageUrl, cloneJobId: ctx.jobId },
+      },
     });
 
     const img = await deps.generateCharacterReference(char.characterPrompt, {
@@ -91,28 +93,29 @@ export async function stepExtractEntities(
       body: buffer,
       contentType: "image/png",
     });
-    await db.collection("characters").doc(id).update({
-      referenceImageUrl: url,
-      updatedAt: FieldValue.serverTimestamp(),
+    await db.character.update({
+      where: { id },
+      data: { referenceImageUrl: url },
     });
     characters.push({ id, name: char.name, referenceImageUrl: url });
   }
 
   for (const { loc, sourcePageImageUrl } of locsToProcess) {
     const id = deps.randomUUID();
-    await db.collection("locations").doc(id).set({
-      name: loc.name,
-      description: loc.description || "",
-      visualDescription: loc.visualDescription || "",
-      locationPrompt: loc.locationPrompt,
-      atmosphere: loc.atmosphere || {},
-      props: loc.props || [],
-      referenceImageUrl: "",
-      sourceImageUrl: sourcePageImageUrl,
-      tags: loc.tags || [],
-      cloneJobId: ctx.jobId,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    await db.location.create({
+      data: {
+        id,
+        name: loc.name,
+        description: loc.description || "",
+        visualDescription: loc.visualDescription || "",
+        locationPrompt: loc.locationPrompt,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        atmosphere: (loc.atmosphere ?? {}) as any,
+        props: loc.props ?? [],
+        referenceImageUrl: "",
+        tags: loc.tags ?? [],
+        data: { sourceImageUrl: sourcePageImageUrl, cloneJobId: ctx.jobId },
+      },
     });
     const img = await deps.generateLocationReference(loc.locationPrompt, {
       sourceImageUrl: sourcePageImageUrl || undefined,
@@ -124,16 +127,16 @@ export async function stepExtractEntities(
       body: buffer,
       contentType: "image/png",
     });
-    await db.collection("locations").doc(id).update({
-      referenceImageUrl: url,
-      updatedAt: FieldValue.serverTimestamp(),
+    await db.location.update({
+      where: { id },
+      data: { referenceImageUrl: url },
     });
     locations.push({ id, name: loc.name, referenceImageUrl: url });
   }
 
-  await ref.update({
-    entityMap: { characters, locations },
-    updatedAt: new Date().toISOString(),
+  await db.cloneJob.update({
+    where: { id: ctx.jobId },
+    data: { entityMap: { characters, locations } },
   });
   await ctx.markStepComplete("extract-entities");
 }

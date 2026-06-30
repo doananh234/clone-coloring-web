@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faXmark } from "@fortawesome/pro-regular-svg-icons";
-import type { CloneJobPage } from "@/lib/ai/clone-types";
+import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 interface ClonePreviewStepProps {
   pages: CloneJobPage[];

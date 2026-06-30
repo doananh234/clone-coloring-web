@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { generateCharacterReference } from "@/lib/ai";
-import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
-import { flushLangfuse } from "@/lib/langfuse";
+import { prisma } from "@vx/db";
+import { generateCharacterReference } from "@vx/server-core/ai";
+import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
+import { flushLangfuse } from "@vx/server-core/langfuse";
 
 async function downloadImage(url: string): Promise<Buffer | null> {
   try {
@@ -45,24 +44,27 @@ export async function POST(req: NextRequest) {
     const r2Config = getR2Config();
     const r2Client = createR2Client(r2Config);
 
-    // Create Firestore doc first to get the ID for R2 keys
-    const docRef = await adminDb.collection("characters").add({
-      name,
-      type: type || "character",
-      role: role || "main_character",
-      visualDna: visualDna || {},
-      characterPrompt,
-      referenceImageUrl: "",
-      sourceImageUrl: "",
-      tags: tags || [],
-      category: category || "",
-      sourceBookId: sourceBookId || "",
-      sourcePageId: sourcePageId || "",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    // Create row first to get the ID for R2 keys
+    const created = await prisma.character.create({
+      data: {
+        name,
+        type: type || "character",
+        role: role || "main_character",
+        visualDna: visualDna || {},
+        characterPrompt,
+        referenceImageUrl: "",
+        tags: tags || [],
+        sourceBookId: sourceBookId || null,
+        data: {
+          category: category || "",
+          sourcePageId: sourcePageId || "",
+          sourceImageUrl: "",
+        },
+      },
     });
 
     const updates: Record<string, unknown> = {};
+    const extraUpdates: Record<string, unknown> = {};
 
     // Upload source image to R2
     if (sourceImageUrl) {
@@ -70,14 +72,14 @@ export async function POST(req: NextRequest) {
         const buffer = await downloadImage(sourceImageUrl);
         if (buffer) {
           const ext = guessExtension(sourceImageUrl);
-          const key = `assets/characters/${docRef.id}/source.${ext}`;
+          const key = `assets/characters/${created.id}/source.${ext}`;
           const { url } = await uploadToR2({
             client: r2Client,
             config: r2Config,
             key,
             body: buffer,
           });
-          updates.sourceImageUrl = url;
+          extraUpdates.sourceImageUrl = url;
         }
       } catch {
         /* source image upload is best-effort */
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
           trace: { caller: "extract/save-character", entityType: "character" },
         });
         const buffer = Buffer.from(img.base64, "base64");
-        const key = `assets/characters/${docRef.id}/reference.png`;
+        const key = `assets/characters/${created.id}/reference.png`;
         const { url } = await uploadToR2({
           client: r2Client,
           config: r2Config,
@@ -108,19 +110,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Batch update Firestore with R2 URLs
-    if (Object.keys(updates).length > 0) {
-      updates.updatedAt = FieldValue.serverTimestamp();
-      await adminDb.collection("characters").doc(docRef.id).update(updates);
+    // Batch update with R2 URLs
+    if (Object.keys(updates).length > 0 || Object.keys(extraUpdates).length > 0) {
+      const existingExtra = (created.data as any) || {};
+      await prisma.character.update({
+        where: { id: created.id },
+        data: {
+          ...updates,
+          data: { ...existingExtra, ...extraUpdates },
+        },
+      });
     }
 
     await flushLangfuse();
 
     return NextResponse.json({
       success: true,
-      id: docRef.id,
+      id: created.id,
       referenceImageUrl: updates.referenceImageUrl || "",
-      sourceImageUrl: updates.sourceImageUrl || "",
+      sourceImageUrl: extraUpdates.sourceImageUrl || "",
     });
   } catch (error) {
     return NextResponse.json(

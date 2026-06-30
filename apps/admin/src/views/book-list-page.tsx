@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useFirestoreGetAll, useFirestore } from "@vx/core-uikit/firebase";
-import { firestoreDelete } from "@vx/core-uikit/firebase";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { appApi } from "@vx/core-uikit/api";
 import { Button, Badge, Input, Card, CardContent } from "@vx/core-uikit/components";
 import { ConfirmDialog } from "@vx/core-uikit/components";
 import { notify } from "@vx/core-uikit/notifications";
@@ -81,25 +81,22 @@ function applyFilter(books: BookEntity[], filter: FilterKey): BookEntity[] {
 export function BookListPage() {
   const { t } = useTranslation("books");
   const { t: tc } = useTranslation("common");
-  const firestore = useFirestore();
+  const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [deleteTarget, setDeleteTarget] = useState<BookEntity | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const {
-    data: allBooks,
-    isLoading,
-    refresh,
-  } = useFirestoreGetAll<BookEntity>({
-    entityName: "books",
-    collectionPath: "books",
-    orderByField: "title",
-    orderByDirection: "asc",
-    pageSize: 500,
-    firestore,
+  const { data: allBooks = [], isLoading } = useQuery({
+    queryKey: ["books", "list-all"],
+    queryFn: async () => {
+      const res = await appApi.getAll<BookEntity>("/api/books", { page: 1, limit: 500 });
+      return res.data;
+    },
   });
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["books"] });
 
   const filtered = useMemo(() => {
     let result = applyFilter(allBooks, filter);
@@ -113,10 +110,10 @@ export function BookListPage() {
   }, [allBooks, filter, search]);
 
   async function handleDelete() {
-    if (!deleteTarget || !firestore) return;
+    if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await firestoreDelete(firestore, "books", deleteTarget.id);
+      await appApi.delete(`/api/books/${deleteTarget.id}`);
       notify.success("Book deleted");
       setDeleteTarget(null);
       refresh();

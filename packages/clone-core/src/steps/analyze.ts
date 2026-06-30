@@ -1,4 +1,4 @@
-import type { Firestore } from "firebase-admin/firestore";
+import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 
 interface JobPage {
@@ -16,14 +16,14 @@ export interface AnalyzeDeps {
 
 export async function stepAnalyze(
   ctx: JobContext,
-  db: Firestore,
+  db: PrismaClient,
   deps: AnalyzeDeps,
 ): Promise<void> {
-  const ref = db.collection("cloneJobs").doc(ctx.jobId);
-  const snap = await ref.get();
-  const job = snap.data() as { pages: JobPage[] };
+  const job = await db.cloneJob.findUnique({ where: { id: ctx.jobId } });
+  if (!job) throw new Error(`cloneJob ${ctx.jobId} missing`);
+  const pages = (job.pages as JobPage[] | null | undefined) ?? [];
 
-  const updatedPages = [...job.pages];
+  const updatedPages = [...pages];
   let analyzedCount = updatedPages.filter((p) => p.status === "analyzed").length;
 
   for (let i = 0; i < updatedPages.length; i++) {
@@ -36,10 +36,10 @@ export async function stepAnalyze(
     analyzedCount++;
     updatedPages[i] = { ...page, status: "analyzed", rawData };
 
-    await ref.update({
-      pages: updatedPages,
-      analyzedPages: analyzedCount,
-      updatedAt: new Date().toISOString(),
+    await db.cloneJob.update({
+      where: { id: ctx.jobId },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { pages: updatedPages as any, analyzedPages: analyzedCount },
     });
   }
 

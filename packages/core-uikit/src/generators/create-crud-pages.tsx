@@ -12,13 +12,6 @@ import { ConfirmDialog } from "../components/crud/confirm-dialog";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { useRestGetAll, useRestGetOne, useRestMutation } from "../api/hooks/use-rest-api";
-import {
-  useFirestoreGetAll,
-  useFirestoreGetOne,
-  useFirestoreMutation,
-} from "../firebase/use-firestore-crud";
-import { firestoreDelete } from "../firebase/firestore-helpers";
-import { useFirestoreOptional } from "../firebase/use-firestore";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEye, faPencil, faTrash, faPlus, faArrowLeft } from "@fortawesome/pro-regular-svg-icons";
 import type { SortParam } from "../types";
@@ -55,19 +48,16 @@ function useTranslatedFields(fields: FieldConfig[], ns: string | undefined) {
   const { t } = useTranslation(ns ?? "common");
   const { t: tc } = useTranslation("common");
 
-  /** Resolve label: if namespace provided, try t(`fields.${name}`), fallback to field.label */
   const fieldLabel = useCallback(
     (field: FieldConfig) => {
       if (!ns) return field.label;
       const key = `fields.${field.name}`;
       const translated = t(key);
-      // i18next returns the key if not found
       return translated === key ? field.label : translated;
     },
     [ns, t],
   );
 
-  /** Resolve option label: try t(`options.${fieldName}.${value}`), fallback to option.label */
   const optionLabel = useCallback(
     (fieldName: string, option: { label: string; value: string }) => {
       if (!ns) return option.label;
@@ -78,7 +68,6 @@ function useTranslatedFields(fields: FieldConfig[], ns: string | undefined) {
     [ns, t],
   );
 
-  /** Entity title: try t("title"), fallback to entityName */
   const entityTitle = useCallback(
     (entityName: string) => {
       if (!ns) return entityName;
@@ -91,7 +80,6 @@ function useTranslatedFields(fields: FieldConfig[], ns: string | undefined) {
   return { fieldLabel, optionLabel, entityTitle, t, tc };
 }
 
-/** Resolve a potentially relative URL using an optional base URL */
 function resolveImageUrl(url: string | undefined | null, baseUrl?: string): string {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
@@ -113,7 +101,6 @@ function buildColumns<T>(
   const cols: ColumnDef<T, unknown>[] = fields
     .filter((f) => f.showInList !== false)
     .map((field) => {
-      // url-image: show thumbnail in list
       if (field.type === "url-image") {
         return {
           accessorKey: field.name,
@@ -137,7 +124,6 @@ function buildColumns<T>(
           },
         };
       }
-      // date: format as localized date string
       if (field.type === "date") {
         return {
           accessorKey: field.name,
@@ -153,25 +139,10 @@ function buildColumns<T>(
             if (typeof val === "number") {
               return new Date(val).toLocaleDateString();
             }
-            // Handle Firestore Timestamp objects
-            if (typeof val === "object" && val !== null) {
-              const obj = val as Record<string, unknown>;
-              // _Timestamp with toDate() on prototype
-              if (typeof obj.toDate === "function") {
-                return (obj as { toDate(): Date }).toDate().toLocaleDateString();
-              }
-              // Plain {seconds, nanoseconds}
-              if (typeof obj.seconds === "number") {
-                return new Date(obj.seconds * 1000).toLocaleDateString();
-              }
-              // Empty or corrupt timestamp object — show dash
-              return <span className="text-muted-foreground">&mdash;</span>;
-            }
             return String(val);
           },
         };
       }
-      // boolean: show Yes/No badge
       if (field.type === "boolean") {
         return {
           accessorKey: field.name,
@@ -230,7 +201,6 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
     entityName,
     basePath,
     apiUrl,
-    dataSource,
     fields,
     namespace,
     navigate: navigateFn,
@@ -240,11 +210,7 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
     imageBaseUrl,
   } = config;
 
-  const isFirestore = dataSource?.type === "firestore";
-  const collectionPath = isFirestore ? dataSource.collection : "";
-
   const schema = customSchema ?? buildSchemaFromFields(fields);
-
   const filterOptionFields = fields.filter((f) => f.filterable && f.options);
 
   const navigate =
@@ -253,23 +219,10 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
       window.location.href = path;
     });
 
-  // --- List Page ---
   function ListPage() {
     const { fieldLabel, optionLabel, entityTitle, tc } = useTranslatedFields(fields, namespace);
     const searchParams = useSearchParams();
     const [deleteTarget, setDeleteTarget] = useState<T | null>(null);
-    const firestore = useFirestoreOptional();
-
-    const formFields = fields
-      .filter((f) => f.showInForm !== false)
-      .map((f) => ({
-        name: f.name,
-        label: fieldLabel(f),
-        type: f.type === "relation" ? ("select" as const) : f.type,
-        options: f.options?.map((o) => ({ label: optionLabel(f.name, o), value: o.value })),
-        subFields: f.subFields,
-        readOnly: f.readOnly,
-      }));
 
     const filterOptions = filterOptionFields.map((f) => ({
       name: f.name,
@@ -277,7 +230,6 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
       options: f.options!.map((o) => ({ label: optionLabel(f.name, o), value: o.value })),
     }));
 
-    // Read state from URL
     const page = Number(searchParams.get("page") || "1");
     const search = searchParams.get("search") || "";
     const sortParam = searchParams.get("sort");
@@ -300,36 +252,14 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
       return f;
     }, [search, searchParams]);
 
-    // Firestore hook (only active when isFirestore)
-    const firestoreResult = useFirestoreGetAll<T>({
+    const { data, meta, isLoading, refresh } = useRestGetAll<T>({
       entityName,
-      collectionPath,
-      orderByField: isFirestore ? dataSource.orderBy?.field : undefined,
-      orderByDirection: isFirestore ? dataSource.orderBy?.direction : undefined,
-      pageSize,
-      filters,
-      searchFields: isFirestore ? dataSource.searchFields : undefined,
-      searchTerm: search || undefined,
-      enabled: isFirestore,
-      firestore,
-    });
-
-    // REST hook (only active when NOT isFirestore)
-    const restResult = useRestGetAll<T>({
-      entityName,
-      url: apiUrl ?? "",
+      url: apiUrl,
       page,
       limit: pageSize,
       sort,
       filters,
-      enabled: !isFirestore,
     });
-
-    // Unified data
-    const data = isFirestore ? firestoreResult.data : restResult.data;
-    const meta = isFirestore ? undefined : restResult.meta;
-    const isLoading = isFirestore ? firestoreResult.isLoading : restResult.isLoading;
-    const refresh = isFirestore ? firestoreResult.refresh : restResult.refresh;
 
     const columns =
       config.columns ??
@@ -394,17 +324,10 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
           isLoading={false}
           onConfirm={() => {
             if (deleteTarget) {
-              if (isFirestore && firestore) {
-                firestoreDelete(firestore, collectionPath, deleteTarget.id).then(() => {
-                  setDeleteTarget(null);
-                  refresh();
-                });
-              } else {
-                appApi.delete(`${apiUrl}/${deleteTarget.id}`).then(() => {
-                  setDeleteTarget(null);
-                  refresh();
-                });
-              }
+              appApi.delete(`${apiUrl}/${deleteTarget.id}`).then(() => {
+                setDeleteTarget(null);
+                refresh();
+              });
             }
           }}
         />
@@ -412,10 +335,8 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
     );
   }
 
-  // --- Create Page ---
   function CreatePage() {
     const { fieldLabel, optionLabel, entityTitle, tc } = useTranslatedFields(fields, namespace);
-    const firestore = useFirestoreOptional();
 
     const formFields = fields
       .filter((f) => f.showInForm !== false)
@@ -428,20 +349,11 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
         readOnly: f.readOnly,
       }));
 
-    const restMutation = useRestMutation<T>({
+    const mutation = useRestMutation<T>({
       entityName,
-      url: apiUrl ?? "",
+      url: apiUrl,
       method: "POST",
     });
-
-    const firestoreMutation = useFirestoreMutation<T>({
-      entityName,
-      collectionPath,
-      method: "POST",
-      firestore,
-    });
-
-    const mutation = isFirestore ? firestoreMutation : restMutation;
 
     const title = entityTitle(entityName);
 
@@ -476,11 +388,9 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
     );
   }
 
-  // --- Edit Page ---
   function EditPage() {
     const { fieldLabel, optionLabel, entityTitle, tc } = useTranslatedFields(fields, namespace);
     const id = window.location.pathname.split("/").filter(Boolean).at(-2) ?? "";
-    const firestore = useFirestoreOptional();
 
     const formFields = fields
       .filter((f) => f.showInForm !== false)
@@ -493,39 +403,19 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
         readOnly: f.readOnly,
       }));
 
-    const restData = useRestGetOne<T>({
+    const { data, isLoading: isFetching } = useRestGetOne<T>({
       entityName,
       url: `${apiUrl}/:id`,
       pathParams: { id },
-      enabled: !isFirestore && !!id,
+      enabled: !!id,
     });
 
-    const firestoreData = useFirestoreGetOne<T>({
-      entityName,
-      collectionPath,
-      docId: id,
-      enabled: isFirestore && !!id,
-      firestore,
-    });
-
-    const { data, isLoading: isFetching } = isFirestore ? firestoreData : restData;
-
-    const restMutation = useRestMutation<T>({
+    const mutation = useRestMutation<T>({
       entityName,
       url: `${apiUrl}/:id`,
       method: "PUT",
       pathParams: { id },
     });
-
-    const firestoreMutation = useFirestoreMutation<T>({
-      entityName,
-      collectionPath,
-      method: "PUT",
-      docId: id,
-      firestore,
-    });
-
-    const mutation = isFirestore ? firestoreMutation : restMutation;
 
     const title = entityTitle(entityName);
 
@@ -569,11 +459,9 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
     );
   }
 
-  // --- Detail Page ---
   function DetailPage() {
     const { fieldLabel, entityTitle, tc } = useTranslatedFields(fields, namespace);
     const id = window.location.pathname.split("/").filter(Boolean).at(-1) ?? "";
-    const firestore = useFirestoreOptional();
 
     const detailFields = fields
       .filter((f) => f.showInDetail !== false)
@@ -584,22 +472,12 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
         subFields: f.subFields,
       }));
 
-    const restData = useRestGetOne<T>({
+    const { data, isLoading } = useRestGetOne<T>({
       entityName,
       url: `${apiUrl}/:id`,
       pathParams: { id },
-      enabled: !isFirestore && !!id,
+      enabled: !!id,
     });
-
-    const firestoreData = useFirestoreGetOne<T>({
-      entityName,
-      collectionPath,
-      docId: id,
-      enabled: isFirestore && !!id,
-      firestore,
-    });
-
-    const { data, isLoading } = isFirestore ? firestoreData : restData;
 
     const title = entityTitle(entityName);
 

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { visionAnalyzeJSON } from "@/lib/ai/llm-provider";
-import { flushLangfuse } from "@/lib/langfuse";
-import { adminDb } from "@/lib/firebase-admin";
+import { visionAnalyzeJSON } from "@vx/server-core/ai/llm-provider";
+import { flushLangfuse } from "@vx/server-core/langfuse";
+import { prisma } from "@vx/db";
 import {
   buildBookMetaPrompt,
   type BookMetaGenerationResult,
   type CategoryOption,
-} from "@/lib/ai/prompts/book-meta-prompt";
+} from "@vx/server-core/ai/prompts/book-meta-prompt";
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,10 +21,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch existing categories for AI matching
-    const catSnap = await adminDb.collection("categories").orderBy("index", "asc").get();
-    const categories: CategoryOption[] = catSnap.docs.map((doc) => ({
+    const catRows = await prisma.category.findMany({ orderBy: { index: "asc" } });
+    const categories: CategoryOption[] = catRows.map((doc) => ({
       id: doc.id,
-      displayName: (doc.data().displayName as string) || (doc.data().name as string) || doc.id,
+      displayName: doc.displayName || doc.name || doc.id,
     }));
 
     const { systemPrompt, userPrompt } = buildBookMetaPrompt(categories);

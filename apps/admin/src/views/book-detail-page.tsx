@@ -1,9 +1,17 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useFirestoreGetOne } from "@vx/core-uikit/firebase";
-import { useFirestore } from "@vx/core-uikit/firebase";
-import { firestoreUpdate } from "@vx/core-uikit/firebase";
+import { useRestGetOne, appApi } from "@vx/core-uikit/api";
 import { Badge, Button, Separator } from "@vx/core-uikit/components";
+
+// Replacement for firestoreUpdate: PUT to /api/books/:id
+async function firestoreUpdate(
+  _firestore: unknown,
+  _collection: string,
+  bookId: string,
+  data: Record<string, unknown>,
+) {
+  return appApi.put(`/api/books/${bookId}`, data);
+}
 import { notify } from "@vx/core-uikit/notifications";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -44,7 +52,7 @@ import {
   DropdownMenuSeparator,
 } from "@vx/core-uikit/components";
 import { ColoringStylePicker } from "@/components/coloring-style-picker";
-import type { ColoringStyleEntity } from "@/lib/ai/coloring-style-types";
+import type { ColoringStyleEntity } from "@vx/server-core/ai/coloring-style-types";
 import { DetailCard } from "@/components/detail-card";
 import { ImageGrid, type ImageItem } from "@/components/image-grid";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -81,17 +89,30 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
   const { t } = useTranslation("books");
   const { t: tc } = useTranslation("common");
   const router = useRouter();
-  const firestore = useFirestore();
+  const firestore = {} as unknown;
 
   const {
     data: book,
     isLoading,
     refresh,
-  } = useFirestoreGetOne<BookEntity>({
+  } = useRestGetOne<BookEntity>({
     entityName: "books",
-    collectionPath: "books",
-    docId: bookId,
-    firestore,
+    url: "/api/books/:id",
+    pathParams: { id: bookId },
+    enabled: !!bookId,
+  });
+
+  // Source-reference metadata: lives on book.data for both worker- and admin-created books.
+  const bookData = ((book as unknown as { data?: Record<string, unknown> })?.data) ?? {};
+  const sourceBookId = (bookData.sourceBookId as string | undefined) ?? undefined;
+  const cloneJobId = (bookData.cloneJobId as string | undefined) ?? undefined;
+
+  // Fetch the source book metadata when this book was cloned from another book.
+  const { data: sourceBook } = useRestGetOne<BookEntity>({
+    entityName: "books",
+    url: "/api/books/:id",
+    pathParams: { id: sourceBookId ?? "" },
+    enabled: !!sourceBookId,
   });
 
   const [generatingSubtitle, setGeneratingSubtitle] = useState(false);
@@ -880,6 +901,73 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
               <dd>{formatDate(book.updatedAt)}</dd>
             </dl>
           </DetailCard>
+
+          {/* Source Reference — shown only for cloned books */}
+          {(sourceBookId || cloneJobId) && (
+            <DetailCard title="Source Reference" subtitle="Where this book was cloned from">
+              <div className="space-y-4 text-sm">
+                {sourceBookId && (
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                      Original Book
+                    </p>
+                    {sourceBook ? (
+                      <div className="flex items-start gap-3 rounded-md border p-3">
+                        {sourceBook.thumbnailUrl ? (
+                          <img
+                            src={resolveUrl(sourceBook.thumbnailUrl)}
+                            alt={sourceBook.title}
+                            className="h-20 w-16 shrink-0 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-20 w-16 shrink-0 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
+                            —
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{sourceBook.title}</p>
+                          {sourceBook.subtitle && (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {sourceBook.subtitle}
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => appNavigate(`/books/${sourceBookId}`)}
+                            className="mt-1 text-xs text-primary hover:underline"
+                          >
+                            View original →
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border p-3 text-xs text-muted-foreground">
+                        Source book ID: <code className="font-mono">{sourceBookId}</code>
+                        <span className="ml-2">(loading…)</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {cloneJobId && (
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                      Clone Job
+                    </p>
+                    <div className="flex items-center justify-between rounded-md border p-3">
+                      <code className="truncate font-mono text-xs">{cloneJobId}</code>
+                      <button
+                        type="button"
+                        onClick={() => appNavigate(`/clone/${cloneJobId}`)}
+                        className="ml-3 shrink-0 text-xs text-primary hover:underline"
+                      >
+                        View clone job →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DetailCard>
+          )}
 
           {/* Raw JSON View */}
           <div className="rounded-lg border">

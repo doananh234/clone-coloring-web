@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { textPrompt, buildStoryOutlinePrompt } from "@/lib/ai";
+import { textPrompt, buildStoryOutlinePrompt } from "@vx/server-core/ai";
 
 type SceneOutline = {
   sceneNumber: number;

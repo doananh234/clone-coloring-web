@@ -12,9 +12,9 @@ import {
   faSparkles,
   faWandMagicSparkles,
 } from "@fortawesome/pro-regular-svg-icons";
-import { EMPTY_COLORING_STYLE } from "@/lib/ai/coloring-style-types";
-import type { ColoringStyleEntity } from "@/lib/ai/coloring-style-types";
-import { buildColorizationDirective } from "@/lib/ai/prompts";
+import { EMPTY_COLORING_STYLE } from "@vx/server-core/ai/coloring-style-types";
+import type { ColoringStyleEntity } from "@vx/server-core/ai/coloring-style-types";
+import { buildColorizationDirective } from "@vx/server-core/ai/prompts";
 import { PropertyGroupSections, ReferenceImageSection } from "./coloring-style-form-sections";
 
 type FormData = Omit<ColoringStyleEntity, "id" | "createdAt" | "updatedAt">;

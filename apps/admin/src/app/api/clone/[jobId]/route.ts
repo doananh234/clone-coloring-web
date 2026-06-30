@@ -1,28 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { getR2Config, createR2Client, resolveR2Url } from "@/lib/r2";
+import { prisma } from "@vx/db";
+import { getR2Config, createR2Client, resolveR2Url } from "@vx/server-core/r2";
 import { DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
-import type { CloneJob } from "@/lib/ai/clone-types";
+import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
-    const doc = await adminDb.collection("cloneJobs").doc(jobId).get();
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
-    if (!doc.exists) {
+    if (!row) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    const job = doc.data() as CloneJob;
+    const extra = (row.data as any) || {};
+    const pages = (row.pages as CloneJobPage[]) || [];
 
     // Resolve R2 URLs for client display
-    const resolvedPages = job.pages.map((p) => ({
+    const resolvedPages = pages.map((p) => ({
       ...p,
       imageUrl: resolveR2Url(p.imageUrl),
       redesignedUrl: p.redesignedUrl ? resolveR2Url(p.redesignedUrl) : undefined,
     }));
+
+    const job: CloneJob = {
+      id: row.id,
+      name: row.name,
+      status: row.status as CloneJob["status"],
+      sourceFileName: row.sourceFileName || "",
+      sourcePdfUrl: row.sourcePdfUrl || "",
+      totalPages: row.totalPages,
+      analyzedPages: row.analyzedPages,
+      pages,
+      bookData: (row.bookData as any) ?? undefined,
+      entityMap: (row.entityMap as any) ?? undefined,
+      bookId: row.bookId ?? undefined,
+      resultBookId: row.resultBookId ?? undefined,
+      error: row.error ?? undefined,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      ...extra,
+    };
 
     return NextResponse.json({
       success: true,
@@ -40,9 +60,9 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
-    const doc = await adminDb.collection("cloneJobs").doc(jobId).get();
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
-    if (!doc.exists) {
+    if (!row) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
@@ -73,8 +93,8 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
       console.warn("[clone/delete] R2 cleanup failed (non-fatal):", r2Error);
     }
 
-    // Delete Firestore document
-    await adminDb.collection("cloneJobs").doc(jobId).delete();
+    // Delete Postgres row
+    await prisma.cloneJob.delete({ where: { id: jobId } });
 
     return NextResponse.json({ success: true });
   } catch (error) {

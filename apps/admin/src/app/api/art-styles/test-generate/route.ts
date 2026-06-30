@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateColoringPage } from "@/lib/ai/image-provider";
+import { generateColoringPage } from "@vx/server-core/ai/image-provider";
 
 export async function POST(req: NextRequest) {
   try {

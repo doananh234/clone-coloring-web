@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { prisma } from "@vx/db";
 
 const R2_PUBLIC_BASE_URL =
   process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || process.env.R2_PUBLIC_BASE_URL || "";
@@ -27,28 +26,24 @@ export async function POST(req: NextRequest) {
     }
 
     // Get all books in this category
-    const booksSnap = await adminDb
-      .collection("books")
-      .where("categoryId", "==", categoryId)
-      .orderBy("title")
-      .get();
-
-    const bookSummaries = booksSnap.docs.map((doc) => {
-      const d = doc.data();
-      return {
-        id: doc.id,
-        title: d.title || "",
-        coverUrl: resolveUrl(d.coverUrl),
-        price: d.price || "",
-        badge: d.badge || "",
-        order: 0,
-      };
+    const books = await prisma.book.findMany({
+      where: { categoryId },
+      orderBy: { title: "asc" },
     });
 
+    const bookSummaries = books.map((d) => ({
+      id: d.id,
+      title: d.title || "",
+      coverUrl: resolveUrl(d.coverUrl),
+      price: d.price || "",
+      badge: d.badge || "",
+      order: 0,
+    }));
+
     // Update category's books array
-    await adminDb.collection("categories").doc(categoryId).update({
-      books: bookSummaries,
-      updatedAt: FieldValue.serverTimestamp(),
+    await prisma.category.update({
+      where: { id: categoryId },
+      data: { books: bookSummaries },
     });
 
     return NextResponse.json({

@@ -12,9 +12,9 @@ import {
   faSparkles,
   faWandMagicSparkles,
 } from "@fortawesome/pro-regular-svg-icons";
-import { EMPTY_ART_STYLE } from "@/lib/ai/art-style-types";
-import type { ArtStyleEntity } from "@/lib/ai/art-style-types";
-import { buildDirectiveFromProperties } from "@/lib/ai/prompts";
+import { EMPTY_ART_STYLE } from "@vx/server-core/ai/art-style-types";
+import type { ArtStyleEntity } from "@vx/server-core/ai/art-style-types";
+import { buildDirectiveFromProperties } from "@vx/server-core/ai/prompts";
 import { PropertyGroupSections, ReferenceImageSection } from "./art-style-form-sections";
 
 type FormData = Omit<ArtStyleEntity, "id" | "createdAt" | "updatedAt">;

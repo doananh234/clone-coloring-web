@@ -1,6 +1,6 @@
 import pino from "pino";
 import { createWorker } from "./queue";
-import "./firestore";
+import "./db";
 import { processCloneJob } from "./processor/clone-job-processor";
 import { reconcileStaleJobs } from "./reconciler";
 

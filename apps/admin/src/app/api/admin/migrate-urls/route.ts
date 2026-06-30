@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { prisma } from "@vx/db";
 
 /**
- * Strips the CDN host prefix from all R2 URLs in Firebase,
+ * Strips the CDN host prefix from all R2 URLs in the database,
  * converting "https://image.lagroups.org/assets/..." → "/assets/..."
  *
  * Processes: books, artStyles, coloringStyles, characters, locations
@@ -75,9 +74,9 @@ export async function POST() {
     const stats = { books: 0, artStyles: 0, coloringStyles: 0, characters: 0, locations: 0 };
 
     // --- Books ---
-    const bookSnap = await adminDb.collection("books").get();
-    for (const doc of bookSnap.docs) {
-      const data = doc.data();
+    const books = await prisma.book.findMany();
+    for (const book of books) {
+      const data = book as unknown as Record<string, unknown>;
       const updates: Record<string, unknown> = {};
       let changed = false;
 
@@ -96,23 +95,24 @@ export async function POST() {
       }
 
       // coloringPages[].url
-      const cpResult = stripArrayUrls(data.coloringPages, "url");
+      const coloringPagesArr = (book.coloringPages as Array<Record<string, unknown>>) || [];
+      const cpResult = stripArrayUrls(coloringPagesArr, "url");
       if (cpResult) {
         updates.coloringPages = cpResult.updated;
         changed = true;
       }
 
       // coloringPages[].coloredUrl
-      if (data.coloringPages?.length) {
-        const coloredResult = stripArrayUrls(data.coloringPages, "coloredUrl");
+      if (coloringPagesArr.length) {
+        const coloredResult = stripArrayUrls(coloringPagesArr, "coloredUrl");
         if (coloredResult) {
           // Merge with existing coloringPages update
-          const base = (updates.coloringPages || data.coloringPages) as Array<
+          const base = (updates.coloringPages || coloringPagesArr) as Array<
             Record<string, unknown>
           >;
           updates.coloringPages = base.map((p, i) => ({
             ...p,
-            ...(coloredResult.updated[i].coloredUrl !== data.coloringPages[i].coloredUrl
+            ...(coloredResult.updated[i].coloredUrl !== coloringPagesArr[i].coloredUrl
               ? { coloredUrl: coloredResult.updated[i].coloredUrl }
               : {}),
           }));
@@ -121,23 +121,23 @@ export async function POST() {
       }
 
       // summaryPages[].url
-      const spResult = stripArrayUrls(data.summaryPages, "url");
+      const summaryPagesArr = (book.summaryPages as Array<Record<string, unknown>>) || [];
+      const spResult = stripArrayUrls(summaryPagesArr, "url");
       if (spResult) {
         updates.summaryPages = spResult.updated;
         changed = true;
       }
 
       if (changed) {
-        updates.updatedAt = FieldValue.serverTimestamp();
-        await doc.ref.update(updates);
+        await prisma.book.update({ where: { id: book.id }, data: updates });
         stats.books++;
       }
     }
 
     // --- Art Styles ---
-    const artSnap = await adminDb.collection("artStyles").get();
-    for (const doc of artSnap.docs) {
-      const data = doc.data();
+    const artStyles = await prisma.artStyle.findMany();
+    for (const style of artStyles) {
+      const data = style as unknown as Record<string, unknown>;
       const updates: Record<string, unknown> = {};
       let changed = false;
 
@@ -147,24 +147,23 @@ export async function POST() {
         changed = true;
       }
 
-      // referenceImages[].url
-      const refResult = stripArrayUrls(data.referenceImages, "url");
+      const refArr = (style.referenceImages as Array<Record<string, unknown>>) || [];
+      const refResult = stripArrayUrls(refArr, "url");
       if (refResult) {
         updates.referenceImages = refResult.updated;
         changed = true;
       }
 
       if (changed) {
-        updates.updatedAt = FieldValue.serverTimestamp();
-        await doc.ref.update(updates);
+        await prisma.artStyle.update({ where: { id: style.id }, data: updates });
         stats.artStyles++;
       }
     }
 
     // --- Coloring Styles ---
-    const csSnap = await adminDb.collection("coloringStyles").get();
-    for (const doc of csSnap.docs) {
-      const data = doc.data();
+    const coloringStyles = await prisma.coloringStyle.findMany();
+    for (const style of coloringStyles) {
+      const data = style as unknown as Record<string, unknown>;
       const updates: Record<string, unknown> = {};
       let changed = false;
 
@@ -174,39 +173,37 @@ export async function POST() {
         changed = true;
       }
 
-      const refResult = stripArrayUrls(data.referenceImages, "url");
+      const refArr = (style.referenceImages as Array<Record<string, unknown>>) || [];
+      const refResult = stripArrayUrls(refArr, "url");
       if (refResult) {
         updates.referenceImages = refResult.updated;
         changed = true;
       }
 
       if (changed) {
-        updates.updatedAt = FieldValue.serverTimestamp();
-        await doc.ref.update(updates);
+        await prisma.coloringStyle.update({ where: { id: style.id }, data: updates });
         stats.coloringStyles++;
       }
     }
 
     // --- Characters ---
-    const charSnap = await adminDb.collection("characters").get();
-    for (const doc of charSnap.docs) {
-      const data = doc.data();
+    const characters = await prisma.character.findMany();
+    for (const character of characters) {
+      const data = character as unknown as Record<string, unknown>;
       const fieldUpdates = stripUrlFields(data, ["referenceImageUrl", "thumbnailUrl"]);
       if (fieldUpdates) {
-        fieldUpdates.updatedAt = FieldValue.serverTimestamp();
-        await doc.ref.update(fieldUpdates);
+        await prisma.character.update({ where: { id: character.id }, data: fieldUpdates });
         stats.characters++;
       }
     }
 
     // --- Locations ---
-    const locSnap = await adminDb.collection("locations").get();
-    for (const doc of locSnap.docs) {
-      const data = doc.data();
+    const locations = await prisma.location.findMany();
+    for (const location of locations) {
+      const data = location as unknown as Record<string, unknown>;
       const fieldUpdates = stripUrlFields(data, ["referenceImageUrl", "thumbnailUrl"]);
       if (fieldUpdates) {
-        fieldUpdates.updatedAt = FieldValue.serverTimestamp();
-        await doc.ref.update(fieldUpdates);
+        await prisma.location.update({ where: { id: location.id }, data: fieldUpdates });
         stats.locations++;
       }
     }

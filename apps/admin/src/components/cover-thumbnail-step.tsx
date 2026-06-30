@@ -15,7 +15,7 @@ import { cn } from "@vx/core-uikit/utils";
 import { ColoringStylePicker } from "@/components/coloring-style-picker";
 import { TextOverlayModal } from "@/components/text-overlay-modal";
 import { faFont } from "@fortawesome/pro-regular-svg-icons";
-import type { ColoringStyleEntity } from "@/lib/ai/coloring-style-types";
+import type { ColoringStyleEntity } from "@vx/server-core/ai/coloring-style-types";
 
 type GeneratedPage = {
   id: string;

@@ -7,6 +7,12 @@
  * All callers import from this file — never from provider-specific files.
  */
 
+import { createRequire } from "node:module";
+
+// ESM shim — `@vx/server-core` is "type": "module" so the bare `require()`
+// used below to lazy-load provider modules needs a CJS-compatible require.
+const require = createRequire(import.meta.url);
+
 import type {
   ImageProviderInterface,
   ImageGenerationOptions,

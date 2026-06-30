@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { getR2Config, createR2Client, uploadToR2 } from "@/lib/r2";
-import { buildColorizationDirective } from "@/lib/ai/prompts";
+import { prisma } from "@vx/db";
+import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
+import { buildColorizationDirective } from "@vx/server-core/ai/prompts";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const doc = await adminDb.collection("coloringStyles").doc(id).get();
-    if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ id: doc.id, ...doc.data() });
+    const style = await prisma.coloringStyle.findUnique({ where: { id } });
+    if (!style) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(style);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
@@ -23,9 +22,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Regenerate directive from style properties if requested
     if (regenerateDirective) {
-      const doc = await adminDb.collection("coloringStyles").doc(id).get();
-      if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
-      const style = doc.data()!;
+      const style = await prisma.coloringStyle.findUnique({ where: { id } });
+      if (!style) return NextResponse.json({ error: "Not found" }, { status: 404 });
       const merged = { ...style, ...data };
       data.colorizationDirective = buildColorizationDirective(merged);
     }
@@ -67,8 +65,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data.thumbnailUrl = referenceImages[0]?.url || "";
     }
 
-    data.updatedAt = FieldValue.serverTimestamp();
-    await adminDb.collection("coloringStyles").doc(id).update(data);
+    await prisma.coloringStyle.update({ where: { id }, data });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
@@ -78,7 +75,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    await adminDb.collection("coloringStyles").doc(id).delete();
+    await prisma.coloringStyle.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

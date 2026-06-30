@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useFirestoreGetAll } from "@vx/core-uikit/firebase";
+import { useRestGetAll } from "@vx/core-uikit/api";
 import { DataTable, Badge, Button } from "@vx/core-uikit/components";
 import { FilterBar } from "@vx/core-uikit/components";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -38,23 +38,18 @@ export function CreditLedgerViewer() {
   const { t } = useTranslation("creditLedger");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const {
-    data: entries,
-    isLoading,
-    hasMore,
-    page,
-    goToNextPage,
-    goToPrevPage,
-    goToFirstPage,
-  } = useFirestoreGetAll<CreditLedgerEntry>({
+  const [page, setPage] = useState(1);
+  const { data: entries, meta, isLoading } = useRestGetAll<CreditLedgerEntry>({
     entityName: "creditLedger",
-    collectionPath: "credit_ledger",
-    orderByField: "createdAt",
-    orderByDirection: "desc",
-    pageSize: 100,
-    searchFields: ["userId", "type", "description"],
-    searchTerm: searchTerm || undefined,
+    url: "/api/credit-ledger",
+    page,
+    limit: 100,
+    filters: searchTerm ? { search: searchTerm } : undefined,
   });
+  const hasMore = meta ? page < meta.totalPages : false;
+  const goToNextPage = () => setPage((p) => p + 1);
+  const goToPrevPage = () => setPage((p) => Math.max(1, p - 1));
+  const goToFirstPage = () => setPage(1);
 
   const columns = useMemo<ColumnDef<CreditLedgerEntry, unknown>[]>(
     () => [

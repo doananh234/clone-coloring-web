@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSpinner, faCheck, faBook } from "@fortawesome/pro-regular-svg-icons";
 import { notify } from "@vx/core-uikit/notifications";
 import { ArtStylePicker } from "@/components/art-style-picker";
-import type { CloneJob, ExtractedCharacter, ExtractedLocation } from "@/lib/ai/clone-types";
+import type { CloneJob, ExtractedCharacter, ExtractedLocation } from "@vx/server-core/ai/clone-types";
 
 interface CloneConfirmStepProps {
   job: CloneJob;

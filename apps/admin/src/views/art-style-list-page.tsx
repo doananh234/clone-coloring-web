@@ -25,7 +25,7 @@ import {
   faSparkles,
 } from "@fortawesome/pro-regular-svg-icons";
 import { appNavigate } from "@/lib/navigate";
-import type { ArtStyleEntity } from "@/lib/ai/art-style-types";
+import type { ArtStyleEntity } from "@vx/server-core/ai/art-style-types";
 
 // --- Helpers ---
 

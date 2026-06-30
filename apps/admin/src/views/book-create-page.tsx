@@ -2,9 +2,39 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useFirestore } from "@vx/core-uikit/firebase";
-import { firestoreCreate, firestoreUpdate, firestoreGetOne } from "@vx/core-uikit/firebase";
-import { useFirestoreGetAll } from "@vx/core-uikit/firebase";
+import { useRestGetAll, appApi } from "@vx/core-uikit/api";
+
+// REST shims that preserve the old firestore* signature for minimal-diff conversion
+async function firestoreCreate(
+  _firestore: unknown,
+  _collection: string,
+  data: Record<string, unknown>,
+  id?: string,
+): Promise<{ id: string }> {
+  const payload = id ? { id, ...data } : data;
+  const created = await appApi.post<{ id: string }>(`/api/books`, payload);
+  return created;
+}
+async function firestoreUpdate(
+  _firestore: unknown,
+  _collection: string,
+  bookId: string,
+  data: Record<string, unknown>,
+) {
+  return appApi.put(`/api/books/${bookId}`, data);
+}
+async function firestoreGetOne<T>(
+  _firestore: unknown,
+  _collection: string,
+  bookId: string,
+): Promise<T | null> {
+  try {
+    const res = await appApi.get<T>(`/api/books/${bookId}`);
+    return res as T;
+  } catch {
+    return null;
+  }
+}
 import {
   Button,
   Input,
@@ -108,7 +138,7 @@ export function BookCreatePage({ existingBookId }: { existingBookId?: string }) 
   const { t } = useTranslation("books");
   const { t: tc } = useTranslation("common");
   const router = useRouter();
-  const firestore = useFirestore();
+  const firestore = {} as unknown;
 
   const [currentStep, setCurrentStep] = useState(0);
   const [bookId, setBookId] = useState<string | null>(existingBookId || null);
@@ -141,7 +171,7 @@ export function BookCreatePage({ existingBookId }: { existingBookId?: string }) 
           "books",
           existingBookId,
         );
-        if (cancelled) return;
+        if (cancelled || !book) return;
 
         setDraft({
           title: (book.title as string) || "",
@@ -190,13 +220,11 @@ export function BookCreatePage({ existingBookId }: { existingBookId?: string }) 
   }, [existingBookId, firestore]);
   const [generatingAll, setGeneratingAll] = useState(false);
 
-  const { data: categories } = useFirestoreGetAll<CategoryEntity>({
+  const { data: categories } = useRestGetAll<CategoryEntity>({
     entityName: "categoriesForPicker",
-    collectionPath: "categories",
-    orderByField: "index",
-    orderByDirection: "asc",
-    pageSize: 100,
-    firestore,
+    url: "/api/categories",
+    page: 1,
+    limit: 100,
   });
 
   function updateDraft(field: keyof BookDraft, value: string) {

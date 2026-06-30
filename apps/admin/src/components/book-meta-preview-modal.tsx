@@ -13,7 +13,7 @@ import {
 } from "@vx/core-uikit/components";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faSquare, faSquareCheck } from "@fortawesome/pro-regular-svg-icons";
-import type { BookMetaGenerationResult } from "@/lib/ai/prompts/book-meta-prompt";
+import type { BookMetaGenerationResult } from "@vx/server-core/ai/prompts/book-meta-prompt";
 
 type FieldEntry = {
   key: string;

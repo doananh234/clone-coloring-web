@@ -1,25 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { textPrompt, buildSubtitlePrompt } from "@/lib/ai";
+import { prisma } from "@vx/db";
+import { textPrompt, buildSubtitlePrompt } from "@vx/server-core/ai";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ bookId: string }> }) {
   const { bookId } = await params;
 
   try {
-    const doc = await adminDb.collection("books").doc(bookId).get();
-    if (!doc.exists) {
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
-    const book = doc.data()!;
 
-    const prompt = buildSubtitlePrompt(book.title, book.description);
+    const prompt = buildSubtitlePrompt(book.title, book.description || "");
     const subtitle = await textPrompt(prompt, { maxTokens: 50, temperature: 0.7 });
 
-    // Save to Firestore
-    await adminDb.collection("books").doc(bookId).update({
-      subtitle,
-      updatedAt: FieldValue.serverTimestamp(),
+    // Save to Postgres
+    await prisma.book.update({
+      where: { id: bookId },
+      data: { subtitle },
     });
 
     return NextResponse.json({ bookId, subtitle });

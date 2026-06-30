@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
-import { editImage } from "@/lib/ai";
-import { buildRedesignPrompt } from "@/lib/ai/prompts";
-import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
-import { flushLangfuse } from "@/lib/langfuse";
-import type { CloneJob } from "@/lib/ai/clone-types";
+import { prisma } from "@vx/db";
+import { editImage } from "@vx/server-core/ai";
+import { buildRedesignPrompt } from "@vx/server-core/ai/prompts";
+import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
+import { flushLangfuse } from "@vx/server-core/langfuse";
+import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 export const maxDuration = 300;
 
@@ -49,27 +49,24 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const body = await req.json().catch(() => ({}));
     const { pageIndex } = body as { pageIndex?: number };
 
-    const docRef = adminDb.collection("cloneJobs").doc(jobId);
-    const doc = await docRef.get();
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
-    if (!doc.exists) {
+    if (!row) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    const job = doc.data() as CloneJob & { entityMap?: EntityMap; bookId?: string };
-    const entityMap: EntityMap = job.entityMap || { characters: [], locations: [] };
+    const jobPages = (row.pages as CloneJobPage[]) || [];
+    const jobBookData = (row.bookData as any) || {};
+    const entityMap: EntityMap = (row.entityMap as EntityMap) || { characters: [], locations: [] };
 
     const r2Config = getR2Config();
     const r2Client = createR2Client(r2Config);
-    const now = new Date().toISOString();
 
     // Create or reuse book
-    let bookId = job.bookId || "";
+    let bookId = row.bookId || "";
     if (!bookId) {
-      bookId = crypto.randomUUID();
-
       // Build initial coloringPages with prompts but no generated URLs yet
-      const coloringPages = job.pages
+      const coloringPages = jobPages
         .filter((p) => p.imageUrl)
         .map((p) => {
           const charNames = (p.rawData?.characters || []).map((c) => c.name.toLowerCase().trim());
@@ -107,7 +104,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           };
         });
 
-      const storyOutline = job.pages
+      const storyOutline = jobPages
         .filter((p) => p.rawData)
         .map((p, i) => ({
           pageNumber: i + 1,
@@ -117,44 +114,45 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           mood: p.rawData!.environment?.mood || "",
         }));
 
-      await adminDb
-        .collection("books")
-        .doc(bookId)
-        .set({
-          title: job.bookData?.title || job.name || "Untitled",
-          subtitle: job.bookData?.subtitle || "",
-          description: job.bookData?.description || "",
-          status: "reproducing",
-          coloringPages,
+      const createdBook = await prisma.book.create({
+        data: {
+          title: jobBookData.title || row.name || "Untitled",
+          subtitle: jobBookData.subtitle || "",
+          description: jobBookData.description || "",
+          coloringPages: coloringPages as any,
           summaryPages: [],
-          specifications: { pages: coloringPages.length },
-          storyOutline,
-          entityMap,
           isPublic: false,
-          isPremium: false,
-          isConverted: false,
-          isRedesigned: false,
-          isEditionConverted: false,
-          cloneJobId: jobId,
-          createdAt: now,
-          updatedAt: now,
-        });
+          data: {
+            status: "reproducing",
+            specifications: { pages: coloringPages.length },
+            storyOutline,
+            entityMap,
+            isPremium: false,
+            isConverted: false,
+            isRedesigned: false,
+            isEditionConverted: false,
+            cloneJobId: jobId,
+          },
+        },
+      });
 
-      await docRef.update({ bookId, updatedAt: now });
+      bookId = createdBook.id;
+      await prisma.cloneJob.update({
+        where: { id: jobId },
+        data: { bookId },
+      });
     }
 
     // Read current book state
-    const bookRef = adminDb.collection("books").doc(bookId);
-    const bookDoc = await bookRef.get();
-    if (!bookDoc.exists) {
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
 
-    const bookData = bookDoc.data()!;
-    const coloringPages = bookData.coloringPages || [];
+    const coloringPages = (book.coloringPages as any[]) || [];
 
     // Determine which pages to generate
-    const pagesToGenerate =
+    const pagesToGenerate: number[] =
       pageIndex !== undefined
         ? [pageIndex]
         : coloringPages
@@ -165,7 +163,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     for (const idx of pagesToGenerate) {
       const page = coloringPages[idx];
-      const jobPage = job.pages[idx];
+      const jobPage = jobPages[idx];
       if (!page) {
         results.push({ index: idx, success: false, error: "Page not found" });
         continue;
@@ -181,18 +179,27 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       try {
         // Update status to generating
         coloringPages[idx].status = "generating";
-        await bookRef.update({ coloringPages, updatedAt: now });
+        await prisma.book.update({
+          where: { id: bookId },
+          data: { coloringPages: coloringPages as any },
+        });
 
         const url = await reproducePage(sourceImageUrl, bookId, page.id, r2Client, r2Config);
 
         coloringPages[idx].url = url;
         coloringPages[idx].status = "done";
-        await bookRef.update({ coloringPages, updatedAt: now });
+        await prisma.book.update({
+          where: { id: bookId },
+          data: { coloringPages: coloringPages as any },
+        });
 
         results.push({ index: idx, success: true, url });
       } catch (err) {
         coloringPages[idx].status = "error";
-        await bookRef.update({ coloringPages, updatedAt: now });
+        await prisma.book.update({
+          where: { id: bookId },
+          data: { coloringPages: coloringPages as any },
+        });
         results.push({
           index: idx,
           success: false,
@@ -206,8 +213,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       (p: { status: string }) => p.status === "done" || p.status === "error",
     );
     if (allDone) {
-      await bookRef.update({ status: "draft", updatedAt: now });
-      await docRef.update({ status: "reproduced", updatedAt: now });
+      // Persist final status via the `data` Json column since Book has no `status` scalar
+      const bookExtra = (book.data as any) || {};
+      await prisma.book.update({
+        where: { id: bookId },
+        data: { data: { ...bookExtra, status: "draft" } },
+      });
+      await prisma.cloneJob.update({
+        where: { id: jobId },
+        data: { status: "reproduced" },
+      });
     }
 
     const succeeded = results.filter((r) => r.success).length;
