@@ -1,223 +1,269 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { normalizeAssetPath } from "@vx/core-uikit/utils";
 
 /**
- * Strips the CDN host prefix from all R2 URLs in Firebase,
- * converting "https://image.lagroups.org/assets/..." → "/assets/..."
+ * Normalize every R2 image URL in Firestore to the canonical
+ * "/assets/<rest>" shape.
  *
- * Processes: books, artStyles, coloringStyles, characters, locations
+ *   POST /api/admin/migrate-urls?dryRun=1   → report only, no writes
+ *   POST /api/admin/migrate-urls            → apply changes
+ *
+ * Handles legacy shapes:
+ *   - "https://image.lagroups.org/assets/foo.png"  → "/assets/foo.png"
+ *   - "https://pub-xxx.r2.dev/uuid/bar.png"        → "/assets/uuid/bar.png"
+ *   - "assets/foo.png"                             → "/assets/foo.png"
+ *   - "uuid/bar.png"                               → "/assets/uuid/bar.png"
  */
 
-const CDN_HOSTS = [
-  "https://image.lagroups.org",
-  "https://pub-", // catch any pub-xxx.r2.dev URLs
-];
-
-function stripCdnHost(url: string | undefined | null): string | undefined {
-  if (!url) return undefined;
-  for (const host of CDN_HOSTS) {
-    if (url.startsWith(host)) {
-      const idx = url.indexOf("/", host.length);
-      if (idx >= 0) return url.slice(idx);
-    }
-  }
-  // Already relative
-  if (url.startsWith("/")) return url;
-  // Relative without leading slash (e.g. "assets/...")
-  if (url.startsWith("assets/")) return `/${url}`;
-  return undefined; // not an R2 URL, leave unchanged
+interface MigrationStats {
+  scanned: number;
+  changed: number;
+  samples: Array<{ docId: string; field: string; from: string; to: string }>;
 }
 
-function stripUrlFields(
+function emptyStats(): MigrationStats {
+  return { scanned: 0, changed: 0, samples: [] };
+}
+
+function normalizeField(
   data: Record<string, unknown>,
-  fields: string[],
-): Record<string, unknown> | null {
-  const updates: Record<string, unknown> = {};
-  let changed = false;
-
-  for (const field of fields) {
-    const val = data[field];
-    if (typeof val === "string" && val.startsWith("http")) {
-      const stripped = stripCdnHost(val);
-      if (stripped && stripped !== val) {
-        updates[field] = stripped;
-        changed = true;
-      }
-    }
-  }
-
-  return changed ? updates : null;
+  field: string,
+): { value: string; changed: boolean } | null {
+  const val = data[field];
+  if (typeof val !== "string" || !val) return null;
+  const normalized = normalizeAssetPath(val);
+  if (!normalized || normalized === val) return null;
+  return { value: normalized, changed: true };
 }
 
-function stripArrayUrls(
-  arr: Array<Record<string, unknown>> | undefined,
-  urlField: string,
-): { updated: Array<Record<string, unknown>>; changed: boolean } | null {
+function normalizeArrayField<T extends Record<string, unknown>>(
+  arr: T[] | undefined,
+  field: string,
+): { value: T[]; changed: boolean } | null {
   if (!arr?.length) return null;
   let changed = false;
   const updated = arr.map((item) => {
-    const val = item[urlField];
-    if (typeof val === "string" && val.startsWith("http")) {
-      const stripped = stripCdnHost(val);
-      if (stripped && stripped !== val) {
-        changed = true;
-        return { ...item, [urlField]: stripped };
-      }
-    }
-    return item;
+    const val = item[field];
+    if (typeof val !== "string" || !val) return item;
+    const normalized = normalizeAssetPath(val);
+    if (!normalized || normalized === val) return item;
+    changed = true;
+    return { ...item, [field]: normalized } as T;
   });
-  return changed ? { updated, changed } : null;
+  return changed ? { value: updated, changed: true } : null;
 }
 
-export async function POST() {
-  try {
-    const stats = { books: 0, artStyles: 0, coloringStyles: 0, characters: 0, locations: 0 };
+async function migrateCollection(params: {
+  collection: string;
+  scalarFields: string[];
+  arrayFields?: Array<{ arrayName: string; urlFields: string[] }>;
+  dryRun: boolean;
+  maxSamples?: number;
+}): Promise<MigrationStats> {
+  const { collection, scalarFields, arrayFields = [], dryRun, maxSamples = 5 } =
+    params;
+  const stats = emptyStats();
+  const snap = await adminDb.collection(collection).get();
 
-    // --- Books ---
-    const bookSnap = await adminDb.collection("books").get();
-    for (const doc of bookSnap.docs) {
-      const data = doc.data();
-      const updates: Record<string, unknown> = {};
-      let changed = false;
+  for (const doc of snap.docs) {
+    stats.scanned++;
+    const data = doc.data();
+    const updates: Record<string, unknown> = {};
+    let docChanged = false;
 
-      // URL fields
-      const fieldUpdates = stripUrlFields(data, [
-        "coverUrl",
-        "thumbnailUrl",
-        "squareThumbnailUrl",
-        "squareUrl",
-        "pdfUrl",
-        "tryoutPage",
-      ]);
-      if (fieldUpdates) {
-        Object.assign(updates, fieldUpdates);
-        changed = true;
+    for (const field of scalarFields) {
+      const result = normalizeField(data, field);
+      if (!result) continue;
+      updates[field] = result.value;
+      docChanged = true;
+      if (stats.samples.length < maxSamples) {
+        stats.samples.push({
+          docId: doc.id,
+          field,
+          from: String(data[field]),
+          to: result.value,
+        });
       }
+    }
 
-      // coloringPages[].url
-      const cpResult = stripArrayUrls(data.coloringPages, "url");
-      if (cpResult) {
-        updates.coloringPages = cpResult.updated;
-        changed = true;
+    for (const { arrayName, urlFields } of arrayFields) {
+      const base = data[arrayName] as Array<Record<string, unknown>> | undefined;
+      if (!base?.length) continue;
+      let workingArray = base;
+      let arrayChanged = false;
+      for (const f of urlFields) {
+        const result = normalizeArrayField(workingArray, f);
+        if (!result) continue;
+        workingArray = result.value;
+        arrayChanged = true;
       }
-
-      // coloringPages[].coloredUrl
-      if (data.coloringPages?.length) {
-        const coloredResult = stripArrayUrls(data.coloringPages, "coloredUrl");
-        if (coloredResult) {
-          // Merge with existing coloringPages update
-          const base = (updates.coloringPages || data.coloringPages) as Array<
-            Record<string, unknown>
-          >;
-          updates.coloringPages = base.map((p, i) => ({
-            ...p,
-            ...(coloredResult.updated[i].coloredUrl !== data.coloringPages[i].coloredUrl
-              ? { coloredUrl: coloredResult.updated[i].coloredUrl }
-              : {}),
-          }));
-          changed = true;
+      if (arrayChanged) {
+        updates[arrayName] = workingArray;
+        docChanged = true;
+        if (stats.samples.length < maxSamples) {
+          stats.samples.push({
+            docId: doc.id,
+            field: arrayName,
+            from: `[array of ${base.length}]`,
+            to: `[normalized: ${urlFields.join(", ")}]`,
+          });
         }
       }
+    }
 
-      // summaryPages[].url
-      const spResult = stripArrayUrls(data.summaryPages, "url");
-      if (spResult) {
-        updates.summaryPages = spResult.updated;
-        changed = true;
-      }
-
-      if (changed) {
+    if (docChanged) {
+      stats.changed++;
+      if (!dryRun) {
         updates.updatedAt = FieldValue.serverTimestamp();
         await doc.ref.update(updates);
-        stats.books++;
       }
     }
+  }
 
-    // --- Art Styles ---
-    const artSnap = await adminDb.collection("artStyles").get();
-    for (const doc of artSnap.docs) {
-      const data = doc.data();
-      const updates: Record<string, unknown> = {};
-      let changed = false;
+  return stats;
+}
 
-      const fieldUpdates = stripUrlFields(data, ["thumbnailUrl"]);
-      if (fieldUpdates) {
-        Object.assign(updates, fieldUpdates);
-        changed = true;
-      }
+async function migrateSingletonDoc(params: {
+  collection: string;
+  docId: string;
+  arrayFields: Array<{ arrayName: string; urlFields: string[] }>;
+  dryRun: boolean;
+  maxSamples?: number;
+}): Promise<MigrationStats> {
+  const { collection, docId, arrayFields, dryRun, maxSamples = 5 } = params;
+  const stats = emptyStats();
+  const ref = adminDb.collection(collection).doc(docId);
+  const snap = await ref.get();
+  if (!snap.exists) return stats;
+  stats.scanned = 1;
 
-      // referenceImages[].url
-      const refResult = stripArrayUrls(data.referenceImages, "url");
-      if (refResult) {
-        updates.referenceImages = refResult.updated;
-        changed = true;
-      }
+  const data = snap.data() as Record<string, unknown>;
+  const updates: Record<string, unknown> = {};
+  let docChanged = false;
 
-      if (changed) {
-        updates.updatedAt = FieldValue.serverTimestamp();
-        await doc.ref.update(updates);
-        stats.artStyles++;
+  for (const { arrayName, urlFields } of arrayFields) {
+    const base = data[arrayName] as Array<Record<string, unknown>> | undefined;
+    if (!base?.length) continue;
+    let workingArray = base;
+    let arrayChanged = false;
+    for (const f of urlFields) {
+      const result = normalizeArrayField(workingArray, f);
+      if (!result) continue;
+      workingArray = result.value;
+      arrayChanged = true;
+    }
+    if (arrayChanged) {
+      updates[arrayName] = workingArray;
+      docChanged = true;
+      if (stats.samples.length < maxSamples) {
+        stats.samples.push({
+          docId,
+          field: arrayName,
+          from: `[array of ${base.length}]`,
+          to: `[normalized: ${urlFields.join(", ")}]`,
+        });
       }
     }
+  }
 
-    // --- Coloring Styles ---
-    const csSnap = await adminDb.collection("coloringStyles").get();
-    for (const doc of csSnap.docs) {
-      const data = doc.data();
-      const updates: Record<string, unknown> = {};
-      let changed = false;
-
-      const fieldUpdates = stripUrlFields(data, ["thumbnailUrl"]);
-      if (fieldUpdates) {
-        Object.assign(updates, fieldUpdates);
-        changed = true;
-      }
-
-      const refResult = stripArrayUrls(data.referenceImages, "url");
-      if (refResult) {
-        updates.referenceImages = refResult.updated;
-        changed = true;
-      }
-
-      if (changed) {
-        updates.updatedAt = FieldValue.serverTimestamp();
-        await doc.ref.update(updates);
-        stats.coloringStyles++;
-      }
+  if (docChanged) {
+    stats.changed = 1;
+    if (!dryRun) {
+      updates.updatedAt = FieldValue.serverTimestamp();
+      await ref.update(updates);
     }
+  }
+  return stats;
+}
 
-    // --- Characters ---
-    const charSnap = await adminDb.collection("characters").get();
-    for (const doc of charSnap.docs) {
-      const data = doc.data();
-      const fieldUpdates = stripUrlFields(data, ["referenceImageUrl", "thumbnailUrl"]);
-      if (fieldUpdates) {
-        fieldUpdates.updatedAt = FieldValue.serverTimestamp();
-        await doc.ref.update(fieldUpdates);
-        stats.characters++;
-      }
-    }
+export async function POST(req: NextRequest) {
+  try {
+    const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
 
-    // --- Locations ---
-    const locSnap = await adminDb.collection("locations").get();
-    for (const doc of locSnap.docs) {
-      const data = doc.data();
-      const fieldUpdates = stripUrlFields(data, ["referenceImageUrl", "thumbnailUrl"]);
-      if (fieldUpdates) {
-        fieldUpdates.updatedAt = FieldValue.serverTimestamp();
-        await doc.ref.update(fieldUpdates);
-        stats.locations++;
-      }
-    }
+    const results = {
+      books: await migrateCollection({
+        collection: "books",
+        scalarFields: [
+          "coverUrl",
+          "thumbnailUrl",
+          "squareThumbnailUrl",
+          "squareUrl",
+          "pdfUrl",
+          "tryoutPage",
+        ],
+        arrayFields: [
+          { arrayName: "coloringPages", urlFields: ["url", "coloredUrl"] },
+          { arrayName: "summaryPages", urlFields: ["url"] },
+        ],
+        dryRun,
+      }),
+      artStyles: await migrateCollection({
+        collection: "artStyles",
+        scalarFields: ["thumbnailUrl"],
+        arrayFields: [{ arrayName: "referenceImages", urlFields: ["url"] }],
+        dryRun,
+      }),
+      coloringStyles: await migrateCollection({
+        collection: "coloringStyles",
+        scalarFields: ["thumbnailUrl"],
+        arrayFields: [{ arrayName: "referenceImages", urlFields: ["url"] }],
+        dryRun,
+      }),
+      characters: await migrateCollection({
+        collection: "characters",
+        scalarFields: ["referenceImageUrl", "thumbnailUrl"],
+        dryRun,
+      }),
+      locations: await migrateCollection({
+        collection: "locations",
+        scalarFields: ["referenceImageUrl", "thumbnailUrl"],
+        dryRun,
+      }),
+      categories: await migrateCollection({
+        collection: "categories",
+        scalarFields: ["iconUrl"],
+        dryRun,
+      }),
+      cloneJobs: await migrateCollection({
+        collection: "cloneJobs",
+        scalarFields: ["sourcePdfUrl"],
+        arrayFields: [
+          { arrayName: "pages", urlFields: ["imageUrl", "redesignedUrl"] },
+        ],
+        dryRun,
+      }),
+      appHome: await migrateSingletonDoc({
+        collection: "app",
+        docId: "home",
+        arrayFields: [
+          { arrayName: "newArrivalBooks", urlFields: ["coverUrl"] },
+          { arrayName: "trendingBooks", urlFields: ["imageUrl"] },
+          { arrayName: "categories", urlFields: ["iconUrl"] },
+          { arrayName: "freeColoringPages", urlFields: ["imageUrl"] },
+        ],
+        dryRun,
+      }),
+    };
 
-    const total =
-      stats.books + stats.artStyles + stats.coloringStyles + stats.characters + stats.locations;
+    const totalScanned = Object.values(results).reduce(
+      (acc, s) => acc + s.scanned,
+      0,
+    );
+    const totalChanged = Object.values(results).reduce(
+      (acc, s) => acc + s.changed,
+      0,
+    );
 
     return NextResponse.json({
       success: true,
-      message: `Migrated ${total} documents`,
-      stats,
+      dryRun,
+      message: dryRun
+        ? `[dry-run] Would update ${totalChanged} of ${totalScanned} documents`
+        : `Updated ${totalChanged} of ${totalScanned} documents`,
+      totals: { scanned: totalScanned, changed: totalChanged },
+      stats: results,
     });
   } catch (error) {
     return NextResponse.json(

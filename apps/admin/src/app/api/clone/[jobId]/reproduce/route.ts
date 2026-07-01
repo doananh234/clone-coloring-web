@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { editImage } from "@/lib/ai";
-import { REPRODUCE_STRENGTH_PREFIX } from "@/lib/ai/prompts";
+import { buildRedesignPrompt } from "@/lib/ai/prompts";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@/lib/r2";
 import { flushLangfuse } from "@/lib/langfuse";
 import type { CloneJob } from "@/lib/ai/clone-types";
@@ -13,21 +13,18 @@ type RouteParams = { params: Promise<{ jobId: string }> };
 type EntityRef = { id: string; name: string; referenceImageUrl: string };
 type EntityMap = { characters: EntityRef[]; locations: EntityRef[] };
 
-const STRENGTH_PREFIX = REPRODUCE_STRENGTH_PREFIX;
-
 /**
- * Reproduce a single page: image-to-image edit from original/redesigned + prompt.
- * Keeps characters and composition, only ~30% change.
+ * Reproduce a single page: image-to-image edit using the same KEEP/MAY/DO NOT
+ * template as the Redesign step (no scene re-description, ~30% change).
  */
 async function reproducePage(
   sourceImageUrl: string,
-  prompt: string,
   bookId: string,
   pageId: string,
   r2Client: ReturnType<typeof createR2Client>,
   r2Config: ReturnType<typeof getR2Config>,
 ) {
-  const fullPrompt = `${STRENGTH_PREFIX}${prompt}`;
+  const fullPrompt = buildRedesignPrompt(30);
   const img = await editImage(resolveR2Url(sourceImageUrl), fullPrompt, {
     trace: { caller: "clone/reproduce", entityType: "book", entityId: bookId },
   });
@@ -169,8 +166,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     for (const idx of pagesToGenerate) {
       const page = coloringPages[idx];
       const jobPage = job.pages[idx];
-      if (!page || !page.prompt) {
-        results.push({ index: idx, success: false, error: "No prompt for this page" });
+      if (!page) {
+        results.push({ index: idx, success: false, error: "Page not found" });
         continue;
       }
 
@@ -186,14 +183,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         coloringPages[idx].status = "generating";
         await bookRef.update({ coloringPages, updatedAt: now });
 
-        const url = await reproducePage(
-          sourceImageUrl,
-          page.prompt,
-          bookId,
-          page.id,
-          r2Client,
-          r2Config,
-        );
+        const url = await reproducePage(sourceImageUrl, bookId, page.id, r2Client, r2Config);
 
         coloringPages[idx].url = url;
         coloringPages[idx].status = "done";

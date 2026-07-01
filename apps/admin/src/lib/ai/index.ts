@@ -59,8 +59,7 @@ export {
   buildCharacterExtractionPrompt,
   buildLocationExtractionPrompt,
   buildCategoryIconPrompt,
-  buildRedesignStrengthPrefix,
-  REPRODUCE_STRENGTH_PREFIX,
+  buildRedesignPrompt,
 } from "./prompts";
 
 // Art Style Types

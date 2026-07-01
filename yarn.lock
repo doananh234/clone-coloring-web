@@ -6736,6 +6736,7 @@ __metadata:
     eslint: "npm:^9.0.0"
     firebase: "npm:^11"
     firebase-admin: "npm:^13.9.0"
+    google-auth-library: "npm:^10.6.2"
     langfuse: "npm:^3.38.20"
     next: "npm:^16.2.6"
     next-themes: "npm:^0.4.6"
@@ -9161,7 +9162,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"google-auth-library@npm:^10.6.1":
+"google-auth-library@npm:^10.6.1, google-auth-library@npm:^10.6.2":
   version: 10.6.2
   resolution: "google-auth-library@npm:10.6.2"
   dependencies:

@@ -35,7 +35,4 @@ export { buildCharacterExtractionPrompt } from "./character-extraction-prompt";
 
 export { buildLocationExtractionPrompt } from "./location-extraction-prompt";
 
-export {
-  buildRedesignStrengthPrefix,
-  REPRODUCE_STRENGTH_PREFIX,
-} from "./redesign-prompts";
+export { buildRedesignPrompt } from "./redesign-prompts";

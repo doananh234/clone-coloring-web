@@ -1,7 +1,7 @@
 /**
  * Image Provider Interface — abstract contract for image generation/editing.
- * Implementations: Azure OpenAI (GPT-image-2), Google Gemini.
- * Switch provider via IMAGE_PROVIDER env var ("azure" | "gemini").
+ * Implementations: Azure OpenAI (GPT-image-2), Google Gemini, Vertex AI.
+ * Switch provider via IMAGE_PROVIDER env var ("azure" | "gemini" | "vertex").
  */
 
 export type ImageGenerationOptions = {

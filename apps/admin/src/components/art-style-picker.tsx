@@ -3,18 +3,11 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Badge, Input, Dialog, DialogContent } from "@vx/core-uikit/components";
+import { resolveAssetUrl as resolveUrl } from "@vx/core-uikit/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPalette, faXmark, faMagnifyingGlass } from "@fortawesome/pro-regular-svg-icons";
 import type { ArtStyleEntity } from "@/lib/ai/art-style-types";
 
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
-function resolveUrl(url: string | undefined | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
-    return url;
-  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-  return url;
-}
 
 interface ArtStylePickerProps {
   value: string | null;

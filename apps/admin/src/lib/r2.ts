@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { normalizeAssetPath, resolveAssetUrl } from "@vx/core-uikit/utils";
 
 export interface R2Config {
   accountId: string;
@@ -71,6 +72,12 @@ export async function uploadToR2(params: {
   const { client, config, key, body, contentType } = params;
   const ct = contentType || guessContentType(key);
 
+  if (!key.startsWith("assets/")) {
+    const msg = `[r2] uploadToR2 key must start with "assets/" — got: ${key}`;
+    if (process.env.NODE_ENV !== "production") throw new Error(msg);
+    console.warn(msg);
+  }
+
   await client.send(
     new PutObjectCommand({
       Bucket: config.bucket,
@@ -80,8 +87,7 @@ export async function uploadToR2(params: {
     }),
   );
 
-  // Store relative path only — CDN host is resolved at read time via resolveR2Url()
-  const url = `/${key}`;
+  const url = normalizeAssetPath(`/${key}`) ?? `/${key}`;
   return { key, url };
 }
 
@@ -108,16 +114,12 @@ export async function getPresignedUploadUrl(params: {
 
 /**
  * Resolve a stored relative path to a full URL for server-side fetching.
- * Handles: "/assets/x.png", "assets/x.png", or already-full "https://..." URLs.
+ * Handles all legacy shapes via the shared normalizer.
  */
 export function resolveR2Url(url: string): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  const base = (
+  const base =
     process.env.R2_PUBLIC_BASE_URL ||
     process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL ||
-    ""
-  ).replace(/\/$/, "");
-  if (base) return `${base}/${url.replace(/^\//, "")}`;
-  return url;
+    "";
+  return resolveAssetUrl(url, base);
 }

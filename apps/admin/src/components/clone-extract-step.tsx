@@ -9,7 +9,7 @@ import {
   faUser,
   faMapPin,
 } from "@fortawesome/pro-regular-svg-icons";
-import { cn } from "@vx/core-uikit/utils";
+import { cn, resolveAssetUrl as resolveUrl } from "@vx/core-uikit/utils";
 import { notify } from "@vx/core-uikit/notifications";
 import type { CloneJob, ExtractedCharacter, ExtractedLocation } from "@/lib/ai/clone-types";
 
@@ -35,15 +35,6 @@ type LocEntry = ExtractedLocation & { pageNumber: number; imageUrl: string };
 // A group of similar characters
 type CharGroup = { key: string; entries: CharEntry[] };
 
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
-
-function resolveUrl(url: string | undefined | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
-    return url;
-  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-  return url;
-}
 
 /** Check if two names are similar (substring or word overlap) */
 function namesAreSimilar(a: string, b: string): boolean {

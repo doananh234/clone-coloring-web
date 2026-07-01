@@ -32,17 +32,8 @@ import {
 import { StoryPlannerStep, type ScenePromptData } from "@/components/story-planner-step";
 import { CoverThumbnailStep } from "@/components/cover-thumbnail-step";
 import type { CategoryEntity } from "@/crud/categories";
-import { cn } from "@vx/core-uikit/utils";
+import { cn, resolveAssetUrl as resolveUrl } from "@vx/core-uikit/utils";
 
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
-
-function resolveUrl(url: string | undefined | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
-    return url;
-  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-  return url;
-}
 
 type BookDraft = {
   title: string;

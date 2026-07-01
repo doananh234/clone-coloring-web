@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useFirestoreGetOne } from "@vx/core-uikit/firebase";
+import { resolveAssetUrl as resolveUrl } from "@vx/core-uikit/utils";
 import { useFirestore } from "@vx/core-uikit/firebase";
 import { Badge, Button, Separator } from "@vx/core-uikit/components";
 import { useRouter } from "next/navigation";
@@ -9,15 +10,6 @@ import { DetailCard } from "@/components/detail-card";
 import { appNavigate } from "@/lib/navigate";
 import type { CategoryEntity } from "@/crud/categories";
 
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
-
-function resolveUrl(url: string | undefined | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
-    return url;
-  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-  return url;
-}
 
 export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
   const { t } = useTranslation("categories");

@@ -7,13 +7,13 @@ import {
   faSpinner,
   faRotate,
   faSparkles,
-  faChevronDown,
-  faChevronUp,
   faDroplet,
   faPaintbrushPencil,
 } from "@fortawesome/pro-regular-svg-icons";
 import { notify } from "@vx/core-uikit/notifications";
+import { resolveAssetUrl as resolveUrl } from "@vx/core-uikit/utils";
 import type { CloneJob, CloneJobPage } from "@/lib/ai/clone-types";
+import { PagePreviewPopover, usePreviewHover } from "./page-preview-popover";
 
 const CHANGE_OPTIONS = [
   { value: 30, label: "30% — Small changes" },
@@ -27,15 +27,6 @@ interface CloneRedesignStepProps {
   onBack: () => void;
 }
 
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
-
-function resolveUrl(url: string | undefined | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
-    return url;
-  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-  return url;
-}
 
 export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRedesignStepProps) {
   const router = useRouter();
@@ -54,12 +45,6 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
       ]),
     ),
   );
-  const [prompts, setPrompts] = useState<Record<number, string>>(
-    Object.fromEntries(
-      job.pages.map((p, i) => [i, p.redesignPrompt || p.rawData?.reproductionPrompt || ""]),
-    ),
-  );
-  const [expandedPage, setExpandedPage] = useState<number | null>(null);
 
   const doneCount = Object.values(pageStates).filter((s) => s.status === "done").length;
 
@@ -76,7 +61,6 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             pageIndex,
-            prompt: prompts[pageIndex] || undefined,
             changePercent,
           }),
         });
@@ -101,7 +85,7 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
         }));
       }
     },
-    [job.id, prompts, changePercent],
+    [job.id, changePercent],
   );
 
   async function handleGenerateAll() {
@@ -126,8 +110,8 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
-        Redesign each page using the original image + analyzed prompt. Edit prompts for small
-        changes before generating.
+        Generate a refreshed variation of each page. Pick a change level, then redesign one page
+        at a time or batch them all.
       </p>
 
       {/* Controls bar */}
@@ -182,10 +166,6 @@ export function CloneRedesignStep({ job, onJobUpdate, onNext, onBack }: CloneRed
             page={page}
             index={i}
             state={pageStates[i] || { status: "idle" }}
-            prompt={prompts[i] || ""}
-            onPromptChange={(val) => setPrompts((prev) => ({ ...prev, [i]: val }))}
-            expanded={expandedPage === i}
-            onToggleExpand={() => setExpandedPage(expandedPage === i ? null : i)}
             onRedesign={() => redesignPage(i)}
             disabled={generatingAll}
           />
@@ -217,20 +197,12 @@ function PageRedesignCard({
   page,
   index,
   state,
-  prompt,
-  onPromptChange,
-  expanded,
-  onToggleExpand,
   onRedesign,
   disabled,
 }: {
   page: CloneJobPage;
   index: number;
   state: { status: string; url?: string };
-  prompt: string;
-  onPromptChange: (val: string) => void;
-  expanded: boolean;
-  onToggleExpand: () => void;
   onRedesign: () => void;
   disabled: boolean;
 }) {
@@ -238,38 +210,93 @@ function PageRedesignCard({
   const isDone = state.status === "done";
   const isError = state.status === "error";
 
+  const { anchorRef, open: previewOpen, position: previewPos, openPreview, closePreview } =
+    usePreviewHover();
+
+  const badge =
+    state.status === "done"
+      ? { text: "Redesigned", className: "text-green-600" }
+      : state.status === "generating"
+        ? { text: "Generating…", className: "text-blue-600" }
+        : state.status === "error"
+          ? { text: "Failed", className: "text-red-500" }
+          : { text: "Not redesigned yet", className: "text-muted-foreground" };
+
   return (
     <div className="rounded-lg border">
       {/* Header row */}
       <div className="flex items-center gap-3 p-3">
-        {/* Original thumbnail */}
-        <div className="h-16 w-12 shrink-0 overflow-hidden rounded border bg-muted">
-          <img
-            src={resolveUrl(page.imageUrl)}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        </div>
-
-        {/* Arrow + Redesigned thumbnail */}
-        <span className="text-xs text-muted-foreground">→</span>
-        <div className="h-16 w-12 shrink-0 overflow-hidden rounded border bg-muted">
-          {isDone && state.url ? (
+        {/* Thumbnail group (original + arrow + redesigned) — hoverable */}
+        <div
+          ref={anchorRef}
+          className="flex items-center gap-3 cursor-zoom-in"
+          onMouseEnter={openPreview}
+          onMouseLeave={closePreview}
+        >
+          {/* Original thumbnail */}
+          <div className="h-16 w-12 shrink-0 overflow-hidden rounded border bg-muted">
             <img
-              src={resolveUrl(state.url)}
+              src={resolveUrl(page.imageUrl)}
               alt=""
               className="h-full w-full object-cover"
             />
-          ) : isGenerating ? (
-            <div className="flex h-full items-center justify-center">
-              <FontAwesomeIcon icon={faSpinner} spin className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center text-[9px] text-muted-foreground">
-              {isError ? "Error" : "—"}
-            </div>
-          )}
+          </div>
+
+          {/* Arrow + Redesigned thumbnail */}
+          <span className="text-xs text-muted-foreground">→</span>
+          <div className="h-16 w-12 shrink-0 overflow-hidden rounded border bg-muted">
+            {isDone && state.url ? (
+              <img
+                src={resolveUrl(state.url)}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : isGenerating ? (
+              <div className="flex h-full items-center justify-center">
+                <FontAwesomeIcon icon={faSpinner} spin className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center text-[9px] text-muted-foreground">
+                {isError ? "Error" : "—"}
+              </div>
+            )}
+          </div>
         </div>
+
+        {previewOpen && previewPos && (
+          <PagePreviewPopover
+            title={`Page ${index + 1}`}
+            badge={badge}
+            leftLabel="Original"
+            leftUrl={resolveUrl(page.imageUrl)}
+            rightLabel="Redesigned"
+            rightSlot={
+              isDone && state.url ? (
+                <img
+                  src={resolveUrl(state.url)}
+                  alt={`Page ${index + 1} redesigned`}
+                  className="h-full w-full object-contain"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              ) : isGenerating ? (
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <FontAwesomeIcon icon={faSpinner} spin className="h-5 w-5" />
+                  <span className="text-xs">Generating…</span>
+                </div>
+              ) : isError ? (
+                <span className="text-xs text-red-500">Failed — try again</span>
+              ) : (
+                <span className="text-xs text-muted-foreground">Not redesigned yet</span>
+              )
+            }
+            top={previewPos.top}
+            left={previewPos.left}
+            onMouseEnter={openPreview}
+            onMouseLeave={closePreview}
+          />
+        )}
 
         {/* Info */}
         <div className="min-w-0 flex-1">
@@ -288,17 +315,6 @@ function PageRedesignCard({
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={onToggleExpand}
-            className="rounded p-1.5 hover:bg-muted"
-            title="Edit prompt"
-          >
-            <FontAwesomeIcon
-              icon={expanded ? faChevronUp : faChevronDown}
-              className="h-3 w-3 text-muted-foreground"
-            />
-          </button>
-          <button
-            type="button"
             onClick={onRedesign}
             disabled={disabled || isGenerating}
             className="rounded p-1.5 hover:bg-muted disabled:opacity-40"
@@ -308,22 +324,6 @@ function PageRedesignCard({
           </button>
         </div>
       </div>
-
-      {/* Expanded prompt editor */}
-      {expanded && (
-        <div className="border-t px-3 py-2.5">
-          <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-            Prompt (edit for small changes)
-          </label>
-          <textarea
-            className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-            rows={4}
-            value={prompt}
-            onChange={(e) => onPromptChange(e.target.value)}
-            disabled={isGenerating}
-          />
-        </div>
-      )}
     </div>
   );
 }

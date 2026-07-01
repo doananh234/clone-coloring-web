@@ -2,6 +2,18 @@ import { createCrudPages } from "@vx/core-uikit/generators";
 import type { FieldConfig } from "@vx/core-uikit/generators";
 import { appNavigate } from "@/lib/navigate";
 
+export type EtsyListing = {
+  etsyTitle?: string;
+  etsyDescription?: string;
+  materials?: string[];
+  etsyCategory?: string;
+  subcategory?: string;
+  priceSuggestionUsd?: number;
+  priceNotes?: string;
+  section?: string;
+  generatedAt?: string;
+};
+
 export type BookEntity = {
   id: string;
   title: string;
@@ -34,6 +46,15 @@ export type BookEntity = {
     locationReferenceImageUrls?: string[];
   }[];
   specifications: { pages: number; dimensions?: string; ageRange?: string };
+  /** Discovery & filtering fields */
+  tags?: string[];
+  primaryColor?: string;
+  secondaryColor?: string;
+  themeStyle?: string;
+  holiday?: string;
+  occasion?: string;
+  /** Etsy listing metadata */
+  etsyListing?: EtsyListing;
   isConverted?: boolean;
   isRedesigned?: boolean;
   isEditionConverted?: boolean;

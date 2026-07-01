@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button } from "@vx/core-uikit/components";
+import { resolveAssetUrl as resolveUrl } from "@vx/core-uikit/utils";
 import { ConfirmDialog } from "@vx/core-uikit/components";
 import { notify } from "@vx/core-uikit/notifications";
 import { useRouter } from "next/navigation";
@@ -19,14 +20,6 @@ import {
 } from "@fortawesome/pro-regular-svg-icons";
 import { DetailCard } from "@/components/detail-card";
 
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
-function resolveUrl(url: string | undefined | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
-    return url;
-  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-  return url;
-}
 import { Input, Textarea } from "@vx/core-uikit/components";
 import { PreviewableImage } from "@/components/global-image-preview";
 import { appNavigate } from "@/lib/navigate";

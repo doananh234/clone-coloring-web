@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useFirestoreGetOne } from "@vx/core-uikit/firebase";
+import { resolveAssetUrl as resolveUrl } from "@vx/core-uikit/utils";
 import { useFirestore } from "@vx/core-uikit/firebase";
 import { firestoreUpdate } from "@vx/core-uikit/firebase";
 import { Badge, Button, Separator } from "@vx/core-uikit/components";
@@ -21,8 +22,10 @@ import {
   faCode,
   faChevronDown,
   faChevronRight,
+  faFont,
 } from "@fortawesome/pro-regular-svg-icons";
 import dynamic from "next/dynamic";
+import { TextOverlayModal } from "@/components/text-overlay-modal";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.default), {
   ssr: false,
@@ -50,15 +53,6 @@ import { ExtractionReviewModal } from "@/components/extraction-review-modal";
 import { appNavigate } from "@/lib/navigate";
 import type { BookEntity } from "@/crud/books";
 
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
-
-function resolveUrl(url: string | undefined | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:"))
-    return url;
-  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-  return url;
-}
 
 function formatDate(val: unknown): string {
   if (!val) return "—";
@@ -117,6 +111,9 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
   const [redesignCharRefs, setRedesignCharRefs] = useState<string[]>([]);
   const [redesignLocRefs, setRedesignLocRefs] = useState<string[]>([]);
   const [redesigning, setRedesigning] = useState(false);
+  const [textOverlayOpen, setTextOverlayOpen] = useState(false);
+  const [textOverlayImageUrl, setTextOverlayImageUrl] = useState("");
+  const [textOverlayTarget, setTextOverlayTarget] = useState<"cover" | "thumbnail" | "square">("cover");
 
   function openLightbox(images: ImageItem[], index: number) {
     setLightboxImages(images);
@@ -226,6 +223,43 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
       refresh();
     } catch {
       notify.error("Failed to update thumbnail");
+    }
+  }
+
+  async function handleTextOverlayApply(base64: string, _previewUrl: string) {
+    if (!firestore) return;
+    try {
+      const field =
+        textOverlayTarget === "cover"
+          ? "coverUrl"
+          : textOverlayTarget === "thumbnail"
+            ? "thumbnailUrl"
+            : "squareThumbnailUrl";
+      const fileName =
+        textOverlayTarget === "cover"
+          ? "cover.png"
+          : textOverlayTarget === "thumbnail"
+            ? "thumbnail.png"
+            : "square.png";
+
+      // Upload to R2
+      const uploadRes = await fetch("/api/generate/upload-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64, key: `assets/${bookId}/${fileName}` }),
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadData.success) {
+        notify.error("Failed to upload to R2");
+        return;
+      }
+
+      const urlWithCacheBust = `${uploadData.url}?v=${Date.now()}`;
+      await firestoreUpdate(firestore, "books", bookId, { [field]: urlWithCacheBust });
+      notify.success("Text overlay applied & uploaded");
+      refresh();
+    } catch {
+      notify.error("Failed to save overlay");
     }
   }
 
@@ -528,6 +562,21 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
               </div>
             )}
           </div>
+          {book.coverUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                setTextOverlayImageUrl(resolveUrl(book.coverUrl));
+                setTextOverlayTarget("cover");
+                setTextOverlayOpen(true);
+              }}
+            >
+              <FontAwesomeIcon icon={faFont} className="mr-1.5 h-3.5 w-3.5" />
+              Add Text Overlay
+            </Button>
+          )}
 
           {/* Thumbnail variants */}
           <div className="grid grid-cols-2 gap-2">
@@ -992,6 +1041,15 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Text Overlay Modal */}
+      <TextOverlayModal
+        open={textOverlayOpen}
+        onOpenChange={setTextOverlayOpen}
+        imageUrl={textOverlayImageUrl}
+        defaultTitle={book?.title || ""}
+        onApply={handleTextOverlayApply}
+      />
     </div>
   );
 }

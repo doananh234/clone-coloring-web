@@ -13,6 +13,8 @@ import {
 } from "@fortawesome/pro-regular-svg-icons";
 import { cn } from "@vx/core-uikit/utils";
 import { ColoringStylePicker } from "@/components/coloring-style-picker";
+import { TextOverlayModal } from "@/components/text-overlay-modal";
+import { faFont } from "@fortawesome/pro-regular-svg-icons";
 import type { ColoringStyleEntity } from "@/lib/ai/coloring-style-types";
 
 type GeneratedPage = {
@@ -76,6 +78,9 @@ export function CoverThumbnailStep({
   const [coverPageIds, setCoverPageIds] = useState<string[]>([]);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [generatingCover, setGeneratingCover] = useState(false);
+  const [textOverlayOpen, setTextOverlayOpen] = useState(false);
+  const [textOverlayImageUrl, setTextOverlayImageUrl] = useState("");
+  const [textOverlayTarget, setTextOverlayTarget] = useState<"square" | "cover">("square");
 
   function handleStyleChange(id: string | null, style: ColoringStyleEntity | null) {
     setColoringStyleId(id);
@@ -307,12 +312,24 @@ export function CoverThumbnailStep({
           maxSelect={1}
         />
         {squarePreview && (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-2">
             <img
               src={squarePreview}
               alt="Square thumbnail"
               className="h-40 w-40 rounded-lg border object-cover"
             />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setTextOverlayImageUrl(squarePreview);
+                setTextOverlayTarget("square");
+                setTextOverlayOpen(true);
+              }}
+            >
+              <FontAwesomeIcon icon={faFont} className="mr-1.5 h-3.5 w-3.5" />
+              Add Text
+            </Button>
           </div>
         )}
       </div>
@@ -346,8 +363,20 @@ export function CoverThumbnailStep({
           maxSelect={4}
         />
         {coverPreview && (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-2">
             <img src={coverPreview} alt="Cover" className="h-52 rounded-lg border object-contain" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setTextOverlayImageUrl(coverPreview);
+                setTextOverlayTarget("cover");
+                setTextOverlayOpen(true);
+              }}
+            >
+              <FontAwesomeIcon icon={faFont} className="mr-1.5 h-3.5 w-3.5" />
+              Add Text
+            </Button>
           </div>
         )}
       </div>
@@ -369,6 +398,21 @@ export function CoverThumbnailStep({
           {saving ? "Saving..." : "Finish & Save"}
         </Button>
       </div>
+
+      {/* Text Overlay Modal */}
+      <TextOverlayModal
+        open={textOverlayOpen}
+        onOpenChange={setTextOverlayOpen}
+        imageUrl={textOverlayImageUrl}
+        defaultTitle={title}
+        onApply={(_base64, previewUrl) => {
+          if (textOverlayTarget === "square") {
+            setSquarePreview(previewUrl);
+          } else {
+            setCoverPreview(previewUrl);
+          }
+        }}
+      />
     </div>
   );
 }

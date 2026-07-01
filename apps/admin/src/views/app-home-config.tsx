@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useFirestore } from "@vx/core-uikit/firebase";
 import { useFirestoreGetAll, normalizeTimestamps } from "@vx/core-uikit/firebase";
 import { SortableList, ItemPickerDialog, Button, Badge } from "@vx/core-uikit/components";
+import { resolveAssetUrl } from "@vx/core-uikit/utils";
 import { notify } from "@vx/core-uikit/notifications";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faTrash, faFloppyDisk, faRotate } from "@fortawesome/pro-regular-svg-icons";
@@ -23,9 +24,7 @@ export { AppHomeConfigPage };
 const R2_BASE = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "https://image.lagroups.org";
 
 function resolveUrl(url: string | undefined): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
-  return `${R2_BASE.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
+  return resolveAssetUrl(url, R2_BASE);
 }
 
 /** Collect all public coloring pages from all books into flat list */
