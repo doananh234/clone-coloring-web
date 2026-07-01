@@ -33,8 +33,13 @@ async function readPdfFromR2(key: string): Promise<Buffer> {
 }
 
 async function fetchPdf(url: string): Promise<Buffer> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`failed to fetch ${url}: ${res.status}`);
+  // SourceBook.bookUrl can be a relative R2 path (manual upload) or an absolute
+  // URL (CSV import from external host). resolveR2Url no-ops on absolute URLs.
+  const absolute = url.startsWith("http://") || url.startsWith("https://")
+    ? url
+    : resolveR2Url(url);
+  const res = await fetch(absolute);
+  if (!res.ok) throw new Error(`failed to fetch ${absolute}: ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
 

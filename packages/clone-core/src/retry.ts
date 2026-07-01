@@ -1,7 +1,23 @@
 import type { CloneStep } from "./types";
 
+/**
+ * `CLONE_MAX_RETRY_ATTEMPTS` semantics:
+ *   - unset / non-numeric  → default 5 attempts
+ *   - `0`                  → 1 attempt (no retry after the first failure)
+ *   - `N`                  → N attempts total
+ * `0` is coerced to `1` because a `for` loop bounded by `0` never runs and
+ * would surface an `undefined` cause via `StepFailedError`.
+ */
+function resolveMaxAttempts(): number {
+  const raw = process.env.CLONE_MAX_RETRY_ATTEMPTS;
+  if (raw == null || raw === "") return 5;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 5;
+  return Math.max(1, Math.floor(n));
+}
+
 export const RETRY_POLICY = {
-  maxAttempts: 5,
+  maxAttempts: resolveMaxAttempts(),
   baseDelayMs: 10_000,
   maxDelayMs: 5 * 60_000,
   jitterMs: 2_000,
@@ -51,6 +67,14 @@ export async function withRetry<T>(
       return result;
     } catch (err) {
       lastErr = err;
+      // Surface the underlying failure per attempt so the worker terminal
+      // shows *why* we're retrying, not just that we retried.
+      const e = err as { message?: string; stack?: string; cause?: unknown; code?: string };
+      console.error(
+        `[withRetry] step=${step} attempt=${attempt}/${RETRY_POLICY.maxAttempts} code=${e.code ?? "-"} msg=${e.message ?? String(err)}`,
+      );
+      if (e.stack) console.error(e.stack);
+      if (e.cause) console.error("cause:", e.cause);
       await ctx.recordRetry(step, attempt, err);
       if (attempt === RETRY_POLICY.maxAttempts) break;
       const expDelay = RETRY_POLICY.baseDelayMs * 2 ** (attempt - 1);

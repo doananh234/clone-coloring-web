@@ -3,6 +3,9 @@ import { prisma } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
+import { cloneQueue } from "@/lib/queue/clone-queue";
+
+type UploadMode = "one-shot" | "multi-step";
 
 // Next.js App Router: long timeout for large PDF processing
 export const maxDuration = 300;
@@ -72,6 +75,7 @@ export async function POST(req: NextRequest) {
     let pdfBuffer: Buffer;
     let pdfKey: string;
     let sourceFileName: string;
+    let mode: UploadMode = "one-shot";
 
     const r2Config = getR2Config();
     const r2Client = createR2Client(r2Config);
@@ -83,23 +87,33 @@ export async function POST(req: NextRequest) {
       pdfKey = body.key;
       jobName = body.name || "Untitled";
       sourceFileName = body.fileName || "source.pdf";
+      if (body.mode === "multi-step" || body.mode === "one-shot") mode = body.mode;
 
       if (!jobId || !pdfKey) {
         return NextResponse.json({ error: "jobId and key required" }, { status: 400 });
       }
 
-      // Fetch PDF from R2
-      const pdfUrl = resolveR2Url(`/${pdfKey}`);
-      const pdfRes = await fetch(pdfUrl);
-      if (!pdfRes.ok) {
-        return NextResponse.json({ error: "Failed to fetch uploaded PDF from storage" }, { status: 400 });
+      // Only need the PDF bytes if we're going to render pages here.
+      if (mode === "multi-step") {
+        const pdfUrl = resolveR2Url(`/${pdfKey}`);
+        const pdfRes = await fetch(pdfUrl);
+        if (!pdfRes.ok) {
+          return NextResponse.json(
+            { error: "Failed to fetch uploaded PDF from storage" },
+            { status: 400 },
+          );
+        }
+        pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
+      } else {
+        pdfBuffer = Buffer.alloc(0);
       }
-      pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
     } else {
       // --- Legacy FormData flow (for local dev / small files) ---
       const formData = await req.formData();
       const file = formData.get("file") as File | null;
       const name = (formData.get("name") as string) || "";
+      const modeField = (formData.get("mode") as string) || "";
+      if (modeField === "multi-step" || modeField === "one-shot") mode = modeField;
 
       if (!file) {
         return NextResponse.json({ error: "PDF file required" }, { status: 400 });
@@ -125,14 +139,68 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString();
 
-    // Render PDF pages to PNG images
+    // Mirror the CSV-import lineage: SourceBook + CloneJob get DIFFERENT ids,
+    // CloneJob.data carries denormalized fields for the list view.
+    const sourceBookId = crypto.randomUUID();
+    await prisma.sourceBook.create({
+      data: {
+        id: sourceBookId,
+        fileName: sourceFileName,
+        fileSize: pdfBuffer.byteLength ? String(pdfBuffer.byteLength) : null,
+        bookUrl: `/${pdfKey}`,
+        topicName: jobName,
+        importedFromCsv: null,
+        data: { sourcePdfUrl: `/${pdfKey}` } as never,
+      },
+    });
+    const cloneJobData = {
+      sourceBookId,
+      thumbnailUrl: null as string | null,
+      brand: null as string | null,
+    };
+
+    if (mode === "one-shot") {
+      // One-shot: skip render — worker's stepOneShot ingests the PDF directly.
+      // Job is queued immediately; pages are populated once Diaflow returns.
+      await prisma.cloneJob.create({
+        data: {
+          id: jobId,
+          name: jobName,
+          status: "queued",
+          sourceFileName,
+          sourcePdfUrl: `/${pdfKey}`,
+          totalPages: 0,
+          analyzedPages: 0,
+          pages: [] as never,
+          data: cloneJobData as never,
+        },
+      });
+
+      await cloneQueue.add("process", { cloneJobId: jobId }, { jobId });
+
+      const job: CloneJob = {
+        id: jobId,
+        name: jobName,
+        status: "queued",
+        sourceFileName,
+        sourcePdfUrl: `/${pdfKey}`,
+        totalPages: 0,
+        analyzedPages: 0,
+        pages: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      return NextResponse.json({ success: true, job, mode });
+    }
+
+    // Multi-step: pre-render pages here, mark useMultiStep=true so the worker
+    // takes the legacy render→analyze→reproduce path when the user hits Start.
     const arrayBuffer = pdfBuffer.buffer.slice(
       pdfBuffer.byteOffset,
       pdfBuffer.byteOffset + pdfBuffer.byteLength,
     ) as ArrayBuffer;
     const renderedPages = await renderPdfToImages(arrayBuffer);
 
-    // Upload each page image to R2
     const pages: CloneJobPage[] = [];
     for (const rendered of renderedPages) {
       const pageKey = `assets/clone-jobs/${jobId}/pages/page-${String(rendered.pageNumber).padStart(3, "0")}.png`;
@@ -151,7 +219,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Create clone job in Postgres
     const job: CloneJob = {
       id: jobId,
       name: jobName,
@@ -175,10 +242,11 @@ export async function POST(req: NextRequest) {
         totalPages: pages.length,
         analyzedPages: 0,
         pages: pages as any,
+        data: { useMultiStep: true, sourceBookId } as never,
       },
     });
 
-    return NextResponse.json({ success: true, job });
+    return NextResponse.json({ success: true, job, mode });
   } catch (error) {
     console.error("[clone/extract] Error:", error);
     return NextResponse.json(

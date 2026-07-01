@@ -48,6 +48,11 @@ export class JobContext {
     return ((job?.data as CloneJobDataExtras | null | undefined) ?? {}) as CloneJobDataExtras;
   }
 
+  // NOTE: All writes use `updateMany` so a deleted CloneJob (e.g., admin UI
+  // Delete pressed during a long one-shot call) silently no-ops instead of
+  // throwing P2025 and cascading through markFailed → the worker's catch
+  // handler → an unrecoverable job crash.
+
   async recordRetry(step: CloneStep, attempt: number, error: unknown): Promise<void> {
     const record: RetryRecord = {
       step,
@@ -57,7 +62,7 @@ export class JobContext {
     };
     const prev = await this.readData();
     const retryHistory = [...(prev.retryHistory ?? []), record];
-    await this.db.cloneJob.update({
+    await this.db.cloneJob.updateMany({
       where: { id: this.jobId },
       data: { data: { ...prev, retryHistory } as never },
     });
@@ -66,7 +71,7 @@ export class JobContext {
   async markStepComplete(step: CloneStep): Promise<void> {
     this.currentStep = step;
     const prev = await this.readData();
-    await this.db.cloneJob.update({
+    await this.db.cloneJob.updateMany({
       where: { id: this.jobId },
       data: { data: { ...prev, currentStep: step } as never },
     });
@@ -74,7 +79,7 @@ export class JobContext {
 
   async markComplete(bookId: string): Promise<void> {
     const prev = await this.readData();
-    await this.db.cloneJob.update({
+    await this.db.cloneJob.updateMany({
       where: { id: this.jobId },
       data: {
         status: "reproduced",
@@ -86,7 +91,7 @@ export class JobContext {
 
   async markFailed(err: unknown): Promise<void> {
     const prev = await this.readData();
-    await this.db.cloneJob.update({
+    await this.db.cloneJob.updateMany({
       where: { id: this.jobId },
       data: {
         status: "error",

@@ -44,7 +44,16 @@ export async function processCloneJob(jobId: string): Promise<void> {
       : process.env.CLONE_USE_MULTI_STEP === "true";
 
   try {
-    if (!ctx.isDone("download")) await withRetry("download", () => stepDownload(ctx, db, downloadDeps), ctx);
+    // Skip download when the PDF is already in R2 (manual upload flow — no
+    // sourceBookId, sourcePdfUrl set at job creation). stepDownload only
+    // applies when the job originated from a SourceBook that must be fetched.
+    if (!ctx.isDone("download")) {
+      if (ctx.sourceBookId) {
+        await withRetry("download", () => stepDownload(ctx, db, downloadDeps), ctx);
+      } else {
+        await ctx.markStepComplete("download");
+      }
+    }
 
     if (useMultiStep) {
       if (!ctx.isDone("render"))           await withRetry("render",           () => stepRender(ctx, db, renderDeps),                     ctx);
@@ -52,11 +61,16 @@ export async function processCloneJob(jobId: string): Promise<void> {
       if (!ctx.isDone("extract-entities")) await ctx.markStepComplete("extract-entities");
       if (!ctx.isDone("reproduce"))        await withRetry("reproduce",        () => stepReproduce(ctx, db, reproduceDeps),               ctx);
     } else {
-      // Default one-shot path: Diaflow takes the PDF file and returns the
-      // redesigned images + analyze JSON for every page in a single call.
-      if (!ctx.isDone("reproduce")) {
-        await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx);
-      }
+      // Default one-shot path:
+      //   1. Render the source PDF into per-page PNGs ourselves and mirror to
+      //      R2. This gives us permanent `imageUrl` values for each page's
+      //      original — Diaflow's `loop_N_output` URLs are signed and expire,
+      //      and the field is not always present.
+      //   2. Diaflow one-shot handles the redesign + analyze JSON. stepOneShot
+      //      merges its output into the pages that stepRender already seeded,
+      //      preserving `imageUrl` and adding `redesignedUrl` + `rawData`.
+      if (!ctx.isDone("render"))    await withRetry("render",    () => stepRender(ctx, db, renderDeps),    ctx);
+      if (!ctx.isDone("reproduce")) await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx);
     }
 
     const bookId = ctx.isDone("create-book") && ctx.resultBookId

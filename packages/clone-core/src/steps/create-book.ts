@@ -69,8 +69,12 @@ export async function stepCreateBook(
   const bookData = ((job.bookData as BookData | null | undefined) ?? {});
   const pages = (job.pages as JobPage[] | null | undefined) ?? [];
 
+  // Filter must match the URL fallback below: a page is usable if EITHER
+  // redesignedUrl or imageUrl is set. Strict `p.imageUrl` filter dropped every
+  // page when stepOneShot left imageUrl empty (older bug: Diaflow's
+  // loop_N_output was missing) — producing a book with 0 coloringPages.
   const coloringPages = pages
-    .filter((p) => p.imageUrl)
+    .filter((p) => p.redesignedUrl || p.imageUrl)
     .map((p) => ({
       id: deps.randomUUID(),
       url: p.redesignedUrl ?? p.imageUrl,

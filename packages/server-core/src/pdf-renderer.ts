@@ -1,9 +1,15 @@
 import { createRequire } from "node:module";
+import * as nodePathModule from "node:path";
+import { pathToFileURL as pathToFileURLModule } from "node:url";
 
 // `@vx/server-core` is "type": "module" — pdfjs-dist needs CJS require for its
-// legacy main build and for `require.resolve("…/package.json")`. Bind a
-// CJS-compatible require to this module's URL.
-const require = createRequire(import.meta.url);
+// legacy main build and for `require.resolve("…/package.json")`. Anchor to a
+// real filesystem URL (cwd/package.json). `import.meta.url` cannot be used
+// here because Turbopack rewrites it to a virtual "[project]/…/[app-route]"
+// path, which breaks require.resolve.
+const require = createRequire(
+  pathToFileURLModule(nodePathModule.join(process.cwd(), "package.json")).href,
+);
 
 const RENDER_SCALE = 2; // 2x for crisp output
 const MAX_WIDTH = 1024;
@@ -123,7 +129,12 @@ export async function renderPdfToImages(pdfBuffer: ArrayBuffer): Promise<Rendere
   const pdfjsPkgPath = require.resolve("pdfjs-dist/package.json");
   const pdfjsRoot = nodePath.dirname(pdfjsPkgPath);
   const standardFontDataUrl = nodePath.join(pdfjsRoot, "standard_fonts") + nodePath.sep;
-  const wasmUrl = pathToFileURL(nodePath.join(pdfjsRoot, "wasm") + nodePath.sep).href;
+  // wasmUrl must be a plain path string (same shape as standardFontDataUrl).
+  // pdfjs-dist v5.7 concatenates `wasmUrl + "openjpeg.wasm"` and hands the
+  // result to its Node fetch shim. A `file://` URL gets mis-parsed there and
+  // the shim ends up calling `fs.readFile(<byteLength>)`, producing
+  // `The "path" argument must be of type string. Received type number (83004)`.
+  const wasmUrl = nodePath.join(pdfjsRoot, "wasm") + nodePath.sep;
 
   // Use require (createRequire-bound) instead of `await import()` because
   // tsx loads this module as a data: URL and Node's ESM resolver rejects

@@ -193,6 +193,7 @@ model CloneJob {
   id             String   @id @default(cuid())
   name           String
   status         String   @default("pending")
+  sourceBookId   String?
   sourceFileName String?
   sourcePdfUrl   String?
   totalPages     Int      @default(0)
@@ -209,4 +210,14 @@ model CloneJob {
 
   @@index([status])
   @@index([createdAt])
+  @@index([sourceBookId])
+}
+
+// Cached counts per CloneJob.status — avoids a full `groupBy` scan on every
+// summary read. Bumped at hot mutation sites (create / delete / status change)
+// and self-heals via a full recompute when the cache is empty or stale.
+model CloneJobStatusCount {
+  status    String   @id
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
 }

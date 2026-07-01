@@ -173,6 +173,26 @@ function ErrorAlert({
     }
   }
 
+  async function handleRecheck() {
+    try {
+      const res = await fetch(`/api/clone/${jobId}/recheck`, { method: "POST" });
+      const body = await res.json();
+      // Log everything to the console so operators can inspect the full
+      // Diaflow payload — the UI just surfaces the summary.
+      console.log("[clone recheck]", body);
+      if (!res.ok) {
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const summary =
+        `Diaflow status: ${body.diaflowStatus}. ` +
+        `Parsed pages: ${body.pageCount}.` +
+        (body.parseError ? ` Parse error: ${body.parseError}` : "");
+      notify.success(`Recheck complete — ${summary} (see console for raw payload)`);
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4">
       <div className="flex items-start gap-3">
@@ -204,9 +224,14 @@ function ErrorAlert({
             </details>
           )}
         </div>
-        <Button size="sm" onClick={handleRetry}>
-          Retry
-        </Button>
+        <div className="flex flex-col gap-2">
+          <Button size="sm" onClick={handleRetry}>
+            Retry
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleRecheck}>
+            Recheck
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -217,6 +242,27 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [job, setJob] = useState<CloneJob | null>(null);
   const [loading, setLoading] = useState(!!existingJobId);
+  const [regenerating, setRegenerating] = useState(false);
+
+  async function handleRegenerateOriginals() {
+    if (!job || regenerating) return;
+    setRegenerating(true);
+    try {
+      const res = await fetch(`/api/clone/${job.id}/sync-original`, {
+        method: "POST",
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      notify.success(
+        `Regenerated ${body.updatedPages} original page(s) — reloading…`,
+      );
+      // Full reload so every step component picks up the new imageUrls.
+      window.location.reload();
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : String(err));
+      setRegenerating(false);
+    }
+  }
 
   // Load existing job
   useEffect(() => {
@@ -330,6 +376,29 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
               style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
             />
           </div>
+
+          {/* Job utilities — only shown when a job is loaded */}
+          {job && (
+            <div className="rounded-md border border-dashed p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Job Utilities
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handleRegenerateOriginals}
+                disabled={regenerating}
+                title="Re-render page images from the source PDF and merge them into job.pages"
+              >
+                <FontAwesomeIcon
+                  icon={faRotate}
+                  className={cn("mr-2 h-3.5 w-3.5", regenerating && "animate-spin")}
+                />
+                {regenerating ? "Regenerating…" : "Regenerate Original Images"}
+              </Button>
+            </div>
+          )}
 
           {/* Step buttons */}
           <div className="space-y-1">

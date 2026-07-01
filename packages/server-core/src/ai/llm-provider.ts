@@ -194,7 +194,7 @@ export type CloneOneShotPage = {
 export async function cloneOneShot(
   pdfUrl: string,
   options?: { trace?: { caller?: string; entityType?: string; entityId?: string } },
-): Promise<CloneOneShotPage[]> {
+): Promise<{ sessionId: string; pages: CloneOneShotPage[] }> {
   if (process.env.LLM_PROVIDER !== "diaflow") {
     throw new Error("cloneOneShot requires LLM_PROVIDER=diaflow");
   }
@@ -202,6 +202,25 @@ export async function cloneOneShot(
   // a literal path here, unlike the createRequire-based `require()` pattern.
   const mod = await import("./image-provider-diaflow");
   return mod.diaflowCloneOneShot(normalizeImageUrl(pdfUrl), options);
+}
+
+/**
+ * Debug helper — recheck a previously-run Diaflow one-shot session without
+ * issuing a new API call. Returns the raw payload + parsed pages so callers
+ * can inspect what the flow actually produced.
+ */
+export async function recheckOneShotSession(sessionId: string): Promise<{
+  sessionId: string;
+  status: string;
+  raw: Record<string, unknown> | undefined;
+  pages: CloneOneShotPage[];
+  parseError?: string;
+}> {
+  if (process.env.LLM_PROVIDER !== "diaflow") {
+    throw new Error("recheckOneShotSession requires LLM_PROVIDER=diaflow");
+  }
+  const mod = await import("./image-provider-diaflow");
+  return mod.diaflowRecheckOneShotSession(sessionId);
 }
 
 /**

@@ -16,12 +16,24 @@ import type { JobContext } from "../job-context";
 
 export interface OneShotPageResult {
   redesignedImageUrl: string;
+  /**
+   * Source page image URL (from Diaflow's `loop_N_output.url`). Optional
+   * because older flow shapes may not emit it — falls back to redesigned
+   * URL when missing so `JobPage.imageUrl` is always populated.
+   */
+  originalImageUrl?: string;
   analyzeData: unknown;
 }
 
 export interface OneShotDeps {
-  /** Calls Diaflow with the source PDF, returns one record per page. */
-  runOneShot: (pdfUrl: string, jobId: string) => Promise<OneShotPageResult[]>;
+  /**
+   * Calls Diaflow with the source PDF and returns the Diaflow sessionId (for
+   * later recheck) plus one record per page.
+   */
+  runOneShot: (
+    pdfUrl: string,
+    jobId: string,
+  ) => Promise<{ sessionId: string; pages: OneShotPageResult[] }>;
   /** Downloads the redesigned image bytes from the Diaflow CDN URL. */
   fetchImage: (url: string) => Promise<{ body: Buffer; contentType: string }>;
   /** Uploads bytes to R2, returns the public URL. */
@@ -52,29 +64,107 @@ export async function stepOneShot(
   }
 
   const existing = (job.pages as JobPage[] | null | undefined) ?? [];
+
+  // Peek at SourceBook cache — a previous stepOneShot run mirrors the raw
+  // Diaflow output there BEFORE image processing, so if it exists we can
+  // skip re-calling Diaflow (~30-40min per PDF). Also used to detect the
+  // "stuck with a partial save from a previous parser bug" case: existing
+  // pages may look 'reproduced' but there are actually more pages waiting.
+  let cachedSessionId = "";
+  let cachedPages: OneShotPageResult[] | null = null;
+  if (ctx.sourceBookId) {
+    const sb = await db.sourceBook.findUnique({ where: { id: ctx.sourceBookId } });
+    const sbData = (sb?.data as Record<string, unknown> | null | undefined) ?? {};
+    if (typeof sbData.oneShotSessionId === "string") {
+      cachedSessionId = sbData.oneShotSessionId;
+    }
+    if (Array.isArray(sbData.oneShotPages)) {
+      cachedPages = sbData.oneShotPages as OneShotPageResult[];
+    }
+  }
+
+  const expectedCount = cachedPages?.length ?? 0;
   const allDone =
     existing.length > 0 &&
+    (expectedCount === 0 || existing.length >= expectedCount) &&
     existing.every((p) => p.redesignedUrl && p.status === "reproduced");
   if (allDone) {
     await markStepsComplete(ctx);
     return;
   }
 
-  const pdfPublicUrl = deps.resolveR2Url(job.sourcePdfUrl);
-  const pages = await deps.runOneShot(pdfPublicUrl, ctx.jobId);
+  // Reuse cached Diaflow output when available — the images + analyze JSON
+  // are already there, we just need to re-upload to R2 and rebuild jobPages.
+  let sessionId: string;
+  let pages: OneShotPageResult[];
+  if (cachedSessionId && cachedPages && cachedPages.length > 0) {
+    sessionId = cachedSessionId;
+    pages = cachedPages;
+  } else {
+    const pdfPublicUrl = deps.resolveR2Url(job.sourcePdfUrl);
+    ({ sessionId, pages } = await deps.runOneShot(pdfPublicUrl, ctx.jobId));
+  }
+
+  // Persist to SourceBook FIRST — it outlives CloneJob (CloneJob can be
+  // deleted mid-run via the admin UI or cleanup script; SourceBook cannot).
+  // Storing sessionId + raw pages here means the recheck route can recover
+  // data even if the CloneJob row is gone by the time we get here.
+  if (ctx.sourceBookId) {
+    try {
+      const sb = await db.sourceBook.findUnique({ where: { id: ctx.sourceBookId } });
+      const prevSbData = (sb?.data as Record<string, unknown> | null | undefined) ?? {};
+      await db.sourceBook.update({
+        where: { id: ctx.sourceBookId },
+        data: {
+          data: {
+            ...prevSbData,
+            oneShotSessionId: sessionId,
+            oneShotPages: pages,
+            oneShotCompletedAt: new Date().toISOString(),
+          } as never,
+        },
+      });
+    } catch (err) {
+      // Non-fatal: if SourceBook is gone too, log and continue — the
+      // sessionId is still returned by runOneShot and captured in worker logs.
+      console.error("[stepOneShot] failed to persist to SourceBook:", err);
+    }
+  }
+
+  // Now try CloneJob — silently no-op if the row was deleted mid-flight.
+  const prevData = (job.data as Record<string, unknown> | null | undefined) ?? {};
+  await db.cloneJob.updateMany({
+    where: { id: ctx.jobId },
+    data: { data: { ...prevData, oneShotSessionId: sessionId } as never },
+  });
 
   const jobPages: JobPage[] = [];
   for (let i = 0; i < pages.length; i++) {
     const item = pages[i];
     const pageNumber = i + 1;
+    const paddedPage = String(pageNumber).padStart(3, "0");
 
-    const { body, contentType } = await deps.fetchImage(item.redesignedImageUrl);
-    const key = `assets/clone-jobs/${ctx.jobId}/redesigned/page-${String(pageNumber).padStart(3, "0")}.png`;
-    const { url } = await deps.uploadToR2({
-      key,
-      body,
-      contentType: contentType || "image/png",
+    // Redesigned image — mirror to R2 (Diaflow CDN URLs are signed + expire).
+    const redesignedFetch = await deps.fetchImage(item.redesignedImageUrl);
+    const redesignedKey = `assets/clone-jobs/${ctx.jobId}/redesigned/page-${paddedPage}.png`;
+    const { url: redesignedR2Url } = await deps.uploadToR2({
+      key: redesignedKey,
+      body: redesignedFetch.body,
+      contentType: redesignedFetch.contentType || "image/png",
     });
+
+    // Original page image — use the R2 URL that stepRender already produced
+    // for this pageNumber. stepRender is now a prerequisite of the one-shot
+    // pipeline, so `existing[i]` should always be populated. Fall back to ""
+    // and warn if not (Diaflow returned MORE pages than the PDF rendered —
+    // shouldn't happen in practice but visible if it does).
+    const renderedOriginal = existing[i]?.imageUrl ?? "";
+    if (!renderedOriginal) {
+      console.warn(
+        `[stepOneShot] page ${pageNumber}: no rendered original found in job.pages. ` +
+          `stepRender may have failed or Diaflow returned more pages than the PDF rendered.`,
+      );
+    }
 
     const analyze = (item.analyzeData ?? {}) as Record<string, unknown>;
     const rawData = {
@@ -94,14 +184,14 @@ export async function stepOneShot(
 
     jobPages.push({
       pageNumber,
-      imageUrl: url,
-      redesignedUrl: url,
+      imageUrl: renderedOriginal,
+      redesignedUrl: redesignedR2Url,
       status: "reproduced",
       rawData,
     });
   }
 
-  await db.cloneJob.update({
+  await db.cloneJob.updateMany({
     where: { id: ctx.jobId },
     data: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

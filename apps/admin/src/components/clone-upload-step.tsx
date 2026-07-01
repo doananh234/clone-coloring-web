@@ -43,19 +43,20 @@ export function CloneUploadStep({ onUploaded }: CloneUploadStepProps) {
     [handleFile],
   );
 
-  const handleUpload = async () => {
+  const handleUpload = async (mode: "one-shot" | "multi-step") => {
     if (!file) return;
     setUploading(true);
     setError(null);
 
     try {
-      // Upload PDF to server via FormData — server handles R2 upload internally
-      setProgress("Uploading PDF...");
       const formData = new FormData();
       formData.append("file", file);
       formData.append("name", name || file.name.replace(/\.pdf$/i, ""));
+      formData.append("mode", mode);
 
-      setProgress("Extracting pages...");
+      setProgress(
+        mode === "one-shot" ? "Uploading & queueing one-shot..." : "Uploading & extracting pages...",
+      );
       const res = await fetch("/api/clone", {
         method: "POST",
         body: formData,
@@ -135,15 +136,28 @@ export function CloneUploadStep({ onUploaded }: CloneUploadStepProps) {
       {/* Error */}
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {/* Upload button */}
-      <button
-        onClick={handleUpload}
-        disabled={!file || uploading}
-        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-      >
-        {uploading && <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4" />}
-        {uploading ? progress || "Processing..." : "Upload & Extract"}
-      </button>
+      {/* Upload buttons: choose the pipeline */}
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => handleUpload("one-shot")}
+          disabled={!file || uploading}
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {uploading && <FontAwesomeIcon icon={faSpinner} spin className="h-4 w-4" />}
+          {uploading ? progress || "Processing..." : "Upload & One-shot"}
+        </button>
+        <button
+          onClick={() => handleUpload("multi-step")}
+          disabled={!file || uploading}
+          className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
+        >
+          Upload & Extract (multi-step)
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        One-shot: PDF is queued straight to the Diaflow one-shot worker (no pre-render). Extract:
+        renders pages upfront and lets you review before the legacy multi-step pipeline runs.
+      </p>
     </div>
   );
 }
