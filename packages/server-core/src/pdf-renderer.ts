@@ -108,8 +108,13 @@ export async function renderPdfToImages(pdfBuffer: ArrayBuffer): Promise<Rendere
   // Legacy build avoids Promise.try (Node 22 lacks it) and is the
   // officially-recommended build for Node.js environments.
   const pdfjsEntry = require.resolve("pdfjs-dist/legacy/build/pdf.mjs");
+  // Wrap dynamic import in `new Function` so bundlers (turbopack/webpack)
+  // cannot statically analyze the expression and reject it as "too dynamic".
+  // pdfjs-dist is already in next.config.ts serverExternalPackages, so it
+  // stays out of the bundle and Node resolves it at runtime as expected.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfjsLib = await import(pathToFileURL(pdfjsEntry).href as any);
+  const dynamicImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+  const pdfjsLib = await dynamicImport(pathToFileURL(pdfjsEntry).href);
 
   // Standard fonts must be loadable in Node, or glyphs render as empty boxes.
   // wasmUrl is required for JBig2/JPEG2000-compressed images (common in

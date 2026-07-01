@@ -133,9 +133,8 @@ export async function textPrompt(
   options?: LLMOptions & { systemPrompt?: string },
 ): Promise<string> {
   if (process.env.LLM_PROVIDER === "diaflow") {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { diaflowTextPrompt } = require("./image-provider-diaflow");
-    return diaflowTextPrompt(prompt, options);
+    const mod = await import("./image-provider-diaflow");
+    return mod.diaflowTextPrompt(prompt, options);
   }
 
   const messages: LLMMessage[] = [];
@@ -156,9 +155,8 @@ export async function visionAnalyze(
   options?: LLMOptions & { systemPrompt?: string },
 ): Promise<string> {
   if (process.env.LLM_PROVIDER === "diaflow") {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { diaflowVisionAnalyze } = require("./image-provider-diaflow");
-    return diaflowVisionAnalyze(imageUrl, prompt, options);
+    const mod = await import("./image-provider-diaflow");
+    return mod.diaflowVisionAnalyze(imageUrl, prompt, options);
   }
 
   // Resolve relative R2 paths to full URLs
@@ -181,6 +179,29 @@ export async function visionAnalyze(
   });
   const result = await chatCompletion(messages, options);
   return result.content;
+}
+
+/**
+ * One-shot clone pipeline (PDF → array of redesigned pages + analyze JSON).
+ * Delegates to the Diaflow provider; throws if Diaflow is not active —
+ * there is no Azure equivalent (the full pipeline only exists in Diaflow).
+ */
+export type CloneOneShotPage = {
+  redesignedImageUrl: string;
+  analyzeData: unknown;
+};
+
+export async function cloneOneShot(
+  pdfUrl: string,
+  options?: { trace?: { caller?: string; entityType?: string; entityId?: string } },
+): Promise<CloneOneShotPage[]> {
+  if (process.env.LLM_PROVIDER !== "diaflow") {
+    throw new Error("cloneOneShot requires LLM_PROVIDER=diaflow");
+  }
+  // Static dynamic import — bundlers (webpack/turbopack) statically resolve
+  // a literal path here, unlike the createRequire-based `require()` pattern.
+  const mod = await import("./image-provider-diaflow");
+  return mod.diaflowCloneOneShot(normalizeImageUrl(pdfUrl), options);
 }
 
 /**

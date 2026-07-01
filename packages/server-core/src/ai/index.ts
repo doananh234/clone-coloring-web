@@ -19,9 +19,11 @@ export {
   textPrompt,
   visionAnalyze,
   visionAnalyzeJSON,
+  cloneOneShot,
   type LLMMessage,
   type LLMOptions,
   type LLMResponse,
+  type CloneOneShotPage,
 } from "./llm-provider";
 
 // Image Provider

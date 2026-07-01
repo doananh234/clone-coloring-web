@@ -6,7 +6,7 @@ import {
   resolveR2Url,
 } from "@vx/server-core/r2";
 import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
-import { visionAnalyzeJSON } from "@vx/server-core/ai/llm-provider";
+import { visionAnalyzeJSON, cloneOneShot } from "@vx/server-core/ai/llm-provider";
 import {
   CLONE_EXTRACTION_PROMPT,
   buildReproductionPrompt,
@@ -102,3 +102,21 @@ export const extractEntitiesDeps = {
 };
 export const reproduceDeps = { generatePage, uploadToR2, resolveR2Url };
 export const createBookDeps = { randomUUID: () => crypto.randomUUID() };
+
+async function fetchImage(url: string): Promise<{ body: Buffer; contentType: string }> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`failed to fetch ${url}: ${res.status}`);
+  const contentType = res.headers.get("content-type") || "image/png";
+  const body = Buffer.from(await res.arrayBuffer());
+  return { body, contentType };
+}
+
+export const oneShotDeps = {
+  runOneShot: (pdfUrl: string, jobId: string) =>
+    cloneOneShot(pdfUrl, {
+      trace: { caller: "worker/one-shot", entityType: "cloneJob", entityId: jobId },
+    }),
+  fetchImage,
+  uploadToR2,
+  resolveR2Url,
+};

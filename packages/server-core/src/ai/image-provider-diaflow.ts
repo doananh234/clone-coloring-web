@@ -27,10 +27,13 @@ import { awaitDiaflowSlot } from "./diaflow-rate-limiter";
 
 // --- Types ---
 
-type DiaflowPayload = {
-  flow: "image" | "text";
-  request: string;
-};
+/**
+ * Diaflow process payload. Two known shapes:
+ *  - Legacy text/image flow:  { flow: "text" | "image", request: string }
+ *  - File-input flow (clone): { file: string[] }
+ * The API just JSON-serializes the body, so we keep this open-ended.
+ */
+type DiaflowPayload = Record<string, unknown>;
 
 type DiaflowOutputField = {
   title: string;
@@ -66,17 +69,51 @@ const DIAFLOW_CDN = "https://cdn.diaflow.io";
 const TRANSIENT_STATUS_CODES = [502, 503, 504];
 const MAX_RETRIES = 3;
 
-function getConfig() {
-  const apiUrl = (process.env.DIAFLOW_API_URL || "https://api.diaflow.io").replace(/\/$/, "");
-  const token = process.env.DIAFLOW_TOKEN;
-  const pollInterval = Number(process.env.DIAFLOW_POLL_INTERVAL) || 3;
-  const pollTimeout = Number(process.env.DIAFLOW_POLL_TIMEOUT) || 300;
+/**
+ * Diaflow scopes — the one-shot clone flow lives on a separate Diaflow
+ * account / interface and needs its own Bearer token. Existing image/text/
+ * vision calls keep using the default scope.
+ *
+ *   default scope  → DIAFLOW_TOKEN          + DIAFLOW_API_URL
+ *   "one-shot"     → DIAFLOW_ONE_SHOT_TOKEN + DIAFLOW_ONE_SHOT_API_URL
+ *                    (falls back to DIAFLOW_TOKEN / DIAFLOW_API_URL if unset)
+ */
+type DiaflowScope = "default" | "one-shot";
+
+function getConfig(scope: DiaflowScope = "default") {
+  const isOneShot = scope === "one-shot";
+
+  const apiUrl = (
+    (isOneShot ? process.env.DIAFLOW_ONE_SHOT_API_URL : undefined) ||
+    process.env.DIAFLOW_API_URL ||
+    "https://api.diaflow.io"
+  ).replace(/\/$/, "");
+
+  const token =
+    (isOneShot ? process.env.DIAFLOW_ONE_SHOT_TOKEN : undefined) ||
+    process.env.DIAFLOW_TOKEN;
+
+  // Timing differs by scope. The one-shot clone flow can take 30-40+ minutes
+  // per PDF, so we sleep an initial fixed delay before the first poll —
+  // every poll before that delay is guaranteed-Processing waste.
+  //   default scope  → 0s   / 3s  / 300s   (fast image/text/vision turns)
+  //   one-shot scope → 2400s / 30s / 3600s (40min warmup → poll → 1h timeout)
+  const initialDelay = isOneShot
+    ? Number(process.env.DIAFLOW_ONE_SHOT_INITIAL_DELAY) || 2400
+    : 0;
+  const pollInterval = isOneShot
+    ? Number(process.env.DIAFLOW_ONE_SHOT_POLL_INTERVAL) || 30
+    : Number(process.env.DIAFLOW_POLL_INTERVAL) || 3;
+  const pollTimeout = isOneShot
+    ? Number(process.env.DIAFLOW_ONE_SHOT_POLL_TIMEOUT) || 3600
+    : Number(process.env.DIAFLOW_POLL_TIMEOUT) || 300;
 
   if (!token) {
-    throw new Error("Diaflow not configured. Set DIAFLOW_TOKEN in .env.local");
+    const envName = isOneShot ? "DIAFLOW_ONE_SHOT_TOKEN (or DIAFLOW_TOKEN)" : "DIAFLOW_TOKEN";
+    throw new Error(`Diaflow not configured. Set ${envName} in .env.local`);
   }
 
-  return { apiUrl, token, pollInterval, pollTimeout };
+  return { apiUrl, token, initialDelay, pollInterval, pollTimeout };
 }
 
 function authHeaders(token: string): Record<string, string> {
@@ -176,13 +213,34 @@ function extractFromOutput(result: Record<string, unknown>): DiaflowExtracted {
 }
 
 async function runDiaflow(payload: DiaflowPayload): Promise<DiaflowResult> {
-  const { apiUrl, token, pollInterval, pollTimeout } = getConfig();
+  const { sessionId, result } = await runDiaflowRaw(payload);
+  return { sessionId, extracted: extractFromOutput(result) };
+}
+
+/**
+ * Lower-level Diaflow runner — returns the raw `result` object so callers
+ * that don't fit the standard `{ content, image }` extraction (e.g. the
+ * one-shot clone flow whose output is a stringified array under a dynamic
+ * field id) can do their own parsing.
+ */
+async function runDiaflowRaw(
+  payload: DiaflowPayload,
+  scope: DiaflowScope = "default",
+): Promise<{ sessionId: string; result: Record<string, unknown> }> {
+  const { apiUrl, token, initialDelay, pollInterval, pollTimeout } = getConfig(scope);
 
   const sessionId = await createSession(payload, token, apiUrl);
+
+  // One-shot clone runs ~30-40min — skip the wasteful early polls and
+  // sleep a fixed initialDelay (default 40min) before the first status check.
+  // Default scope keeps initialDelay = 0 so existing fast flows are unaffected.
+  if (initialDelay > 0) {
+    await sleep(initialDelay * 1000);
+  }
+
   const deadline = Date.now() + pollTimeout * 1000;
 
   while (Date.now() < deadline) {
-    await sleep(pollInterval * 1000);
     const status = await pollOnce(sessionId, token, apiUrl);
 
     if (isFailed(status.status)) {
@@ -193,8 +251,10 @@ async function runDiaflow(payload: DiaflowPayload): Promise<DiaflowResult> {
       if (!status.result) {
         throw new Error("Diaflow completed but returned no result");
       }
-      return { sessionId, extracted: extractFromOutput(status.result) };
+      return { sessionId, result: status.result };
     }
+
+    await sleep(pollInterval * 1000);
   }
 
   throw new Error(`Diaflow timed out after ${pollTimeout}s (session: ${sessionId})`);
@@ -230,25 +290,36 @@ async function fetchAsBase64(url: string): Promise<{ data: string; mimeType: str
  * Flow: POST /uploads (get presigned URL + key) → PUT raw bytes to presigned URL → return key
  */
 async function uploadImage(imageUrl: string): Promise<string> {
-  const { apiUrl, token } = getConfig();
+  return uploadAsset(imageUrl, "png", "image/png");
+}
 
-  // Fetch image bytes
-  let imageBytes: Buffer;
-  let contentType = "image/png";
+/**
+ * Generic upload — image, PDF, anything. Shares the presign + PUT flow with
+ * uploadImage but parameterizes filename extension + default content type.
+ */
+async function uploadAsset(
+  sourceUrl: string,
+  extension: string,
+  fallbackContentType: string,
+  scope: DiaflowScope = "default",
+): Promise<string> {
+  const { apiUrl, token } = getConfig(scope);
 
-  if (imageUrl.startsWith("data:")) {
-    const [header, b64data] = imageUrl.split(",");
-    contentType = header.match(/data:(.*?);/)?.[1] || "image/png";
-    imageBytes = Buffer.from(b64data, "base64");
+  let fileBytes: Buffer;
+  let contentType = fallbackContentType;
+
+  if (sourceUrl.startsWith("data:")) {
+    const [header, b64data] = sourceUrl.split(",");
+    contentType = header.match(/data:(.*?);/)?.[1] || fallbackContentType;
+    fileBytes = Buffer.from(b64data, "base64");
   } else {
-    const res = await fetch(imageUrl);
-    if (!res.ok) throw new Error(`Failed to download image for upload (${res.status}): ${imageUrl}`);
-    contentType = res.headers.get("content-type") || "image/png";
-    imageBytes = Buffer.from(await res.arrayBuffer());
+    const res = await fetch(sourceUrl);
+    if (!res.ok) throw new Error(`Failed to download asset for upload (${res.status}): ${sourceUrl}`);
+    contentType = res.headers.get("content-type") || fallbackContentType;
+    fileBytes = Buffer.from(await res.arrayBuffer());
   }
 
-  // Step 1: Get presigned upload URL
-  const filename = `${crypto.randomUUID()}.png`;
+  const filename = `${crypto.randomUUID()}.${extension}`;
   const presignRes = await fetch(`${apiUrl}/api/v1/flows/uploads`, {
     method: "POST",
     headers: authHeaders(token),
@@ -268,18 +339,124 @@ async function uploadImage(imageUrl: string): Promise<string> {
     throw new Error(`Diaflow presign missing uploadUrl or key: ${JSON.stringify(presignData).slice(0, 300)}`);
   }
 
-  // Step 2: PUT raw bytes to presigned URL
   const putRes = await fetch(uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": contentType },
-    body: new Uint8Array(imageBytes),
+    body: new Uint8Array(fileBytes),
   });
 
   if (!putRes.ok) {
-    throw new Error(`Diaflow image upload failed (${putRes.status})`);
+    throw new Error(`Diaflow asset upload failed (${putRes.status})`);
   }
 
   return remotePath;
+}
+
+// --- One-shot clone flow ---
+
+export type DiaflowCloneOneShotPage = {
+  redesignedImageUrl: string;
+  analyzeData: unknown;
+};
+
+/**
+ * Single-call clone pipeline.
+ *
+ * Input:  R2-resolvable URL of the source PDF.
+ * Output: Array of page records, one per PDF page, each containing the
+ *         redesigned CDN image URL plus the parsed `llm_0_output` analyze JSON.
+ *
+ * Diaflow contract:
+ *   - Request payload: `{ flow: "text", request: "pdf: <uploadedKey>" }`
+ *     (override prefix via env DIAFLOW_CLONE_REQUEST_PREFIX)
+ *   - Response output node has a single dynamic string value — a JSON-encoded
+ *     array like:
+ *       [
+ *         {
+ *           "image_generation_0_output": "common/.../redesigned.png",
+ *           "llm_0_output": "{\"characters\":[...],\"locations\":[...]}"
+ *         },
+ *         ...
+ *       ]
+ */
+export async function diaflowCloneOneShot(
+  pdfUrl: string,
+  options?: DiaflowLLMOptions,
+): Promise<DiaflowCloneOneShotPage[]> {
+  // The one-shot clone flow lives on a separate Diaflow account / interface
+  // and uses its own credentials (DIAFLOW_ONE_SHOT_TOKEN / _API_URL).
+  const pdfKey = await uploadAsset(pdfUrl, "pdf", "application/pdf", "one-shot");
+
+  // Real payload shape for the clone flow (verified via Diaflow web client):
+  //   POST /api/v1/interfaces/app/process   { "file": ["<uploadKey>"] }
+  const payload: DiaflowPayload = { file: [pdfKey] };
+
+  const { sessionId, result } = await runDiaflowRaw(payload, "one-shot");
+  logDiaflowToLangfuse("cloneOneShot", pdfKey, undefined, options);
+
+  const arrayString = pickFirstOutputString(result);
+  if (!arrayString) {
+    throw new Error(
+      `Diaflow one-shot returned no string output (session: ${sessionId}): ${JSON.stringify(result).slice(0, 300)}`,
+    );
+  }
+
+  let arr: Array<Record<string, unknown>>;
+  try {
+    const parsed = JSON.parse(arrayString);
+    arr = Array.isArray(parsed) ? parsed : [parsed];
+  } catch (err) {
+    throw new Error(
+      `Diaflow one-shot output is not valid JSON (session: ${sessionId}): ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  return arr.map((item, idx) => {
+    const imgPath = typeof item.image_generation_0_output === "string"
+      ? item.image_generation_0_output
+      : "";
+    const llmRaw = typeof item.llm_0_output === "string" ? item.llm_0_output : "";
+    if (!imgPath) {
+      throw new Error(`Diaflow one-shot item ${idx} missing image_generation_0_output (session: ${sessionId})`);
+    }
+    let analyzeData: unknown = null;
+    if (llmRaw) {
+      try {
+        analyzeData = JSON.parse(llmRaw);
+      } catch {
+        analyzeData = llmRaw;
+      }
+    }
+    return {
+      redesignedImageUrl: toCdnUrl(imgPath),
+      analyzeData,
+    };
+  });
+}
+
+/**
+ * Pull the first string value out of Diaflow's `output` node. The wrapping
+ * field id is dynamic so we either follow input_cf when present or scan
+ * top-level for the first non-meta string.
+ */
+function pickFirstOutputString(result: Record<string, unknown> | undefined): string | null {
+  if (!result) return null;
+  const out = result["output"] as Record<string, unknown> | undefined;
+  if (!out) return null;
+  const cf = out["input_cf"] as Record<string, { output_type?: string }> | undefined;
+  if (cf) {
+    for (const [fieldId, schema] of Object.entries(cf)) {
+      if (schema.output_type === "text") {
+        const v = out[fieldId];
+        if (typeof v === "string" && v.length > 0) return v;
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(out)) {
+    if (k === "input_cf" || k === "input") continue;
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  return null;
 }
 
 // --- Langfuse ---
