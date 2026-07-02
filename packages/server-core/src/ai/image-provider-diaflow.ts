@@ -64,7 +64,7 @@ type DiaflowResult = {
 
 // --- Config ---
 
-const DIAFLOW_CDN = (process.env.DIAFLOW_CDN_URL || "https://cdn-dev.diaflow.io").replace(/\/$/, "");
+const DIAFLOW_CDN = (process.env.DIAFLOW_CDN_URL || "https://cdn.diaflow.io").replace(/\/$/, "");
 const TRANSIENT_STATUS_CODES = [502, 503, 504];
 const MAX_RETRIES = 3;
 
