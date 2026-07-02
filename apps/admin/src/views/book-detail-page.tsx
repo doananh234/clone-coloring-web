@@ -33,6 +33,7 @@ import {
 } from "@fortawesome/pro-regular-svg-icons";
 import dynamic from "next/dynamic";
 import { TextOverlayModal } from "@/components/text-overlay-modal";
+import { EditCoverModal } from "@/components/edit-cover-modal";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.default), {
   ssr: false,
@@ -143,6 +144,8 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
   const [textOverlayOpen, setTextOverlayOpen] = useState(false);
   const [textOverlayImageUrl, setTextOverlayImageUrl] = useState("");
   const [textOverlayTarget, setTextOverlayTarget] = useState<"cover" | "thumbnail" | "square">("cover");
+  const [editCoverOpen, setEditCoverOpen] = useState(false);
+  const [editCoverImageUrl, setEditCoverImageUrl] = useState("");
 
   function openLightbox(images: ImageItem[], index: number) {
     setLightboxImages(images);
@@ -289,6 +292,28 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
       refresh();
     } catch {
       notify.error("Failed to save overlay");
+    }
+  }
+
+  async function handleEditCoverApply(base64: string, _previewUrl: string) {
+    if (!firestore) return;
+    try {
+      const uploadRes = await fetch("/api/generate/upload-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64, key: `assets/${bookId}/cover.png` }),
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadData.success) {
+        notify.error("Failed to upload edited cover");
+        return;
+      }
+      const urlWithCacheBust = `${uploadData.url}?v=${Date.now()}`;
+      await firestoreUpdate(firestore, "books", bookId, { coverUrl: urlWithCacheBust });
+      notify.success("Cover updated");
+      refresh();
+    } catch {
+      notify.error("Failed to save edited cover");
     }
   }
 
@@ -592,19 +617,33 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
             )}
           </div>
           {book.coverUrl && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => {
-                setTextOverlayImageUrl(resolveUrl(book.coverUrl));
-                setTextOverlayTarget("cover");
-                setTextOverlayOpen(true);
-              }}
-            >
-              <FontAwesomeIcon icon={faFont} className="mr-1.5 h-3.5 w-3.5" />
-              Add Text Overlay
-            </Button>
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setTextOverlayImageUrl(resolveUrl(book.coverUrl));
+                  setTextOverlayTarget("cover");
+                  setTextOverlayOpen(true);
+                }}
+              >
+                <FontAwesomeIcon icon={faFont} className="mr-1.5 h-3.5 w-3.5" />
+                Add Text Overlay
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setEditCoverImageUrl(resolveUrl(book.coverUrl));
+                  setEditCoverOpen(true);
+                }}
+              >
+                <FontAwesomeIcon icon={faSparkles} className="mr-1.5 h-3.5 w-3.5" />
+                Edit Cover
+              </Button>
+            </div>
           )}
 
           {/* Thumbnail variants */}
@@ -1145,6 +1184,14 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
         imageUrl={textOverlayImageUrl}
         defaultTitle={book?.title || ""}
         onApply={handleTextOverlayApply}
+      />
+
+      {/* Edit Cover Modal */}
+      <EditCoverModal
+        open={editCoverOpen}
+        onOpenChange={setEditCoverOpen}
+        imageUrl={editCoverImageUrl}
+        onApply={handleEditCoverApply}
       />
     </div>
   );

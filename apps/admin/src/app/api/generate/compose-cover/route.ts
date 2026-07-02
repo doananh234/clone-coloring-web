@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const layoutHint =
       count <= 2 ? "side by side in a row" : count <= 4 ? "in a 2x2 grid" : "in a collage layout";
 
-    const prompt = `Professional coloring book cover for "${title}". Compose ${count} colorful coloring page illustrations ${layoutHint} into one eye-catching book cover. Add the title "${title}" in bold, decorative lettering at the top. Vibrant, polished, suitable as a commercial book cover.`;
+    const prompt = `Professional coloring book cover for "${title}". Compose ${count} colorful coloring page illustrations ${layoutHint} into one eye-catching book cover. Add the title "${title}" in bold, decorative lettering at the top. Vibrant, polished, suitable as a commercial book cover. STRICT: Do NOT add any border, frame, outline, decorative edge, or margin around the cover. The illustration must extend fully edge-to-edge (full-bleed) with no padding or background band on any side.`;
 
     const img = await generateImage(prompt, { size: "1024x1024" });
 
