@@ -1,0 +1,13 @@
+{
+  "title": "Quản lý Thương hiệu",
+  "fields": {
+    "name": "Tên nội bộ",
+    "displayName": "Tên hiển thị",
+    "description": "Mô tả",
+    "logoUrl": "Logo",
+    "isPublic": "Công khai",
+    "index": "Thứ tự",
+    "createdAt": "Ngày tạo",
+    "updatedAt": "Ngày cập nhật"
+  }
+}

@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCloudArrowUp, faFilePdf, faSpinner } from "@fortawesome/pro-regular-svg-icons";
 import type { CloneJob } from "@vx/server-core/ai/clone-types";
+import { useActiveBrandStore } from "@vx/core-uikit/store";
 
 interface CloneUploadStepProps {
   onUploaded: (job: CloneJob) => void;
@@ -17,6 +18,7 @@ export function CloneUploadStep({ onUploaded }: CloneUploadStepProps) {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeBrand = useActiveBrandStore((s) => s.activeBrand);
 
   const handleFile = useCallback(
     (f: File) => {
@@ -53,6 +55,7 @@ export function CloneUploadStep({ onUploaded }: CloneUploadStepProps) {
       formData.append("file", file);
       formData.append("name", name || file.name.replace(/\.pdf$/i, ""));
       formData.append("mode", mode);
+      if (activeBrand?.name) formData.append("brand", activeBrand.name);
 
       setProgress(
         mode === "one-shot" ? "Uploading & queueing one-shot..." : "Uploading & extracting pages...",

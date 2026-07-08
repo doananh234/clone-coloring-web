@@ -33,6 +33,7 @@ export interface OneShotDeps {
   runOneShot: (
     pdfUrl: string,
     jobId: string,
+    brandInfo?: string,
   ) => Promise<{ sessionId: string; pages: OneShotPageResult[] }>;
   /** Downloads the redesigned image bytes from the Diaflow CDN URL. */
   fetchImage: (url: string) => Promise<{ body: Buffer; contentType: string }>;
@@ -102,7 +103,9 @@ export async function stepOneShot(
     pages = cachedPages;
   } else {
     const pdfPublicUrl = deps.resolveR2Url(job.sourcePdfUrl);
-    ({ sessionId, pages } = await deps.runOneShot(pdfPublicUrl, ctx.jobId));
+    const jobData = (job.data as Record<string, unknown> | null | undefined) ?? {};
+    const brandInfo = typeof jobData.brand === "string" ? jobData.brand : undefined;
+    ({ sessionId, pages } = await deps.runOneShot(pdfPublicUrl, ctx.jobId, brandInfo));
   }
 
   // Persist to SourceBook FIRST — it outlives CloneJob (CloneJob can be

@@ -193,7 +193,10 @@ export type CloneOneShotPage = {
 
 export async function cloneOneShot(
   pdfUrl: string,
-  options?: { trace?: { caller?: string; entityType?: string; entityId?: string } },
+  options?: {
+    brandInfo?: string;
+    trace?: { caller?: string; entityType?: string; entityId?: string };
+  },
 ): Promise<{ sessionId: string; pages: CloneOneShotPage[] }> {
   if (process.env.LLM_PROVIDER !== "diaflow") {
     throw new Error("cloneOneShot requires LLM_PROVIDER=diaflow");

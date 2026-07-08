@@ -1,0 +1,13 @@
+{
+  "title": "Brand Management",
+  "fields": {
+    "name": "Internal Name",
+    "displayName": "Display Name",
+    "description": "Description",
+    "logoUrl": "Logo",
+    "isPublic": "Public",
+    "index": "Sort Order",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At"
+  }
+}

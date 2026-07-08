@@ -3,14 +3,12 @@ import * as React from "react";
 import { NavMain } from "./nav-main";
 import { NavSecondary } from "./nav-secondary";
 import { NavUser } from "./nav-user";
+import { BrandSwitcher } from "./brand-switcher";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
 } from "../ui/sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -24,10 +22,10 @@ import {
   faGear,
   faCircleQuestion,
   faMagnifyingGlass,
-  faCommand,
   faPalette,
   faDroplet,
   faCopy,
+  faTag,
 } from "@fortawesome/pro-regular-svg-icons";
 
 const data = {
@@ -45,6 +43,7 @@ const data = {
       icon: <FontAwesomeIcon icon={faGear} />,
       subItems: [
         { title: "Categories", url: "/categories", icon: <FontAwesomeIcon icon={faFolder} /> },
+        { title: "Brands", url: "/brands", icon: <FontAwesomeIcon icon={faTag} /> },
         { title: "Characters", url: "/characters", icon: <FontAwesomeIcon icon={faUser} /> },
         { title: "Locations", url: "/locations", icon: <FontAwesomeIcon icon={faMapPin} /> },
         { title: "Art Styles", url: "/art-styles", icon: <FontAwesomeIcon icon={faPalette} /> },
@@ -84,17 +83,7 @@ export function AppSidebar({ LinkComponent, user, onLogout, ...props }: AppSideb
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader className="border-b border-sidebar-border">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="data-[slot=sidebar-menu-button]:p-1.5!"
-              render={<a href="/" />}
-            >
-              <FontAwesomeIcon icon={faCommand} className="size-5!" />
-              <span className="text-base font-semibold">Acme Inc.</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <BrandSwitcher LinkComponent={LinkComponent} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} LinkComponent={LinkComponent} />

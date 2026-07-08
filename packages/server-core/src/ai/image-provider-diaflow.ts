@@ -413,7 +413,14 @@ export async function diaflowCloneOneShot(
 
   // Real payload shape for the clone flow (verified via Diaflow web client):
   //   POST /api/v1/interfaces/app/process   { "file": ["<uploadKey>"] }
-  const payload: DiaflowPayload = { file: [pdfKey] };
+  // brand_info (name of the selected brand workspace) is added when present so
+  // the Diaflow flow can tailor output per brand; omitted otherwise to keep the
+  // legacy payload unchanged.
+  const brandInfo = options?.brandInfo?.trim();
+  const payload: DiaflowPayload = {
+    file: [pdfKey],
+    ...(brandInfo ? { brand_info: brandInfo } : {}),
+  };
 
   // Salvage partial success: an internal loop iteration failing marks the
   // overall flow as Failed, but loop-output-N.output still lists every
@@ -916,6 +923,7 @@ export const diaflowImageProvider: ImageProviderInterface = {
 // --- LLM Functions ---
 
 type DiaflowLLMOptions = {
+  brandInfo?: string;
   trace?: { caller?: string; entityType?: string; entityId?: string };
 };
 

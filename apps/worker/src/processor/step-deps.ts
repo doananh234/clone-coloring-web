@@ -117,8 +117,9 @@ async function fetchImage(url: string): Promise<{ body: Buffer; contentType: str
 }
 
 export const oneShotDeps = {
-  runOneShot: (pdfUrl: string, jobId: string) =>
+  runOneShot: (pdfUrl: string, jobId: string, brandInfo?: string) =>
     cloneOneShot(pdfUrl, {
+      brandInfo,
       trace: { caller: "worker/one-shot", entityType: "cloneJob", entityId: jobId },
     }),
   fetchImage,

@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
     let pdfKey: string;
     let sourceFileName: string;
     let mode: UploadMode = "one-shot";
+    let brand: string | null = null;
 
     const r2Config = getR2Config();
     const r2Client = createR2Client(r2Config);
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest) {
       jobName = body.name || "Untitled";
       sourceFileName = body.fileName || "source.pdf";
       if (body.mode === "multi-step" || body.mode === "one-shot") mode = body.mode;
+      if (typeof body.brand === "string" && body.brand.trim()) brand = body.brand.trim();
 
       if (!jobId || !pdfKey) {
         return NextResponse.json({ error: "jobId and key required" }, { status: 400 });
@@ -114,6 +116,8 @@ export async function POST(req: NextRequest) {
       const name = (formData.get("name") as string) || "";
       const modeField = (formData.get("mode") as string) || "";
       if (modeField === "multi-step" || modeField === "one-shot") mode = modeField;
+      const brandField = (formData.get("brand") as string) || "";
+      if (brandField.trim()) brand = brandField.trim();
 
       if (!file) {
         return NextResponse.json({ error: "PDF file required" }, { status: 400 });
@@ -156,7 +160,7 @@ export async function POST(req: NextRequest) {
     const cloneJobData = {
       sourceBookId,
       thumbnailUrl: null as string | null,
-      brand: null as string | null,
+      brand,
     };
 
     if (mode === "one-shot") {

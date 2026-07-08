@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // Singleton app config (Firestore: collection "app")
@@ -51,6 +52,19 @@ model Category {
   isPublic    Boolean  @default(false)
   index       Int?
   books       Json     @default("[]")
+  data        Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Brand {
+  id          String   @id @default(cuid())
+  name        String
+  displayName String?
+  description String?
+  logoUrl     String?
+  isPublic    Boolean  @default(false)
+  index       Int?
   data        Json     @default("{}")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
