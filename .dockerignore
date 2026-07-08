@@ -5,12 +5,11 @@
 **/.yarn/cache
 **/.yarn/install-state.gz
 **/coverage
-# Never bake env files into images — must be injected at runtime via
-# docker-compose env_file/environment. Baking packages/db/.env caused Prisma
-# to connect to Supabase instead of the compose-provided local Postgres.
-**/.env
-**/.env.*
-!**/.env.example
+# Don't bake packages/db/.env — it forces Prisma to use its Supabase URL
+# even when docker-compose injects a different DATABASE_URL at runtime.
+# apps/admin/.env is intentionally kept for build-time Firebase config.
+packages/db/.env
+packages/db/.env.local
 apps/admin/src/**/*.js
 apps/admin/src/**/*.js.map
 apps/admin/src/**/*.d.ts
