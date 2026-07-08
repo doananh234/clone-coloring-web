@@ -32,7 +32,10 @@ type BrandSwitcherProps = {
 
 export function BrandSwitcher({ LinkComponent }: BrandSwitcherProps) {
   const { isMobile } = useSidebar();
-  const { activeBrand, setActiveBrand } = useActiveBrandStore();
+  // Subscribe with individual selectors so unrelated store fields don't
+  // trigger re-renders, and the setter reference stays stable.
+  const activeBrand = useActiveBrandStore((s) => s.activeBrand);
+  const setActiveBrand = useActiveBrandStore((s) => s.setActiveBrand);
   const { data: brands, isLoading } = useRestGetAll<BrandRecord>({
     entityName: "brands",
     url: "/api/brands",
@@ -40,15 +43,26 @@ export function BrandSwitcher({ LinkComponent }: BrandSwitcherProps) {
   });
 
   // Auto-select the first brand when none is active, or when the persisted
-  // active brand no longer exists in the list.
+  // active brand no longer exists in the list. Depend on the id (primitive)
+  // rather than the whole object to avoid re-running on every setActiveBrand.
+  const activeBrandId = activeBrand?.id;
   React.useEffect(() => {
     if (isLoading || brands.length === 0) return;
-    const stillExists = activeBrand && brands.some((b) => b.id === activeBrand.id);
+    const stillExists = !!activeBrandId && brands.some((b) => b.id === activeBrandId);
     if (!stillExists) {
       const first = brands[0];
       setActiveBrand({ id: first.id, name: brandLabel(first) });
     }
-  }, [isLoading, brands, activeBrand, setActiveBrand]);
+  }, [isLoading, brands, activeBrandId, setActiveBrand]);
+
+  const handleSelect = React.useCallback(
+    (b: BrandRecord) => {
+      const label = brandLabel(b);
+      if (activeBrandId === b.id) return; // no-op if already active
+      setActiveBrand({ id: b.id, name: label });
+    },
+    [activeBrandId, setActiveBrand],
+  );
 
   const manageHref = "/brands";
   const Link = LinkComponent || "a";
@@ -87,12 +101,9 @@ export function BrandSwitcher({ LinkComponent }: BrandSwitcherProps) {
             )}
             {brands.map((b) => {
               const label = brandLabel(b);
-              const isActive = activeBrand?.id === b.id;
+              const isActive = activeBrandId === b.id;
               return (
-                <DropdownMenuItem
-                  key={b.id}
-                  onClick={() => setActiveBrand({ id: b.id, name: label })}
-                >
+                <DropdownMenuItem key={b.id} onClick={() => handleSelect(b)}>
                   <FontAwesomeIcon icon={faTag} className="size-4" />
                   <span className="truncate">{label}</span>
                   {isActive && <FontAwesomeIcon icon={faCheck} className="ml-auto size-4" />}
