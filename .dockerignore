@@ -5,6 +5,12 @@
 **/.yarn/cache
 **/.yarn/install-state.gz
 **/coverage
+# Never bake env files into images — must be injected at runtime via
+# docker-compose env_file/environment. Baking packages/db/.env caused Prisma
+# to connect to Supabase instead of the compose-provided local Postgres.
+**/.env
+**/.env.*
+!**/.env.example
 apps/admin/src/**/*.js
 apps/admin/src/**/*.js.map
 apps/admin/src/**/*.d.ts
