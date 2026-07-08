@@ -26,4 +26,6 @@ ENV NODE_ENV=production
 COPY --from=build /app /app
 WORKDIR /app/apps/admin
 EXPOSE 3000
-CMD ["yarn", "start"]
+# Sync Prisma schema to DB on every start, then launch Next.
+# `db push` is idempotent — safe to re-run. Matches the flow used in deploy.sh.
+CMD ["sh", "-c", "cd /app/packages/db && npx prisma db push --accept-data-loss --skip-generate && cd /app/apps/admin && yarn start"]
