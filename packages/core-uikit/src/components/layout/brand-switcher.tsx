@@ -22,6 +22,9 @@ type BrandRecord = {
 
 const brandLabel = (b: BrandRecord): string => b.displayName?.trim() || b.name;
 
+// LinkComponent kept as optional prop for API compatibility with AppSidebar.
+// It is intentionally unused: we use window.location for the "Manage brands"
+// action to avoid Base UI's render-prop ref forwarding requirement.
 type BrandSwitcherProps = {
   LinkComponent?: React.ComponentType<{
     href: string;
@@ -30,7 +33,7 @@ type BrandSwitcherProps = {
   }>;
 };
 
-export function BrandSwitcher({ LinkComponent }: BrandSwitcherProps) {
+export function BrandSwitcher(_props: BrandSwitcherProps = {}) {
   const { isMobile } = useSidebar();
   // Subscribe with individual selectors so unrelated store fields don't
   // trigger re-renders, and the setter reference stays stable.
@@ -65,7 +68,6 @@ export function BrandSwitcher({ LinkComponent }: BrandSwitcherProps) {
   );
 
   const manageHref = "/brands";
-  const Link = LinkComponent || "a";
 
   return (
     <SidebarMenu>
@@ -111,7 +113,11 @@ export function BrandSwitcher({ LinkComponent }: BrandSwitcherProps) {
               );
             })}
             <DropdownMenuSeparator />
-            <DropdownMenuItem render={<Link href={manageHref} />}>
+            <DropdownMenuItem
+              onClick={() => {
+                if (typeof window !== "undefined") window.location.assign(manageHref);
+              }}
+            >
               <FontAwesomeIcon icon={faGear} className="size-4" />
               Manage brands
             </DropdownMenuItem>
