@@ -69,6 +69,7 @@ ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && \
     docker compose up -d postgres && \
     docker compose run --rm --no-deps \
         -e DATABASE_URL=postgresql://postgres:postgres@postgres:5432/coloring \
+        -e DIRECT_URL=postgresql://postgres:postgres@postgres:5432/coloring \
         admin sh -c 'cd /app/packages/db && npx prisma db push --accept-data-loss --skip-generate'"
 
 # 4. Start app containers.

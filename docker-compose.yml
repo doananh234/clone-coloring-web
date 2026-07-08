@@ -54,6 +54,9 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/coloring
+      # Prisma schema declares directUrl = env("DIRECT_URL"). For local
+      # Postgres (no pgbouncer) it's the same as DATABASE_URL.
+      DIRECT_URL: postgresql://postgres:postgres@postgres:5432/coloring
     ports:
       - "3000:3000"
     depends_on:
@@ -73,6 +76,7 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/coloring
+      DIRECT_URL: postgresql://postgres:postgres@postgres:5432/coloring
     depends_on:
       redis:
         condition: service_healthy
