@@ -4,6 +4,7 @@ import { useActiveBrandStore } from "../../store/active-brand-store";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -93,25 +94,28 @@ export function BrandSwitcher(_props: BrandSwitcherProps = {}) {
             align="start"
             sideOffset={4}
           >
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Brands
-            </DropdownMenuLabel>
-            {brands.length === 0 && (
-              <DropdownMenuItem disabled>
-                {isLoading ? "Loading…" : "No brands yet"}
-              </DropdownMenuItem>
-            )}
-            {brands.map((b) => {
-              const label = brandLabel(b);
-              const isActive = activeBrandId === b.id;
-              return (
-                <DropdownMenuItem key={b.id} onClick={() => handleSelect(b)}>
-                  <FontAwesomeIcon icon={faTag} className="size-4" />
-                  <span className="truncate">{label}</span>
-                  {isActive && <FontAwesomeIcon icon={faCheck} className="ml-auto size-4" />}
+            {/* Base UI requires GroupLabel to be inside a Group. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Brands
+              </DropdownMenuLabel>
+              {brands.length === 0 && (
+                <DropdownMenuItem disabled>
+                  {isLoading ? "Loading…" : "No brands yet"}
                 </DropdownMenuItem>
-              );
-            })}
+              )}
+              {brands.map((b) => {
+                const label = brandLabel(b);
+                const isActive = activeBrandId === b.id;
+                return (
+                  <DropdownMenuItem key={b.id} onClick={() => handleSelect(b)}>
+                    <FontAwesomeIcon icon={faTag} className="size-4" />
+                    <span className="truncate">{label}</span>
+                    {isActive && <FontAwesomeIcon icon={faCheck} className="ml-auto size-4" />}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
