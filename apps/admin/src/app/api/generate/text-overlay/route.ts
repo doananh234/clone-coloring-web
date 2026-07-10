@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { renderTextOverlay } from "@/lib/canvas/text-renderer";
-import type { TextOverlayRequest } from "@/lib/text-overlay/text-overlay-types";
+import { renderTextOverlay } from "@vx/server-core/text-overlay/server";
+import type { TextOverlayRequest } from "@vx/server-core/text-overlay";
 
 export async function POST(req: NextRequest) {
   try {

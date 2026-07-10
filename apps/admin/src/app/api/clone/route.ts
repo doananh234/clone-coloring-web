@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
     let sourceFileName: string;
     let mode: UploadMode = "one-shot";
     let brand: string | null = null;
+    let brandId: string | null = null;
 
     const r2Config = getR2Config();
     const r2Client = createR2Client(r2Config);
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
       sourceFileName = body.fileName || "source.pdf";
       if (body.mode === "multi-step" || body.mode === "one-shot") mode = body.mode;
       if (typeof body.brand === "string" && body.brand.trim()) brand = body.brand.trim();
+      if (typeof body.brandId === "string" && body.brandId.trim()) brandId = body.brandId.trim();
 
       if (!jobId || !pdfKey) {
         return NextResponse.json({ error: "jobId and key required" }, { status: 400 });
@@ -118,6 +120,8 @@ export async function POST(req: NextRequest) {
       if (modeField === "multi-step" || modeField === "one-shot") mode = modeField;
       const brandField = (formData.get("brand") as string) || "";
       if (brandField.trim()) brand = brandField.trim();
+      const brandIdField = (formData.get("brandId") as string) || "";
+      if (brandIdField.trim()) brandId = brandIdField.trim();
 
       if (!file) {
         return NextResponse.json({ error: "PDF file required" }, { status: 400 });
@@ -161,6 +165,7 @@ export async function POST(req: NextRequest) {
       sourceBookId,
       thumbnailUrl: null as string | null,
       brand,
+      brandId,
     };
 
     if (mode === "one-shot") {

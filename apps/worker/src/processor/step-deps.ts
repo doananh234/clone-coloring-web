@@ -16,7 +16,9 @@ import {
   generateCharacterReference,
   generateLocationReference,
   editImage,
+  colorizeImage,
 } from "@vx/server-core/ai";
+import { generateAiCover } from "@vx/server-core/cover-generation";
 
 const r2Config = getR2Config();
 const r2Client = createR2Client(r2Config);
@@ -123,6 +125,14 @@ export const oneShotDeps = {
       trace: { caller: "worker/one-shot", entityType: "cloneJob", entityId: jobId },
     }),
   fetchImage,
+  uploadToR2,
+  resolveR2Url,
+};
+
+export const generateCoverDeps = {
+  colorizeImage: (imageUrl: string, directive: string, opts?: { referenceImageUrls?: string[] }) =>
+    colorizeImage(imageUrl, directive, opts),
+  generateAiCover,
   uploadToR2,
   resolveR2Url,
 };

@@ -103,8 +103,7 @@ export async function stepOneShot(
     pages = cachedPages;
   } else {
     const pdfPublicUrl = deps.resolveR2Url(job.sourcePdfUrl);
-    const jobData = (job.data as Record<string, unknown> | null | undefined) ?? {};
-    const brandInfo = typeof jobData.brand === "string" ? jobData.brand : undefined;
+    const brandInfo = await resolveBrandInfo(job, db);
     ({ sessionId, pages } = await deps.runOneShot(pdfPublicUrl, ctx.jobId, brandInfo));
   }
 
@@ -171,6 +170,10 @@ export async function stepOneShot(
 
     const analyze = (item.analyzeData ?? {}) as Record<string, unknown>;
     const rawData = {
+      // Preserve every field the LLM emitted (titleCover, subtitle, isCover,
+      // isBW, visualDna, ...). Guaranteed fallbacks below keep every existing
+      // consumer (stepCreateBook, admin UI) working unchanged.
+      ...analyze,
       scene: analyze.scene ?? { description: "", cameraView: "wide", composition: "" },
       environment: analyze.environment ?? {
         timeOfDay: "day",
@@ -194,6 +197,49 @@ export async function stepOneShot(
     });
   }
 
+  // Extract book-level cover meta from the page tagged isCover: true.
+  // Only present in Diaflow output when the LLM identifies a cover-style page.
+  // User-set titleCover/subtitle in bookData are preserved (never overwritten).
+  const coverPageAnalyze = pages
+    .map((p) => p.analyzeData as Record<string, unknown> | null | undefined)
+    .find((d) => d?.isCover === true);
+
+  if (coverPageAnalyze) {
+    const currentBookData = (job.bookData as Record<string, unknown> | null | undefined) ?? {};
+    const diaflowTitleCover =
+      typeof coverPageAnalyze.titleCover === "string" ? coverPageAnalyze.titleCover : undefined;
+    const diaflowSubtitle =
+      typeof coverPageAnalyze.subtitle === "string" ? coverPageAnalyze.subtitle : undefined;
+
+    // Only populate from Diaflow if user hasn't already set these fields
+    const nextTitleCover =
+      typeof currentBookData.titleCover === "string"
+        ? currentBookData.titleCover
+        : diaflowTitleCover;
+    const nextSubtitle =
+      typeof currentBookData.subtitle === "string" ? currentBookData.subtitle : diaflowSubtitle;
+
+    // Always write bookData when a cover page is found (to record the decision)
+    const nextBookData = {
+      ...currentBookData,
+      ...(nextTitleCover !== undefined ? { titleCover: nextTitleCover } : {}),
+      ...(nextSubtitle !== undefined ? { subtitle: nextSubtitle } : {}),
+    };
+
+    // Only update if something actually changed
+    if (
+      nextTitleCover !== currentBookData.titleCover ||
+      nextSubtitle !== currentBookData.subtitle
+    ) {
+      await db.cloneJob.updateMany({
+        where: { id: ctx.jobId },
+        data: {
+          bookData: nextBookData as never,
+        },
+      });
+    }
+  }
+
   await db.cloneJob.updateMany({
     where: { id: ctx.jobId },
     data: {
@@ -212,4 +258,85 @@ async function markStepsComplete(ctx: JobContext): Promise<void> {
   if (!ctx.isDone("analyze")) await ctx.markStepComplete("analyze");
   if (!ctx.isDone("extract-entities")) await ctx.markStepComplete("extract-entities");
   if (!ctx.isDone("reproduce")) await ctx.markStepComplete("reproduce");
+}
+
+export interface ResolvedBrand {
+  id: string;
+  name: string;
+  data: Record<string, unknown>;
+}
+
+/**
+ * Resolves the CloneJob's brand row fresh from the DB.
+ *
+ * Lookup priority:
+ *   1. job.data.brandId (findUnique)   ← primary; immune to Brand renames
+ *   2. job.data.brand   (findFirst by name)
+ *   3. first brand ordered by (index asc, createdAt asc)
+ *
+ * Returns null only when no brand exists at all in the DB.
+ */
+export async function resolveBrand(
+  job: { data?: unknown } & Record<string, unknown>,
+  db: PrismaClient,
+): Promise<ResolvedBrand | null> {
+  const jobData = (job.data as Record<string, unknown> | null | undefined) ?? {};
+
+  const brandId = typeof jobData.brandId === "string" ? jobData.brandId.trim() : "";
+  if (brandId) {
+    const row = await db.brand.findUnique({ where: { id: brandId } });
+    if (row) {
+      return {
+        id: row.id,
+        name: row.name,
+        data: (row.data as Record<string, unknown> | null | undefined) ?? {},
+      };
+    }
+  }
+
+  const brandName = typeof jobData.brand === "string" ? jobData.brand.trim() : "";
+  if (brandName) {
+    const row = await db.brand.findFirst({ where: { name: brandName } });
+    if (row) {
+      return {
+        id: row.id,
+        name: row.name,
+        data: (row.data as Record<string, unknown> | null | undefined) ?? {},
+      };
+    }
+  }
+
+  const fallback = await db.brand.findFirst({
+    orderBy: [{ index: "asc" }, { createdAt: "asc" }],
+  });
+  if (fallback) {
+    return {
+      id: fallback.id,
+      name: fallback.name,
+      data: (fallback.data as Record<string, unknown> | null | undefined) ?? {},
+    };
+  }
+  return null;
+}
+
+/**
+ * Legacy thin wrapper for Diaflow's `brand_info` payload (needs just the name).
+ * New callers should use resolveBrand() directly to get the full row.
+ */
+export async function resolveBrandInfo(
+  job: { data?: unknown } & Record<string, unknown>,
+  db: PrismaClient,
+): Promise<string | undefined> {
+  const resolved = await resolveBrand(job, db);
+  if (!resolved) return undefined;
+  const jobData = (job.data as Record<string, unknown> | null | undefined) ?? {};
+  const explicit = typeof jobData.brand === "string" ? jobData.brand.trim() : "";
+  const explicitBrandId = typeof jobData.brandId === "string" ? jobData.brandId.trim() : "";
+  // Warn once if we had to fall back to the first brand (no explicit match)
+  if (!explicit && !explicitBrandId) {
+    console.warn(
+      `[stepOneShot] cloneJob ${job.id} has no selected brand; using first brand "${resolved.name}" for Diaflow brand_info.`,
+    );
+  }
+  return resolved.name;
 }

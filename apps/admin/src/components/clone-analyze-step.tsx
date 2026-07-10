@@ -177,7 +177,7 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
               key={page.pageNumber}
               onClick={() => (page.status === "analyzed" || page.status === "error") && openPageReview(page)}
               disabled={page.status === "pending" || page.status === "analyzing"}
-              className={`group relative aspect-[3/4] overflow-hidden rounded-md border-2 transition-all ${
+              className={`group relative aspect-square overflow-hidden rounded-md border-2 transition-all ${
                 page.status === "analyzed"
                   ? "cursor-pointer border-green-500 hover:ring-1 hover:ring-green-500"
                   : page.status === "analyzing"
@@ -381,7 +381,7 @@ function AnalyzeCreateStyleMenu({
                   <img
                     src={resolveStyleUrl(p.url)}
                     alt={`Page ${p.pageNumber}`}
-                    className="aspect-[3/4] w-full object-cover"
+                    className="aspect-square w-full object-cover"
                   />
                 </button>
               ))}

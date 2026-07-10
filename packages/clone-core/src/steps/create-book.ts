@@ -80,23 +80,8 @@ export async function stepCreateBook(
       url: p.redesignedUrl ?? p.imageUrl,
       isPublic: false,
       prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
-      sceneData: p.rawData
-        ? {
-            scene: p.rawData.scene,
-            environment: p.rawData.environment,
-            characters: (p.rawData.characters ?? []).map((c) => ({
-              name: c.name,
-              type: c.type,
-              role: c.role,
-              characterPrompt: c.characterPrompt,
-            })),
-            locations: (p.rawData.locations ?? []).map((l) => ({
-              name: l.name,
-              description: l.description,
-              locationPrompt: l.locationPrompt,
-            })),
-          }
-        : undefined,
+      // Persist full per-page LLM output — enables future indexing/search.
+      sceneData: p.rawData ? { ...p.rawData } : undefined,
     }));
 
   const storyOutline = pages

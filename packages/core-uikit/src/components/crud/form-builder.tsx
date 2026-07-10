@@ -14,6 +14,7 @@ import { UrlImageField } from "./url-image-field";
 import { ColorField } from "./color-field";
 import { NestedArrayField } from "./nested-array-field";
 import { EmbeddedObjectField } from "./embedded-object-field";
+import { AsyncSelectField } from "./async-select-field";
 import type { FieldConfig } from "../../generators/types";
 
 type FieldType =
@@ -36,6 +37,9 @@ type FormField = {
   type: FieldType;
   placeholder?: string;
   options?: { label: string; value: string }[];
+  optionsUrl?: string;
+  optionsValueField?: string;
+  optionsLabelField?: string;
   required?: boolean;
   subFields?: FieldConfig[];
   readOnly?: boolean;
@@ -105,6 +109,21 @@ function FormBuilderInner<T extends Record<string, unknown>>({
           />
         );
       case "select":
+        if (field.optionsUrl) {
+          return (
+            <AsyncSelectField
+              url={field.optionsUrl}
+              valueField={field.optionsValueField}
+              labelField={field.optionsLabelField}
+              value={(watch(field.name as Path<T>) as string) ?? ""}
+              placeholder={field.placeholder || `Select ${field.label}`}
+              onChange={(val) =>
+                setValue(field.name as Path<T>, val as any, { shouldValidate: true })
+              }
+              error={!!errorMessage}
+            />
+          );
+        }
         return (
           <Select
             value={watch(field.name as Path<T>) as string}

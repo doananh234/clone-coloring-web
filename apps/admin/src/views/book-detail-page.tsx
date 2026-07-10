@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useRestGetOne, appApi } from "@vx/core-uikit/api";
+import { useRestGetOne, useRestGetAll, appApi } from "@vx/core-uikit/api";
 import { Badge, Button, Separator } from "@vx/core-uikit/components";
+import type { FabricSceneJSON, StyleFilter } from "@vx/server-core/text-overlay";
 
 // Replacement for firestoreUpdate: PUT to /api/books/:id
 async function firestoreUpdate(
@@ -14,6 +15,9 @@ async function firestoreUpdate(
 }
 import { notify } from "@vx/core-uikit/notifications";
 import { useRouter } from "next/navigation";
+import React from "react";
+import { CoverEditorModal } from "@/components/cover-editor/cover-editor-modal";
+import { DEFAULT_SLOT_STATE, type CoverEditorInitialState } from "@/components/cover-editor/types";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -30,10 +34,9 @@ import {
   faChevronDown,
   faChevronRight,
   faFont,
+  faDownload,
 } from "@fortawesome/pro-regular-svg-icons";
 import dynamic from "next/dynamic";
-import { TextOverlayModal } from "@/components/text-overlay-modal";
-import { EditCoverModal } from "@/components/edit-cover-modal";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.default), {
   ssr: false,
@@ -108,12 +111,28 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
   const sourceBookId = (bookData.sourceBookId as string | undefined) ?? undefined;
   const cloneJobId = (bookData.cloneJobId as string | undefined) ?? undefined;
 
+  // Extract coverMeta from bookData safely
+  const coverMeta = ((bookData as { coverMeta?: {
+    titleCover?: string;
+    subtitle?: string;
+    sourceThumbnailUrl?: string;
+  } })?.coverMeta) ?? undefined;
+
   // Fetch the source book metadata when this book was cloned from another book.
   const { data: sourceBook } = useRestGetOne<BookEntity>({
     entityName: "books",
     url: "/api/books/:id",
     pathParams: { id: sourceBookId ?? "" },
     enabled: !!sourceBookId,
+  });
+
+  // Brand list, cached by React Query — used to resolve the cover editor's
+  // brand slot text from Book.data.brandId or Book.data.brand (name).
+  const { data: brandList } = useRestGetAll<{ id: string; name: string; displayName?: string | null }>({
+    entityName: "brands",
+    url: "/api/brands",
+    limit: 200,
+    enabled: !!book,
   });
 
   const [generatingSubtitle, setGeneratingSubtitle] = useState(false);
@@ -141,11 +160,123 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
   const [redesignCharRefs, setRedesignCharRefs] = useState<string[]>([]);
   const [redesignLocRefs, setRedesignLocRefs] = useState<string[]>([]);
   const [redesigning, setRedesigning] = useState(false);
-  const [textOverlayOpen, setTextOverlayOpen] = useState(false);
-  const [textOverlayImageUrl, setTextOverlayImageUrl] = useState("");
-  const [textOverlayTarget, setTextOverlayTarget] = useState<"cover" | "thumbnail" | "square">("cover");
-  const [editCoverOpen, setEditCoverOpen] = useState(false);
-  const [editCoverImageUrl, setEditCoverImageUrl] = useState("");
+  const [coverEditorOpen, setCoverEditorOpen] = React.useState(false);
+  const [uploadingCover, setUploadingCover] = React.useState(false);
+  const coverUploadInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Upload Cover: user picks an image → base64 → POST cover-export
+  //   (imageBase64 mode) → get back r2 url → PUT book.coverUrl.
+  //   Reuses the same upload path Save Cover uses so no new endpoint.
+  const handleCoverUpload = React.useCallback(
+    async (file: File) => {
+      if (!book?.id) return;
+      setUploadingCover(true);
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result ?? ""));
+          reader.onerror = () => reject(new Error("failed to read file"));
+          reader.readAsDataURL(file);
+        });
+        const res = await fetch("/api/generate/cover-export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookId: book.id, imageBase64: dataUrl }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? `Upload failed (${res.status})`);
+        }
+        const { url } = (await res.json()) as { url: string; base64: string };
+        await fetch(`/api/books/${book.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ coverUrl: url }),
+        });
+        if (typeof refresh === "function") await refresh();
+        notify.success("Cover uploaded");
+      } catch (err) {
+        notify.error(err instanceof Error ? err.message : "Upload failed");
+      } finally {
+        setUploadingCover(false);
+      }
+    },
+    [book?.id, refresh],
+  );
+
+  // Download Original: fetch the clean colored illustration (no text) via
+  //   the same-origin proxy so cross-origin CORS doesn't kill the download,
+  //   then trigger a browser download with a friendly filename.
+  const handleDownloadOriginal = React.useCallback(async () => {
+    if (!book) return;
+    const coverMetaObj = (bookData as { coverMeta?: { sourceThumbnailUrl?: string } })
+      ?.coverMeta;
+    const originalUrl =
+      coverMetaObj?.sourceThumbnailUrl ??
+      book.thumbnailUrl ??
+      book.squareThumbnailUrl ??
+      "";
+    if (!originalUrl) {
+      notify.error("No original illustration available for this book");
+      return;
+    }
+    try {
+      const absoluteUrl = resolveUrl(originalUrl);
+      const proxied = absoluteUrl.startsWith("/")
+        ? absoluteUrl
+        : `/api/proxy-image?url=${encodeURIComponent(absoluteUrl)}`;
+      const resp = await fetch(proxied);
+      if (!resp.ok) throw new Error(`fetch failed (${resp.status})`);
+      const blob = await resp.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `${(book.title || "cover").replace(/[^\w-]+/g, "-")}-original.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : "Download failed");
+    }
+  }, [book, bookData]);
+
+  const editorInitial = React.useMemo<CoverEditorInitialState | null>(() => {
+    if (!book) return null;
+    const meta = (bookData as { coverMeta?: Record<string, unknown> })?.coverMeta;
+    const metaObj = meta as { sourceThumbnailUrl?: string; titleCover?: string; subtitle?: string; scene?: unknown; filter?: string } | undefined;
+    // Resolve the brand slot text: prefer the Brand row's displayName (or
+    // name) from the cached list; fall back to the raw brand name snapshot
+    // on the book. Empty string means the slot renders no brand text at all
+    // (no more "(empty)" placeholder bleeding into the AI blend result).
+    const brandIdKey = typeof bookData?.brandId === "string" ? bookData.brandId : "";
+    const brandNameKey = typeof bookData?.brand === "string" ? bookData.brand : "";
+    const matched =
+      (brandIdKey && brandList.find((b) => b.id === brandIdKey)) ||
+      (brandNameKey && brandList.find((b) => b.name === brandNameKey)) ||
+      null;
+    const brandName = matched
+      ? (matched.displayName?.trim() || matched.name || "")
+      : brandNameKey;
+    return {
+      bookId: book.id,
+      backgroundUrl: resolveUrl(metaObj?.sourceThumbnailUrl ?? book.coverUrl ?? ""),
+      scene: metaObj?.scene as FabricSceneJSON | undefined,
+      slots: {
+        ...DEFAULT_SLOT_STATE,
+        title: {
+          ...DEFAULT_SLOT_STATE.title,
+          text: metaObj?.titleCover ?? book.title ?? "",
+        },
+        subtitle: {
+          ...DEFAULT_SLOT_STATE.subtitle,
+          text: metaObj?.subtitle ?? book.subtitle ?? "",
+        },
+        brand: { ...DEFAULT_SLOT_STATE.brand, text: brandName },
+      },
+      filter: (metaObj?.filter ?? "none") as StyleFilter,
+    };
+  }, [book, bookData, brandList]);
 
   function openLightbox(images: ImageItem[], index: number) {
     setLightboxImages(images);
@@ -258,64 +389,6 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
     }
   }
 
-  async function handleTextOverlayApply(base64: string, _previewUrl: string) {
-    if (!firestore) return;
-    try {
-      const field =
-        textOverlayTarget === "cover"
-          ? "coverUrl"
-          : textOverlayTarget === "thumbnail"
-            ? "thumbnailUrl"
-            : "squareThumbnailUrl";
-      const fileName =
-        textOverlayTarget === "cover"
-          ? "cover.png"
-          : textOverlayTarget === "thumbnail"
-            ? "thumbnail.png"
-            : "square.png";
-
-      // Upload to R2
-      const uploadRes = await fetch("/api/generate/upload-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64, key: `assets/${bookId}/${fileName}` }),
-      });
-      const uploadData = await uploadRes.json();
-      if (!uploadData.success) {
-        notify.error("Failed to upload to R2");
-        return;
-      }
-
-      const urlWithCacheBust = `${uploadData.url}?v=${Date.now()}`;
-      await firestoreUpdate(firestore, "books", bookId, { [field]: urlWithCacheBust });
-      notify.success("Text overlay applied & uploaded");
-      refresh();
-    } catch {
-      notify.error("Failed to save overlay");
-    }
-  }
-
-  async function handleEditCoverApply(base64: string, _previewUrl: string) {
-    if (!firestore) return;
-    try {
-      const uploadRes = await fetch("/api/generate/upload-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64, key: `assets/${bookId}/cover.png` }),
-      });
-      const uploadData = await uploadRes.json();
-      if (!uploadData.success) {
-        notify.error("Failed to upload edited cover");
-        return;
-      }
-      const urlWithCacheBust = `${uploadData.url}?v=${Date.now()}`;
-      await firestoreUpdate(firestore, "books", bookId, { coverUrl: urlWithCacheBust });
-      notify.success("Cover updated");
-      refresh();
-    } catch {
-      notify.error("Failed to save edited cover");
-    }
-  }
 
   async function handleColorize() {
     if (!colorizeStyleId || !colorizePageUrl) return;
@@ -617,65 +690,84 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
             )}
           </div>
           {book.coverUrl && (
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => {
-                  setTextOverlayImageUrl(resolveUrl(book.coverUrl));
-                  setTextOverlayTarget("cover");
-                  setTextOverlayOpen(true);
-                }}
-              >
-                <FontAwesomeIcon icon={faFont} className="mr-1.5 h-3.5 w-3.5" />
-                Add Text Overlay
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => {
-                  setEditCoverImageUrl(resolveUrl(book.coverUrl));
-                  setEditCoverOpen(true);
-                }}
-              >
-                <FontAwesomeIcon icon={faSparkles} className="mr-1.5 h-3.5 w-3.5" />
-                Edit Cover
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setCoverEditorOpen(true)}
+            >
+              <FontAwesomeIcon icon={faSparkles} className="mr-1.5 h-3.5 w-3.5" />
+              Edit Cover
+            </Button>
           )}
+          {/* Hidden file input driven by the Upload Cover button below. */}
+          <input
+            ref={coverUploadInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleCoverUpload(file);
+              e.target.value = "";
+            }}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={uploadingCover}
+              onClick={() => coverUploadInputRef.current?.click()}
+            >
+              {uploadingCover ? (
+                <FontAwesomeIcon icon={faSpinner} spin className="mr-1.5 h-3.5 w-3.5" />
+              ) : (
+                <FontAwesomeIcon icon={faUpload} className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {uploadingCover ? "Uploading…" : "Upload"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadOriginal}
+              title="Download the clean colored illustration (no text) for manual editing"
+            >
+              <FontAwesomeIcon icon={faDownload} className="mr-1.5 h-3.5 w-3.5" />
+              Original
+            </Button>
+          </div>
 
-          {/* Thumbnail variants */}
+          {/* Thumbnail variants — both are 1:1 now (worker writes the same
+              square asset to both URL fields). */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <p className="mb-1 text-[10px] font-medium uppercase text-muted-foreground">
-                Thumbnail (3:4)
+                Thumbnail
               </p>
               {book.thumbnailUrl ? (
                 <img
                   src={resolveUrl(book.thumbnailUrl)}
                   alt=""
-                  className="h-16 w-full rounded border object-cover"
+                  className="aspect-square w-full rounded border object-cover"
                 />
               ) : (
-                <div className="flex h-16 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
+                <div className="flex aspect-square w-full items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
                   —
                 </div>
               )}
             </div>
             <div>
               <p className="mb-1 text-[10px] font-medium uppercase text-muted-foreground">
-                Square (1:1)
+                Square
               </p>
               {book.squareThumbnailUrl ? (
                 <img
                   src={resolveUrl(book.squareThumbnailUrl)}
                   alt=""
-                  className="h-16 w-full rounded border object-cover"
+                  className="aspect-square w-full rounded border object-cover"
                 />
               ) : (
-                <div className="flex h-16 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
+                <div className="flex aspect-square w-full items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
                   —
                 </div>
               )}
@@ -1177,22 +1269,38 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Text Overlay Modal */}
-      <TextOverlayModal
-        open={textOverlayOpen}
-        onOpenChange={setTextOverlayOpen}
-        imageUrl={textOverlayImageUrl}
-        defaultTitle={book?.title || ""}
-        onApply={handleTextOverlayApply}
-      />
-
-      {/* Edit Cover Modal */}
-      <EditCoverModal
-        open={editCoverOpen}
-        onOpenChange={setEditCoverOpen}
-        imageUrl={editCoverImageUrl}
-        onApply={handleEditCoverApply}
-      />
+      {/* Cover Editor Modal */}
+      {editorInitial && (
+        <CoverEditorModal
+          open={coverEditorOpen}
+          onOpenChange={setCoverEditorOpen}
+          initialState={editorInitial}
+          onSave={async (result) => {
+            const currentMeta =
+              ((bookData as { coverMeta?: Record<string, unknown> })?.coverMeta as Record<string, unknown> | null | undefined) ?? {};
+            const nextMeta = {
+              ...currentMeta,
+              scene: result.scene,
+              filter: result.filter,
+              status: "manual",
+              editedAt: new Date().toISOString(),
+            };
+            // Only overwrite coverUrl. Leave thumbnailUrl + squareThumbnailUrl
+            // pointing at the clean colored illustration (no text) so we can
+            // recover / regenerate later without losing the pre-text source.
+            await fetch(`/api/books/${book.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                coverUrl: result.coverUrl,
+                data: { ...bookData, coverMeta: nextMeta },
+              }),
+            });
+            // Refresh book query (React Query invalidation).
+            if (typeof refresh === "function") await refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

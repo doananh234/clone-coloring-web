@@ -8,4 +8,9 @@ export {
   stepOneShot,
   type OneShotDeps,
   type OneShotPageResult,
+  resolveBrand,
 } from "./one-shot";
+export {
+  stepGenerateCover,
+  type GenerateCoverDeps,
+} from "./generate-cover";

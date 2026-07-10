@@ -1,0 +1,16 @@
+# Production override for docker-compose.yml.
+# Usage (invoked by deploy.sh):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml <command>
+#
+# Swaps env_file entries so the admin + worker containers read production
+# secrets from .env.prod instead of the local-dev .env.local / .env files.
+# .env.prod files are git-ignored and must be created locally before deploy.
+
+services:
+  admin:
+    env_file:
+      - apps/admin/.env.prod
+
+  worker:
+    env_file:
+      - apps/worker/.env.prod

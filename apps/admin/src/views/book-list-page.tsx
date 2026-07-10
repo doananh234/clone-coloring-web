@@ -223,11 +223,11 @@ function BookCard({
 }) {
   return (
     <Card
-      className="group cursor-pointer overflow-hidden transition-shadow hover:shadow-md"
+      className="group cursor-pointer gap-0 overflow-hidden py-0 transition-shadow hover:shadow-md"
       onClick={onView}
     >
       {/* Cover image */}
-      <div className="relative aspect-[3/4] bg-muted">
+      <div className="relative aspect-square bg-muted">
         {book.coverUrl ? (
           <img
             src={resolveUrl(book.coverUrl)}

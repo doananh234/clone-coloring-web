@@ -44,7 +44,7 @@ export function ImageGrid({
           <button
             key={img.id}
             type="button"
-            className="group relative aspect-[3/4] overflow-hidden rounded-md border bg-muted"
+            className="group relative aspect-square overflow-hidden rounded-md border bg-muted"
             onClick={() => onImageClick?.(img, i)}
           >
             <img
@@ -69,7 +69,7 @@ export function ImageGrid({
         {remaining > 0 && (
           <button
             type="button"
-            className="flex aspect-[3/4] items-center justify-center rounded-md border bg-muted text-sm text-muted-foreground hover:bg-accent"
+            className="flex aspect-square items-center justify-center rounded-md border bg-muted text-sm text-muted-foreground hover:bg-accent"
             onClick={() => onImageClick?.(images[maxVisible], maxVisible)}
           >
             +{remaining} more

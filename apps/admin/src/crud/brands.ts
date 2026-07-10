@@ -10,6 +10,7 @@ export type BrandEntity = {
   logoUrl: string;
   isPublic?: boolean;
   index?: number;
+  coloringStyleId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -31,6 +32,15 @@ export const brandFields: FieldConfig[] = [
   { name: "logoUrl", label: "Logo", type: "url-image" },
   { name: "isPublic", label: "Public", type: "boolean" },
   { name: "index", label: "Sort Order", type: "number", sortable: true },
+  {
+    name: "coloringStyleId",
+    label: "Default Coloring Style",
+    type: "select",
+    optionsUrl: "/api/coloring-styles",
+    optionsValueField: "id",
+    optionsLabelField: "name",
+    showInList: false,
+  },
   {
     name: "createdAt",
     label: "Created",

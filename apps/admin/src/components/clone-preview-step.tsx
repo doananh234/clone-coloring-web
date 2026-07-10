@@ -56,7 +56,7 @@ export function ClonePreviewStep({ pages, onNext, onBack }: ClonePreviewStepProp
             <button
               key={page.pageNumber}
               onClick={() => togglePage(page.pageNumber)}
-              className={`group relative aspect-[3/4] overflow-hidden rounded-md border-2 transition-all ${
+              className={`group relative aspect-square overflow-hidden rounded-md border-2 transition-all ${
                 isSelected ? "border-primary ring-1 ring-primary" : "border-transparent opacity-50"
               }`}
             >

@@ -345,6 +345,9 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
         label: fieldLabel(f),
         type: f.type === "relation" ? ("select" as const) : f.type,
         options: f.options?.map((o) => ({ label: optionLabel(f.name, o), value: o.value })),
+        optionsUrl: f.optionsUrl,
+        optionsValueField: f.optionsValueField,
+        optionsLabelField: f.optionsLabelField,
         subFields: f.subFields,
         readOnly: f.readOnly,
       }));
@@ -399,6 +402,9 @@ export function createCrudPages<T extends { id: string }>(config: CrudPagesConfi
         label: fieldLabel(f),
         type: f.type === "relation" ? ("select" as const) : f.type,
         options: f.options?.map((o) => ({ label: optionLabel(f.name, o), value: o.value })),
+        optionsUrl: f.optionsUrl,
+        optionsValueField: f.optionsValueField,
+        optionsLabelField: f.optionsLabelField,
         subFields: f.subFields,
         readOnly: f.readOnly,
       }));

@@ -306,11 +306,11 @@ function LocationCard({
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden transition-shadow hover:shadow-md"
+      className="group cursor-pointer gap-0 overflow-hidden py-0 transition-shadow hover:shadow-md"
       onClick={onView}
     >
       {/* Reference image */}
-      <div className="relative aspect-[4/3] bg-muted">
+      <div className="relative aspect-square bg-muted">
         {location.referenceImageUrl ? (
           <img
             src={resolveUrl(location.referenceImageUrl)}

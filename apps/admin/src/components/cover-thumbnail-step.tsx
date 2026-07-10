@@ -13,7 +13,8 @@ import {
 } from "@fortawesome/pro-regular-svg-icons";
 import { cn } from "@vx/core-uikit/utils";
 import { ColoringStylePicker } from "@/components/coloring-style-picker";
-import { TextOverlayModal } from "@/components/text-overlay-modal";
+import { CoverEditorModal } from "@/components/cover-editor/cover-editor-modal";
+import { DEFAULT_SLOT_STATE } from "@/components/cover-editor/types";
 import { faFont } from "@fortawesome/pro-regular-svg-icons";
 import type { ColoringStyleEntity } from "@vx/server-core/ai/coloring-style-types";
 
@@ -78,9 +79,8 @@ export function CoverThumbnailStep({
   const [coverPageIds, setCoverPageIds] = useState<string[]>([]);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [generatingCover, setGeneratingCover] = useState(false);
-  const [textOverlayOpen, setTextOverlayOpen] = useState(false);
-  const [textOverlayImageUrl, setTextOverlayImageUrl] = useState("");
-  const [textOverlayTarget, setTextOverlayTarget] = useState<"square" | "cover">("square");
+  const [coverEditorOpen, setCoverEditorOpen] = useState(false);
+  const [editorTarget, setEditorTarget] = useState<"cover" | "thumbnail">("cover");
 
   function handleStyleChange(id: string | null, style: ColoringStyleEntity | null) {
     setColoringStyleId(id);
@@ -322,62 +322,38 @@ export function CoverThumbnailStep({
               variant="outline"
               size="sm"
               onClick={() => {
-                setTextOverlayImageUrl(squarePreview);
-                setTextOverlayTarget("square");
-                setTextOverlayOpen(true);
+                setEditorTarget("thumbnail");
+                setCoverEditorOpen(true);
               }}
             >
               <FontAwesomeIcon icon={faFont} className="mr-1.5 h-3.5 w-3.5" />
-              Add Text
+              Design Thumbnail Text
             </Button>
           </div>
         )}
       </div>
 
-      {/* Cover */}
+      {/* Cover — opens the full editor */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium">Cover Image</Label>
           <Button
             variant="outline"
             size="sm"
-            onClick={handleGenerateCover}
-            disabled={!canGenerateCover}
+            onClick={() => {
+              if (!squarePreview) {
+                notify.error("Generate a thumbnail first — it becomes the cover base.");
+                return;
+              }
+              setCoverEditorOpen(true);
+            }}
           >
-            {generatingCover ? (
-              <FontAwesomeIcon icon={faSpinner} spin className="mr-1.5 h-3.5 w-3.5" />
-            ) : (
-              <FontAwesomeIcon icon={faSparkles} className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            {generatingCover ? "Generating..." : "Compose Cover"}
+            <FontAwesomeIcon icon={faSparkles} className="mr-1.5 h-3.5 w-3.5" />
+            Design Cover
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Select 2–4 pages to compose into a cover.{" "}
-          <span className="font-medium">{coverPageIds.length}/4 selected</span>
-        </p>
-        <PageSelector
-          pages={selectablePages}
-          selectedIds={coverPageIds}
-          onToggle={toggleCoverPage}
-          maxSelect={4}
-        />
         {coverPreview && (
-          <div className="flex flex-col items-center gap-2">
-            <img src={coverPreview} alt="Cover" className="h-52 rounded-lg border object-contain" />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setTextOverlayImageUrl(coverPreview);
-                setTextOverlayTarget("cover");
-                setTextOverlayOpen(true);
-              }}
-            >
-              <FontAwesomeIcon icon={faFont} className="mr-1.5 h-3.5 w-3.5" />
-              Add Text
-            </Button>
-          </div>
+          <img src={coverPreview} alt="Cover" className="h-52 rounded-lg border object-contain" />
         )}
       </div>
 
@@ -399,20 +375,30 @@ export function CoverThumbnailStep({
         </Button>
       </div>
 
-      {/* Text Overlay Modal */}
-      <TextOverlayModal
-        open={textOverlayOpen}
-        onOpenChange={setTextOverlayOpen}
-        imageUrl={textOverlayImageUrl}
-        defaultTitle={title}
-        onApply={(_base64, previewUrl) => {
-          if (textOverlayTarget === "square") {
-            setSquarePreview(previewUrl);
-          } else {
-            setCoverPreview(previewUrl);
-          }
-        }}
-      />
+      {/* Cover Editor Modal — serves both cover and thumbnail text editing */}
+      {squarePreview && (
+        <CoverEditorModal
+          open={coverEditorOpen}
+          onOpenChange={setCoverEditorOpen}
+          initialState={{
+            bookId: bookId ?? "temp",
+            backgroundUrl: squarePreview,
+            scene: undefined,
+            slots: {
+              ...DEFAULT_SLOT_STATE,
+              title: { ...DEFAULT_SLOT_STATE.title, text: title },
+            },
+            filter: "none",
+          }}
+          onSave={async (result) => {
+            if (editorTarget === "thumbnail") {
+              setSquarePreview(result.coverUrl);
+            } else {
+              setCoverPreview(result.coverUrl);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

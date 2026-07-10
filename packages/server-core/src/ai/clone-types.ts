@@ -56,6 +56,7 @@ export type CloneJobPage = {
 
 export type CloneJobBookData = {
   title: string;
+  titleCover?: string;
   subtitle?: string;
   description?: string;
   category?: string;

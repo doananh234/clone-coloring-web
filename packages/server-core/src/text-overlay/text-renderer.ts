@@ -3,8 +3,8 @@
  * Draws text overlay (header + footer) onto a source image.
  */
 
-import type { TextOverlayConfig, TextBlockConfig } from "../text-overlay/text-overlay-types";
-import { fetchGoogleFont } from "../text-overlay/google-fonts-loader";
+import type { TextOverlayConfig, TextBlockConfig } from "./text-overlay-types";
+import { fetchGoogleFont } from "./google-fonts-loader";
 
 /** Text fits within this fraction of canvas width. */
 const MAX_TEXT_WIDTH_RATIO = 0.95;

@@ -152,7 +152,7 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
                     className="overflow-hidden rounded-lg border text-left hover:shadow-md transition-shadow"
                     onClick={() => appNavigate(`/books/${book.id}`)}
                   >
-                    <div className="aspect-[3/4] bg-muted">
+                    <div className="aspect-square bg-muted">
                       {book.coverUrl ? (
                         <img
                           src={resolveUrl(book.coverUrl)}

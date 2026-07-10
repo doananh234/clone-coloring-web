@@ -417,7 +417,7 @@ function CreateStyleMenu({
                   <img
                     src={resolveUrl(p.url)}
                     alt={`Page ${p.pageNumber}`}
-                    className="aspect-[3/4] w-full object-cover"
+                    className="aspect-square w-full object-cover"
                   />
                 </button>
               ))}

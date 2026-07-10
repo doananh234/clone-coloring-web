@@ -19,6 +19,15 @@ export type FieldConfig = {
     | "url-image"
     | "color";
   options?: { label: string; value: string }[];
+  /**
+   * Fetch options from an API endpoint at render time. When set, `options` is
+   * ignored. Expected response shape: `{ data: T[] }` or `T[]`. Value + label
+   * pulled from each item via `optionsValueField` (default "id") and
+   * `optionsLabelField` (default "name" or "displayName" fallback).
+   */
+  optionsUrl?: string;
+  optionsValueField?: string;
+  optionsLabelField?: string;
   sortable?: boolean;
   filterable?: boolean;
   showInList?: boolean;

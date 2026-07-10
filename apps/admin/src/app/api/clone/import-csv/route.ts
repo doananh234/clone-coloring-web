@@ -47,6 +47,25 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Pre-load every Brand once, keyed by lowercased/trimmed name, so each CSV
+    // row can resolve `brandId` from its plain-text brand column with a
+    // case-insensitive match. Without this, jobs get `brandId: null` and the
+    // worker's cover step later falls back to a case-sensitive Postgres name
+    // lookup — which silently misses "Didi Plums" vs "didi plums" etc.
+    const allBrands = await prisma.brand.findMany({ select: { id: true, name: true } });
+    const brandIdByName = new Map<string, string>();
+    for (const b of allBrands) {
+      if (typeof b.name === "string" && b.name.trim()) {
+        brandIdByName.set(b.name.trim().toLowerCase(), b.id);
+      }
+    }
+    const resolveBrandId = (rawName: string | null | undefined): string | null => {
+      if (typeof rawName !== "string") return null;
+      const key = rawName.trim().toLowerCase();
+      if (!key) return null;
+      return brandIdByName.get(key) ?? null;
+    };
+
     const jobIds: string[] = [];
     const pendingJobIds: string[] = [];
     for (const row of newRows) {
@@ -99,6 +118,7 @@ export async function POST(req: NextRequest) {
             // Denormalize for fast UI rendering without a second read.
             thumbnailUrl: row.thumbnailUrl || null,
             brand: row.brand || null,
+            brandId: resolveBrandId(row.brand),
           },
         },
       });

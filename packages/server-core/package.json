@@ -9,6 +9,8 @@
     "./ai/llm-provider": "./src/ai/llm-provider.ts",
     "./ai/prompts": "./src/ai/prompts/index.ts",
     "./ai/prompts/book-meta-prompt": "./src/ai/prompts/book-meta-prompt.ts",
+    "./ai/prompts/cover-design-prompt": "./src/ai/prompts/cover-design-prompt.ts",
+    "./cover-generation": "./src/cover-generation/index.ts",
     "./ai/clone-types": "./src/ai/clone-types.ts",
     "./ai/image-provider-types": "./src/ai/image-provider-types.ts",
     "./ai/image-provider-diaflow": "./src/ai/image-provider-diaflow.ts",
@@ -21,7 +23,9 @@
     "./ai/coloring-style-types": "./src/ai/coloring-style-types.ts",
     "./r2": "./src/r2.ts",
     "./pdf-renderer": "./src/pdf-renderer.ts",
-    "./langfuse": "./src/langfuse.ts"
+    "./langfuse": "./src/langfuse.ts",
+    "./text-overlay": "./src/text-overlay/index.ts",
+    "./text-overlay/server": "./src/text-overlay/server.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
@@ -29,8 +33,15 @@
     "ioredis": "^5.4.0",
     "langfuse": "^3.38.20"
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "devDependencies": {
     "@vx/tsconfig": "workspace:*",
-    "typescript": "^5.8.0"
+    "sharp": "^0.34.5",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
   }
 }

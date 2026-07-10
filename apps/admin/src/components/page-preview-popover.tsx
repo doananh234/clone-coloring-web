@@ -129,7 +129,7 @@ export function PagePreviewPopover({
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {leftLabel}
           </p>
-          <div className="aspect-[3/4] w-full overflow-hidden rounded-md border bg-muted">
+          <div className="aspect-square w-full overflow-hidden rounded-md border bg-muted">
             <img
               src={leftUrl}
               alt={leftLabel}
@@ -144,7 +144,7 @@ export function PagePreviewPopover({
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {rightLabel}
           </p>
-          <div className="flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-md border bg-muted">
+          <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border bg-muted">
             {rightSlot}
           </div>
         </div>

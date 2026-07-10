@@ -8,6 +8,7 @@ import {
   stepReproduce,
   stepCreateBook,
   stepOneShot,
+  stepGenerateCover,
 } from "@vx/clone-core";
 import { db } from "../db";
 import { notifySuccess, notifyFailure } from "../notify/telegram";
@@ -19,6 +20,7 @@ import {
   reproduceDeps,
   createBookDeps,
   oneShotDeps,
+  generateCoverDeps,
 } from "./step-deps";
 
 // silence unused-import warnings for the manually-triggered extract step.
@@ -76,6 +78,18 @@ export async function processCloneJob(jobId: string): Promise<void> {
     const bookId = ctx.isDone("create-book") && ctx.resultBookId
       ? ctx.resultBookId
       : await withRetry("create-book", () => stepCreateBook(ctx, db, createBookDeps), ctx);
+
+    if (!ctx.isDone("generate-cover")) {
+      // stepGenerateCover runs in BOTH multi-step and one-shot paths. In one-shot mode,
+      // stepOneShot populates bookData.titleCover from the Diaflow LLM's isCover page.
+      // In multi-step mode, that extraction doesn't happen — stepGenerateCover falls back
+      // to bookData.title (the long form title) for the cover header.
+      await withRetry(
+        "generate-cover",
+        () => stepGenerateCover(ctx, db, generateCoverDeps),
+        ctx,
+      );
+    }
 
     await ctx.markComplete(bookId);
     await notifySuccess(ctx, bookId);
