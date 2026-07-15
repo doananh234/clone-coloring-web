@@ -90,3 +90,27 @@ Without `opts`, output is byte-identical to today's prompt.
 
 - No changes to `redesign-page` route, the worker pipeline, or Regenerate All.
 - No DB schema changes (`cameraView` already lives in `rawData.scene`).
+
+---
+
+## Revision 2 (same day): candidates instead of direct replace
+
+User feedback: regen and new-angle must NOT replace the current result directly.
+
+- `CloneJobPage` gains `regenCandidateUrl?`, `angleCandidateUrl?`, `angleCandidateView?`.
+  `reproducedUrl` keeps meaning "current applied result".
+- Per-page generation writes ONLY the matching candidate field; uploads go to
+  `assets/clone-jobs/{jobId}/reproduce/page-{NNN}-{regen|angle}.png` (+`?v=`),
+  never to the book's page key. Book untouched at generate time.
+- New route `POST /api/clone/[jobId]/apply-candidate { pageIndex, kind }`:
+  sets `reproducedUrl` = candidate URL, persists `rawData.scene.cameraView`
+  (angle only, at apply time), updates `book.coloringPages[idx].url`.
+  Candidates are kept after apply (user can switch back and forth).
+- New-angle picks exclude BOTH the current scene view and the existing angle
+  candidate's view (`pickDifferentCameraView` accepts a list).
+- "Regenerate All" sends `apply: true` — generates the regen candidate and
+  applies it immediately (previous behavior preserved).
+- UI: each row shows Original → Current → up to two candidate thumbs
+  ("Regen" / "Angle: {view}") each with a Use button; per-candidate spinner;
+  applied candidate highlighted.
+- Bulk mode (no `pageIndex`) unchanged.
