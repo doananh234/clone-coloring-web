@@ -59,7 +59,10 @@ describe("stepCreateBook — writes full rawData into sceneData", () => {
   it("preserves all fields the LLM emitted (including new ones like isCover, titleCover)", async () => {
     const { db, created } = fakeDb();
     const ctx = fakeCtx("j1");
-    const deps = { randomUUID: () => "uuid-1" };
+    const deps = {
+      randomUUID: () => "uuid-1",
+      copyImage: async ({ destKey }: { sourceUrl: string; destKey: string }) => `/${destKey}`,
+    };
 
     await stepCreateBook(ctx, db, deps);
 
@@ -87,8 +90,31 @@ describe("stepCreateBook — writes full rawData into sceneData", () => {
       pages: [{ pageNumber: 1, imageUrl: "https://r2/x.png", redesignedUrl: "https://r2/y.png" }],
     });
     const ctx = fakeCtx("j1");
-    await stepCreateBook(ctx, db, { randomUUID: () => "uuid-1" });
+    await stepCreateBook(ctx, db, {
+      randomUUID: () => "uuid-1",
+      copyImage: async ({ destKey }) => `/${destKey}`,
+    });
     const book = created[0].data as { coloringPages: Array<{ sceneData?: unknown }> };
     expect(book.coloringPages[0].sceneData).toBeUndefined();
+  });
+});
+
+describe("stepCreateBook — moves page images into assets/{bookId}/", () => {
+  it("copies each page's redesigned image out of the clone-job prefix into assets/{bookId}/pages/", async () => {
+    const { db, created } = fakeDb();
+    const ctx = fakeCtx("j1");
+    const copyImage = vi.fn(async ({ destKey }: { sourceUrl: string; destKey: string }) => `/${destKey}`);
+
+    const bookId = await stepCreateBook(ctx, db, { randomUUID: () => "uuid-1", copyImage });
+
+    expect(copyImage).toHaveBeenCalledWith({
+      sourceUrl: "https://r2/red.png",
+      destKey: `assets/${bookId}/pages/page-001.png`,
+    });
+
+    const book = created[0].data as { coloringPages: Array<{ url: string }>; coverUrl: string };
+    expect(book.coloringPages[0].url).toBe(`/assets/${bookId}/pages/page-001.png`);
+    expect(book.coloringPages[0].url).not.toContain("clone-jobs");
+    expect(book.coverUrl).toBe(`/assets/${bookId}/pages/page-001.png`);
   });
 });

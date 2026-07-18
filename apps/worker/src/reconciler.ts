@@ -1,3 +1,4 @@
+import { enqueueCloneJob } from "@vx/clone-core/queue-enqueue";
 import { db } from "./db";
 import { cloneQueue } from "./queue";
 
@@ -21,8 +22,13 @@ export async function reconcileStaleJobs(deps: Deps = {}): Promise<{ recovered: 
 
   const recovered: string[] = [];
   for (const { id } of jobs) {
-    await cloneQueue.add("process", { cloneJobId: id }, { jobId: id });
-    recovered.push(id);
+    try {
+      const result = await enqueueCloneJob(cloneQueue, id);
+      if (result.enqueued) recovered.push(id);
+    } catch (err) {
+      // One bad job must not abort recovery of the rest.
+      console.error(`reconciler: failed to re-enqueue clone job ${id}`, err);
+    }
   }
   return { recovered };
 }

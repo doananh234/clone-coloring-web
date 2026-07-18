@@ -40,6 +40,8 @@ interface JobPage {
   redesignedUrl?: string;
   redesignPrompt?: string;
   rawData?: PageRawData;
+  status?: string;
+  error?: string;
 }
 
 interface BookData {
@@ -54,6 +56,15 @@ interface BookData {
 
 export interface CreateBookDeps {
   randomUUID: () => string;
+  /**
+   * Moves a page image out of its clone-job storage location (source URL)
+   * into the given permanent destination key, returning the new url.
+   * clone-job assets (assets/clone-jobs/{jobId}/...) are purged over time
+   * (see apps/worker/src/scripts/cleanup-failed.ts) — a published book must
+   * not keep depending on that temporary storage. Returns sourceUrl
+   * unchanged for URLs that aren't internal R2 paths (e.g. already empty).
+   */
+  copyImage: (args: { sourceUrl: string; destKey: string }) => Promise<string>;
 }
 
 export async function stepCreateBook(
@@ -68,21 +79,33 @@ export async function stepCreateBook(
 
   const bookData = ((job.bookData as BookData | null | undefined) ?? {});
   const pages = (job.pages as JobPage[] | null | undefined) ?? [];
+  const bookId = deps.randomUUID();
 
-  // Filter must match the URL fallback below: a page is usable if EITHER
-  // redesignedUrl or imageUrl is set. Strict `p.imageUrl` filter dropped every
-  // page when stepOneShot left imageUrl empty (older bug: Diaflow's
-  // loop_N_output was missing) — producing a book with 0 coloringPages.
-  const coloringPages = pages
-    .filter((p) => p.redesignedUrl || p.imageUrl)
-    .map((p) => ({
-      id: deps.randomUUID(),
-      url: p.redesignedUrl ?? p.imageUrl,
-      isPublic: false,
-      prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
-      // Persist full per-page LLM output — enables future indexing/search.
-      sceneData: p.rawData ? { ...p.rawData } : undefined,
-    }));
+  // Skip pages stepOneShot marked as failed — those have no redesignedUrl
+  // and shipping them would surface the raw B&W original as a "coloring
+  // page". Filter must otherwise match the URL fallback below: a page is
+  // usable if EITHER redesignedUrl or imageUrl is set. Strict `p.imageUrl`
+  // filter dropped every page when stepOneShot left imageUrl empty (older
+  // bug: Diaflow's loop_N_output was missing) — producing a book with 0
+  // coloringPages.
+  const usablePages = pages.filter((p) => p.status !== "error" && (p.redesignedUrl || p.imageUrl));
+
+  const coloringPages = await Promise.all(
+    usablePages.map(async (p, i) => {
+      const sourceUrl = p.redesignedUrl ?? p.imageUrl;
+      const ext = sourceUrl.split(".").pop()?.split("?")[0] || "png";
+      const destKey = `assets/${bookId}/pages/page-${String(i + 1).padStart(3, "0")}.${ext}`;
+      const url = await deps.copyImage({ sourceUrl, destKey });
+      return {
+        id: deps.randomUUID(),
+        url,
+        isPublic: false,
+        prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
+        // Persist full per-page LLM output — enables future indexing/search.
+        sceneData: p.rawData ? { ...p.rawData } : undefined,
+      };
+    }),
+  );
 
   const storyOutline = pages
     .filter((p) => p.rawData)
@@ -95,7 +118,6 @@ export async function stepCreateBook(
     }));
 
   const firstImage = coloringPages[0]?.url ?? "";
-  const bookId = deps.randomUUID();
   const title =
     bookData.title || job.name || job.sourceFileName?.replace(/\.pdf$/i, "") || "Untitled";
 

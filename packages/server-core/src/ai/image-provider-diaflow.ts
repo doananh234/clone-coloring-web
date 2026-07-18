@@ -164,7 +164,17 @@ async function pollOnce(sessionId: string, token: string, apiUrl: string): Promi
       throw new Error(`Diaflow poll error (${res.status}): ${err}`);
     }
 
-    return (await res.json()) as DiaflowResponse;
+    // Diaflow occasionally returns HTTP 200 with a null/scalar body when a
+    // session has been GC'd or is in an unexpected state. Reject that here so
+    // callers get a legible error instead of "Cannot read properties of null
+    // (reading 'result')" the first time they touch the response.
+    const body: unknown = await res.json();
+    if (!body || typeof body !== "object" || typeof (body as { status?: unknown }).status !== "string") {
+      throw new Error(
+        `Diaflow poll returned unexpected body for session ${sessionId}: ${JSON.stringify(body).slice(0, 300)}`,
+      );
+    }
+    return body as DiaflowResponse;
   }
 
   throw lastError || new Error("Diaflow poll failed after retries");

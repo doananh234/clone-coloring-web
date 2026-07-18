@@ -19,10 +19,18 @@ export async function GET(req: NextRequest) {
 
     const where = status && status !== "all" ? { status } : undefined;
 
+    // Terminal states are sorted by when they became terminal (updatedAt), so
+    // the latest finish/failure is visible at the top. Non-terminal states
+    // keep createdAt ordering to reflect queue arrival order.
+    const isTerminal = status === "reproduced" || status === "error";
+    const orderBy = isTerminal
+      ? ({ updatedAt: "desc" } as const)
+      : ({ createdAt: "desc" } as const);
+
     const [rows, grouped] = await Promise.all([
       prisma.cloneJob.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy,
         take: limit,
       }),
       prisma.cloneJob.groupBy({

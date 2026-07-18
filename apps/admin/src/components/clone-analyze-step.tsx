@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSpinner,
@@ -58,9 +59,12 @@ export function CloneAnalyzeStep({ job, onJobUpdate, onNext, onBack }: CloneAnal
       const data = await res.json();
       if (data.success) {
         onJobUpdate(data.job);
+      } else {
+        toast.error(data.error ?? `Analyze failed (HTTP ${res.status})`);
       }
     } catch (err) {
       console.error("Analysis failed:", err);
+      toast.error(err instanceof Error ? err.message : "Analyze request failed");
     } finally {
       setAnalyzing(false);
     }

@@ -59,31 +59,19 @@ Your job: analyze the illustration and add professionally designed typography.
 
 DO NOT redraw the illustration.
 DO NOT change colors, characters, or details of the artwork.
-ONLY add text and remove any border.
+ONLY add text on top of the existing illustration.
 
 ===========================================
-CRITICAL — FULL-BLEED, NO BORDER
+CRITICAL — ONE SINGLE VIEW
 ===========================================
 
-The output MUST be FULL-BLEED. The illustration fills the ENTIRE square
-canvas from edge to edge, pixel to pixel.
+The output is ONE image with the SAME single illustration as the input.
+It is NOT a collage. It is NOT a grid. It is NOT a diptych or triptych.
+It is NOT split into panels or before/after views. Do not duplicate the
+artwork or add any additional panels.
 
-Absolutely FORBIDDEN in the output:
-- ❌ Any square or rectangular border, frame, or outline around the artwork
-- ❌ Any thin colored line running along the outer edge of the canvas
-- ❌ Any white / colored margin, padding, or gutter between the artwork and
-     the canvas edge
-- ❌ Any double frame or inner rim
-- ❌ Any rounded-rectangle mask around the illustration
-
-If the INPUT image contains ANY of the above (a decorative rim, a printed
-frame, a page-margin gap), you MUST remove it by extending the illustration
-or its background out to the four edges of the canvas. Do this BEFORE
-adding any text. The pixels touching the canvas edge must be illustration
-or its natural background — never a frame line, never a solid margin.
-
-Zoom in and re-verify the four edges before finishing. If you see even a
-1-pixel colored strip near an edge, extend the artwork further.
+The input is already borderless and full-bleed. Keep it that way — do
+not add any decorative frame, page border, or colored margin.
 
 ===========================================
 CRITICAL — THREE TEXT ELEMENTS, ALL REQUIRED
@@ -216,14 +204,12 @@ Return the illustration with all THREE text elements (title, subtitle,
 brand) composited on top. The illustration itself must be identical to the
 input aside from the text overlays.
 
-FINAL CHECK before returning (do all three):
-  1. Does the output contain the brand "${brand}" at the bottom? If not,
+FINAL CHECK before returning:
+  1. Is the output ONE single illustration filling the whole square? If it
+     looks like a collage / grid / diptych / before-after / multi-panel
+     layout, discard and redo with a single view.
+  2. Does the output contain the brand "${brand}" at the bottom? If not,
      add it.
-  2. Examine each of the four canvas edges one by one (top, right, bottom,
-     left). Do you see a border line, rim, frame, or solid-color margin
-     touching the edge? If yes on ANY edge, extend the artwork or its
-     background out to that edge and re-check. The output must be
-     completely full-bleed.
   3. Are all three text elements (title, subtitle, brand) present and
      positioned per the spec? If any is missing, add it.`;
 }

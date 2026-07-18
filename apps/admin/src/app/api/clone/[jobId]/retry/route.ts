@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import { cloneQueue } from "@/lib/queue/clone-queue";
+import { enqueueCloneJob } from "@vx/clone-core/queue-enqueue";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     },
   });
 
-  await cloneQueue.add("process", { cloneJobId: jobId }, { jobId });
+  const result = await enqueueCloneJob(cloneQueue, jobId);
 
-  return NextResponse.json({ enqueued: jobId });
+  return NextResponse.json({ jobId, ...result });
 }

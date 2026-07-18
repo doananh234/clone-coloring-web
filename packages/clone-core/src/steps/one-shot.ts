@@ -35,6 +35,14 @@ export interface OneShotDeps {
     jobId: string,
     brandInfo?: string,
   ) => Promise<{ sessionId: string; pages: OneShotPageResult[] }>;
+  /**
+   * Re-polls an existing Diaflow session to get fresh signed URLs. Called
+   * when the cached CDN URLs 4xx during the fetch loop (Diaflow's signed
+   * URLs expire — a cached run from an earlier attempt won't survive a
+   * retry that runs hours later). Optional so tests + older wiring keep
+   * working; when absent, we just fail the page instead of refreshing.
+   */
+  recheckOneShot?: (sessionId: string) => Promise<{ pages: OneShotPageResult[] }>;
   /** Downloads the redesigned image bytes from the Diaflow CDN URL. */
   fetchImage: (url: string) => Promise<{ body: Buffer; contentType: string }>;
   /** Uploads bytes to R2, returns the public URL. */
@@ -140,26 +148,16 @@ export async function stepOneShot(
     data: { data: { ...prevData, oneShotSessionId: sessionId } as never },
   });
 
+  // Track whether we've already refreshed signed URLs in this run — we only
+  // recheck the session ONCE per stepOneShot invocation to avoid hammering
+  // Diaflow if every page's URL is stale.
+  let urlsRefreshed = false;
+  const errors: Array<{ pageNumber: number; error: string }> = [];
+
   const jobPages: JobPage[] = [];
   for (let i = 0; i < pages.length; i++) {
-    const item = pages[i];
     const pageNumber = i + 1;
     const paddedPage = String(pageNumber).padStart(3, "0");
-
-    // Redesigned image — mirror to R2 (Diaflow CDN URLs are signed + expire).
-    const redesignedFetch = await deps.fetchImage(item.redesignedImageUrl);
-    const redesignedKey = `assets/clone-jobs/${ctx.jobId}/redesigned/page-${paddedPage}.png`;
-    const { url: redesignedR2Url } = await deps.uploadToR2({
-      key: redesignedKey,
-      body: redesignedFetch.body,
-      contentType: redesignedFetch.contentType || "image/png",
-    });
-
-    // Original page image — use the R2 URL that stepRender already produced
-    // for this pageNumber. stepRender is now a prerequisite of the one-shot
-    // pipeline, so `existing[i]` should always be populated. Fall back to ""
-    // and warn if not (Diaflow returned MORE pages than the PDF rendered —
-    // shouldn't happen in practice but visible if it does).
     const renderedOriginal = existing[i]?.imageUrl ?? "";
     if (!renderedOriginal) {
       console.warn(
@@ -168,33 +166,113 @@ export async function stepOneShot(
       );
     }
 
-    const analyze = (item.analyzeData ?? {}) as Record<string, unknown>;
-    const rawData = {
-      // Preserve every field the LLM emitted (titleCover, subtitle, isCover,
-      // isBW, visualDna, ...). Guaranteed fallbacks below keep every existing
-      // consumer (stepCreateBook, admin UI) working unchanged.
-      ...analyze,
-      scene: analyze.scene ?? { description: "", cameraView: "wide", composition: "" },
-      environment: analyze.environment ?? {
-        timeOfDay: "day",
-        weather: "sunny",
-        season: "neutral",
-        mood: "peaceful",
-      },
-      characters: analyze.characters ?? [],
-      locations: analyze.locations ?? [],
-      props: analyze.props ?? [],
-      reproductionPrompt:
-        typeof analyze.reproductionPrompt === "string" ? analyze.reproductionPrompt : "",
-    };
+    try {
+      // Redesigned image — mirror to R2 (Diaflow CDN URLs are signed + expire).
+      // On a 4xx, ask Diaflow for a fresh signed URL by re-polling the session
+      // and retry that page ONCE. This recovers the common "cached URL from a
+      // previous run has now expired" failure without a full re-run.
+      let redesignedFetch: { body: Buffer; contentType: string };
+      try {
+        redesignedFetch = await deps.fetchImage(pages[i].redesignedImageUrl);
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        const is4xx = typeof status === "number" && status >= 400 && status < 500;
+        if (!is4xx || !deps.recheckOneShot || urlsRefreshed) throw err;
 
-    jobPages.push({
-      pageNumber,
-      imageUrl: renderedOriginal,
-      redesignedUrl: redesignedR2Url,
-      status: "reproduced",
-      rawData,
-    });
+        console.warn(
+          `[stepOneShot] page ${pageNumber}: signed URL returned ${status}, ` +
+            `re-polling Diaflow session ${sessionId} for fresh URLs.`,
+        );
+        const refreshed = await deps.recheckOneShot(sessionId);
+        urlsRefreshed = true;
+        // Adopt fresh URLs for every remaining page. We match by index; if
+        // the refreshed count differs we still take what we can.
+        for (let j = 0; j < pages.length && j < refreshed.pages.length; j++) {
+          pages[j] = { ...pages[j], redesignedImageUrl: refreshed.pages[j].redesignedImageUrl };
+        }
+        redesignedFetch = await deps.fetchImage(pages[i].redesignedImageUrl);
+      }
+
+      const redesignedKey = `assets/clone-jobs/${ctx.jobId}/redesigned/page-${paddedPage}.png`;
+      const { url: redesignedR2Url } = await deps.uploadToR2({
+        key: redesignedKey,
+        body: redesignedFetch.body,
+        contentType: redesignedFetch.contentType || "image/png",
+      });
+
+      const analyze = (pages[i].analyzeData ?? {}) as Record<string, unknown>;
+      const rawData = {
+        // Preserve every field the LLM emitted (titleCover, subtitle, isCover,
+        // isBW, visualDna, ...). Guaranteed fallbacks below keep every existing
+        // consumer (stepCreateBook, admin UI) working unchanged.
+        ...analyze,
+        scene: analyze.scene ?? { description: "", cameraView: "wide", composition: "" },
+        environment: analyze.environment ?? {
+          timeOfDay: "day",
+          weather: "sunny",
+          season: "neutral",
+          mood: "peaceful",
+        },
+        characters: analyze.characters ?? [],
+        locations: analyze.locations ?? [],
+        props: analyze.props ?? [],
+        reproductionPrompt:
+          typeof analyze.reproductionPrompt === "string" ? analyze.reproductionPrompt : "",
+      };
+
+      jobPages.push({
+        pageNumber,
+        imageUrl: renderedOriginal,
+        redesignedUrl: redesignedR2Url,
+        status: "reproduced",
+        rawData,
+      });
+    } catch (err) {
+      // Persistent failure for this page — record it but keep going so the
+      // successful pages aren't discarded. The book will publish with the
+      // salvaged pages; failed ones can be re-reproduced individually later.
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[stepOneShot] page ${pageNumber} failed: ${message}`);
+      errors.push({ pageNumber, error: message });
+      jobPages.push({
+        pageNumber,
+        imageUrl: renderedOriginal,
+        status: "error",
+        error: message,
+      });
+    }
+  }
+
+  // If EVERY page failed we should not commit — let withRetry surface the
+  // failure and retry the whole step. A partial success is still worth
+  // committing so downstream steps can proceed on the salvaged pages.
+  if (errors.length === pages.length && pages.length > 0) {
+    throw new Error(
+      `[stepOneShot] all ${pages.length} pages failed. First error: ${errors[0].error}`,
+    );
+  }
+  if (errors.length > 0) {
+    console.warn(
+      `[stepOneShot] committing with ${errors.length}/${pages.length} failed page(s): ` +
+        errors.map((e) => `page ${e.pageNumber}`).join(", "),
+    );
+  }
+
+  // If we refreshed URLs mid-run, mirror the fresh page list back to the
+  // SourceBook cache so a later retry doesn't re-hit the same expired URLs.
+  if (urlsRefreshed && ctx.sourceBookId) {
+    try {
+      const sb = await db.sourceBook.findUnique({ where: { id: ctx.sourceBookId } });
+      const prevSbData = (sb?.data as Record<string, unknown> | null | undefined) ?? {};
+      await db.sourceBook.update({
+        where: { id: ctx.sourceBookId },
+        data: {
+          data: { ...prevSbData, oneShotPages: pages } as never,
+        },
+      });
+    } catch (err) {
+      console.error("[stepOneShot] failed to persist refreshed URLs to SourceBook:", err);
+    }
   }
 
   // Extract book-level cover meta from the page tagged isCover: true.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import { resolveR2Url } from "@vx/server-core/r2";
 import type { CloneJobBookData, CloneJobPage } from "@vx/server-core/ai/clone-types";
+import { moveCloneJobImageToBook } from "@/lib/move-clone-page-to-book";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
@@ -77,32 +78,41 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // Create a book from the cloned pages (persist full generation context)
-    const coloringPages = pages
-      .filter((p) => p.imageUrl)
-      .map((p) => ({
-        id: crypto.randomUUID(),
-        url: p.imageUrl,
-        isPublic: false,
-        prompt: p.rawData?.reproductionPrompt || "",
-        sceneData: p.rawData
-          ? {
-              scene: p.rawData.scene,
-              environment: p.rawData.environment,
-              characters: (p.rawData.characters || []).map((c) => ({
-                name: c.name,
-                type: c.type,
-                role: c.role,
-                characterPrompt: c.characterPrompt,
-              })),
-              locations: (p.rawData.locations || []).map((l) => ({
-                name: l.name,
-                description: l.description,
-                locationPrompt: l.locationPrompt,
-              })),
-            }
-          : undefined,
-      }));
+    // Create a book from the cloned pages (persist full generation context).
+    // Images are moved out of assets/clone-jobs/{jobId}/... into
+    // assets/{bookId}/... here since clone-job assets are purged over time
+    // (see apps/worker/src/scripts/cleanup-failed.ts) — a published book
+    // must not keep depending on that temporary storage location.
+    const bookId = crypto.randomUUID();
+    const usablePages = pages.filter((p) => p.imageUrl);
+    const coloringPages = await Promise.all(
+      usablePages.map(async (p, i) => {
+        const url = await moveCloneJobImageToBook({ sourceUrl: p.imageUrl, bookId, pageIndex: i });
+        return {
+          id: crypto.randomUUID(),
+          url,
+          isPublic: false,
+          prompt: p.rawData?.reproductionPrompt || "",
+          sceneData: p.rawData
+            ? {
+                scene: p.rawData.scene,
+                environment: p.rawData.environment,
+                characters: (p.rawData.characters || []).map((c) => ({
+                  name: c.name,
+                  type: c.type,
+                  role: c.role,
+                  characterPrompt: c.characterPrompt,
+                })),
+                locations: (p.rawData.locations || []).map((l) => ({
+                  name: l.name,
+                  description: l.description,
+                  locationPrompt: l.locationPrompt,
+                })),
+              }
+            : undefined,
+        };
+      }),
+    );
 
     const storyOutline = pages
       .filter((p) => p.rawData)
@@ -116,6 +126,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const createdBook = await prisma.book.create({
       data: {
+        id: bookId,
         title: body.bookData.title || row.name || "Untitled",
         subtitle: body.bookData.subtitle || "",
         description: body.bookData.description || "",

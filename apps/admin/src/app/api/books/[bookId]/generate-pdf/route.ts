@@ -1,7 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, type PDFImage } from "pdf-lib";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
+
+type ImageItem = { id: string; url: string };
+
+async function embedImage(
+  pdfDoc: PDFDocument,
+  item: ImageItem,
+  errors: string[],
+): Promise<PDFImage | null> {
+  const fullUrl = resolveR2Url(item.url);
+  if (!fullUrl || !fullUrl.startsWith("http")) {
+    errors.push(`Skip ${item.id}: invalid URL "${item.url}"`);
+    return null;
+  }
+
+  try {
+    const imgRes = await fetch(fullUrl);
+    if (!imgRes.ok) {
+      errors.push(`Skip ${item.id}: fetch ${imgRes.status} ${fullUrl}`);
+      return null;
+    }
+    const imgBytes = new Uint8Array(await imgRes.arrayBuffer());
+    if (imgBytes.byteLength === 0) {
+      errors.push(`Skip ${item.id}: empty body ${fullUrl}`);
+      return null;
+    }
+
+    // Detect format by magic bytes — content-type from R2 is unreliable.
+    const isJpeg = imgBytes[0] === 0xff && imgBytes[1] === 0xd8 && imgBytes[2] === 0xff;
+    const isPng =
+      imgBytes[0] === 0x89 &&
+      imgBytes[1] === 0x50 &&
+      imgBytes[2] === 0x4e &&
+      imgBytes[3] === 0x47;
+
+    if (isJpeg) return await pdfDoc.embedJpg(imgBytes);
+    if (isPng) return await pdfDoc.embedPng(imgBytes);
+
+    errors.push(
+      `Skip ${item.id}: unsupported format (magic: ${Array.from(imgBytes.slice(0, 4))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(" ")}) ${fullUrl}`,
+    );
+    return null;
+  } catch (err) {
+    errors.push(`Skip ${item.id}: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ bookId: string }> }) {
   try {
@@ -11,70 +59,44 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ bo
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
 
-    const pages: { id: string; url: string }[] = (book.coloringPages as any[]) || [];
+    const coloringPages: ImageItem[] = (book.coloringPages as ImageItem[] | null) || [];
+    const coverUrl = book.coverUrl || undefined;
 
-    if (pages.length === 0) {
-      return NextResponse.json({ error: "No coloring pages to include" }, { status: 400 });
+    if (coloringPages.length === 0 && !coverUrl) {
+      return NextResponse.json({ error: "No pages to include" }, { status: 400 });
     }
+
+    // Build ordered list: cover first (if present), then coloring pages.
+    const items: ImageItem[] = [];
+    if (coverUrl) items.push({ id: "cover", url: coverUrl });
+    items.push(...coloringPages);
 
     const pdfDoc = await PDFDocument.create();
     const errors: string[] = [];
 
-    for (const page of pages) {
-      const fullUrl = resolveR2Url(page.url);
-      if (!fullUrl || !fullUrl.startsWith("http")) {
-        errors.push(`Skip ${page.id}: invalid URL "${page.url}"`);
-        continue;
-      }
+    for (const item of items) {
+      const image = await embedImage(pdfDoc, item, errors);
+      if (!image) continue;
 
-      try {
-        const imgRes = await fetch(fullUrl);
-        if (!imgRes.ok) {
-          errors.push(`Skip ${page.id}: fetch ${imgRes.status}`);
-          continue;
-        }
-        const imgBytes = new Uint8Array(await imgRes.arrayBuffer());
-
-        const contentType = imgRes.headers.get("content-type") || "";
-        let image;
-        if (contentType.includes("jpeg") || contentType.includes("jpg")) {
-          image = await pdfDoc.embedJpg(imgBytes);
-        } else {
-          image = await pdfDoc.embedPng(imgBytes);
-        }
-
-        // US Letter size: 612 x 792 points (8.5 x 11 inches)
-        const pdfPage = pdfDoc.addPage([612, 792]);
-        const { width: imgW, height: imgH } = image;
-
-        // Scale to fit with 0.5" margins
-        const maxW = 612 - 72;
-        const maxH = 792 - 72;
-        const scale = Math.min(maxW / imgW, maxH / imgH);
-        const drawW = imgW * scale;
-        const drawH = imgH * scale;
-
-        pdfPage.drawImage(image, {
-          x: (612 - drawW) / 2,
-          y: (792 - drawH) / 2,
-          width: drawW,
-          height: drawH,
-        });
-      } catch (err) {
-        errors.push(`Skip ${page.id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
+      // Page size matches image native dimensions — no scaling, no margins.
+      const { width, height } = image;
+      const pdfPage = pdfDoc.addPage([width, height]);
+      pdfPage.drawImage(image, { x: 0, y: 0, width, height });
     }
 
     if (pdfDoc.getPageCount() === 0) {
+      console.error("[generate-pdf] No pages embedded for book", bookId, errors);
       return NextResponse.json(
         { error: "No pages could be embedded", details: errors },
         { status: 400 },
       );
     }
+    if (errors.length > 0) {
+      console.warn("[generate-pdf] Partial success for book", bookId, errors);
+    }
 
     const pdfBytes = await pdfDoc.save();
 
-    // Upload to R2
     const r2Config = getR2Config();
     const r2Client = createR2Client(r2Config);
     const { url: pdfUrl } = await uploadToR2({
@@ -85,15 +107,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ bo
       contentType: "application/pdf",
     });
 
-    // Update book
+    // Cache-bust so the browser doesn't keep serving the previous generation.
+    const versionedPdfUrl = `${pdfUrl}?v=${Date.now()}`;
     await prisma.book.update({
       where: { id: bookId },
-      data: { pdfUrl },
+      data: { pdfUrl: versionedPdfUrl },
     });
 
     return NextResponse.json({
       success: true,
-      pdfUrl,
+      pdfUrl: versionedPdfUrl,
       pageCount: pdfDoc.getPageCount(),
       ...(errors.length > 0 ? { warnings: errors } : {}),
     });

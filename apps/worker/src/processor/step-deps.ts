@@ -3,10 +3,11 @@ import {
   getR2Config,
   createR2Client,
   uploadToR2 as r2Upload,
+  copyR2Object,
   resolveR2Url,
 } from "@vx/server-core/r2";
 import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
-import { visionAnalyzeJSON, cloneOneShot } from "@vx/server-core/ai/llm-provider";
+import { visionAnalyzeJSON, cloneOneShot, recheckOneShotSession } from "@vx/server-core/ai/llm-provider";
 import {
   CLONE_EXTRACTION_PROMPT,
   buildReproductionPrompt,
@@ -25,6 +26,20 @@ const r2Client = createR2Client(r2Config);
 
 async function uploadToR2(args: { key: string; body: Buffer; contentType: string }) {
   return r2Upload({ client: r2Client, config: r2Config, ...args });
+}
+
+// Moves a clone-job page image into the book's permanent assets/{bookId}/
+// prefix via a server-side R2 copy (no download/re-upload). Leaves external
+// or already-empty URLs untouched — only internal "/assets/..." paths are
+// ours to move.
+async function copyImage(args: { sourceUrl: string; destKey: string }): Promise<string> {
+  const { sourceUrl, destKey } = args;
+  if (!sourceUrl || sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
+    return sourceUrl;
+  }
+  const sourceKey = sourceUrl.replace(/^\//, "").split("?")[0];
+  const { url } = await copyR2Object({ client: r2Client, config: r2Config, sourceKey, destKey });
+  return url;
 }
 
 async function readPdfFromR2(key: string): Promise<Buffer> {
@@ -108,11 +123,18 @@ export const extractEntitiesDeps = {
   randomUUID: () => crypto.randomUUID(),
 };
 export const reproduceDeps = { generatePage, uploadToR2, resolveR2Url };
-export const createBookDeps = { randomUUID: () => crypto.randomUUID() };
+export const createBookDeps = { randomUUID: () => crypto.randomUUID(), copyImage };
 
 async function fetchImage(url: string): Promise<{ body: Buffer; contentType: string }> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`failed to fetch ${url}: ${res.status}`);
+  if (!res.ok) {
+    // Attach the HTTP status so callers (stepOneShot) can distinguish
+    // expired-signed-URL 4xx (recoverable via session recheck) from other
+    // failures without parsing the message.
+    const err = new Error(`failed to fetch ${url}: ${res.status}`) as Error & { status: number };
+    err.status = res.status;
+    throw err;
+  }
   const contentType = res.headers.get("content-type") || "image/png";
   const body = Buffer.from(await res.arrayBuffer());
   return { body, contentType };
@@ -124,6 +146,12 @@ export const oneShotDeps = {
       brandInfo,
       trace: { caller: "worker/one-shot", entityType: "cloneJob", entityId: jobId },
     }),
+  // Re-poll an existing Diaflow session to get FRESH signed URLs when the
+  // cached ones expire mid-loop. No new one-shot API call — cheap ~1s poll.
+  recheckOneShot: async (sessionId: string) => {
+    const result = await recheckOneShotSession(sessionId);
+    return { pages: result.pages };
+  },
   fetchImage,
   uploadToR2,
   resolveR2Url,

@@ -243,6 +243,29 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
   const [job, setJob] = useState<CloneJob | null>(null);
   const [loading, setLoading] = useState(!!existingJobId);
   const [regenerating, setRegenerating] = useState(false);
+  const [rerunning, setRerunning] = useState(false);
+
+  async function handleRerun() {
+    if (!job || rerunning) return;
+    if (
+      !window.confirm(
+        `Re-run "${job.name}" from scratch? This makes a fresh AI call (slow, costs money) and creates a NEW book — the old book is kept.`,
+      )
+    ) {
+      return;
+    }
+    setRerunning(true);
+    try {
+      const res = await fetch(`/api/clone/${job.id}/rerun`, { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      notify.success("Re-enqueued from scratch — reloading…");
+      window.location.reload();
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : String(err));
+      setRerunning(false);
+    }
+  }
 
   async function handleRegenerateOriginals() {
     if (!job || regenerating) return;
@@ -397,6 +420,22 @@ export function ClonePage({ existingJobId }: ClonePageProps) {
                 />
                 {regenerating ? "Regenerating…" : "Regenerate Original Images"}
               </Button>
+              {["reproduced", "error", "stashed"].includes(job.status) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 w-full"
+                  onClick={handleRerun}
+                  disabled={rerunning}
+                  title="Reset all pipeline progress and re-enqueue — fresh Diaflow call, new book"
+                >
+                  <FontAwesomeIcon
+                    icon={faRotate}
+                    className={cn("mr-2 h-3.5 w-3.5", rerunning && "animate-spin")}
+                  />
+                  {rerunning ? "Re-enqueuing…" : "Re-run From Scratch"}
+                </Button>
+              )}
             </div>
           )}
 

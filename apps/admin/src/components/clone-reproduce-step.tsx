@@ -9,7 +9,9 @@ import {
   faSpinner,
   faSparkles,
   faRotate,
+  faRotateLeft,
   faBook,
+  faCameraRotate,
   faChevronDown,
   faChevronUp,
 } from "@fortawesome/pro-regular-svg-icons";
@@ -23,6 +25,14 @@ interface CloneReproduceStepProps {
   onBack: () => void;
   onNext?: () => void;
 }
+
+type CandidateKind = "regen" | "angle";
+
+type PageCandidates = {
+  regen?: string;
+  angle?: string;
+  angleView?: string;
+};
 
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
 
@@ -56,52 +66,111 @@ export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepPr
     limit: 100,
   });
 
-  // Each page: redesigned URL is the "init result", can be overridden by AI regeneration
-  const [pageOverrides, setPageOverrides] = useState<Record<number, string>>({});
-  const [pageStatus, setPageStatus] = useState<Record<number, "idle" | "generating" | "done" | "error">>({});
+  // Per-page candidates: regen / new-angle results generated but not applied.
+  // Seeded from job.pages (persisted fields), overlaid by this session's runs.
+  const [candidates, setCandidates] = useState<Record<number, PageCandidates>>({});
+  // Local override of the applied result (reproducedUrl) after an apply call.
+  const [applied, setApplied] = useState<Record<number, string>>({});
+  // Generation status per `${pageIndex}:${kind}` slot.
+  const [genStatus, setGenStatus] = useState<Record<string, "generating" | "error">>({});
+  const [applying, setApplying] = useState<Record<number, boolean>>({});
   const [generatingAll, setGeneratingAll] = useState(false);
 
-  // Best available image per page: override (regenerated) > redesigned > original
-  function bestUrl(index: number): string {
-    if (pageOverrides[index]) return pageOverrides[index];
+  // Current applied result: session apply > persisted apply > redesigned > original
+  function currentUrl(index: number): string {
     const page = job.pages[index];
-    return page?.redesignedUrl || page?.imageUrl || "";
+    return applied[index] || page?.reproducedUrl || page?.redesignedUrl || page?.imageUrl || "";
+  }
+
+  function candidatesFor(index: number): PageCandidates {
+    const page = job.pages[index];
+    return {
+      regen: candidates[index]?.regen ?? page?.regenCandidateUrl,
+      angle: candidates[index]?.angle ?? page?.angleCandidateUrl,
+      angleView: candidates[index]?.angleView ?? page?.angleCandidateView,
+    };
   }
 
   // Always true — every page has at least the original image
   const hasAnyResult = job.pages.length > 0;
 
   const regeneratePage = useCallback(
-    async (pageIndex: number) => {
-      setPageStatus((prev) => ({ ...prev, [pageIndex]: "generating" }));
+    async (pageIndex: number, kind: CandidateKind, apply = false) => {
+      const slot = `${pageIndex}:${kind}`;
+      setGenStatus((prev) => ({ ...prev, [slot]: "generating" }));
       try {
         const res = await fetch(`/api/clone/${job.id}/reproduce`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pageIndex }),
+          body: JSON.stringify({ pageIndex, newAngle: kind === "angle", apply }),
         });
         const data = await res.json();
-        if (data.success && data.results?.[0]?.success) {
-          setPageOverrides((prev) => ({ ...prev, [pageIndex]: data.results[0].url }));
-          setPageStatus((prev) => ({ ...prev, [pageIndex]: "done" }));
+        const result = data.results?.[0];
+        if (data.success && result?.success) {
+          // Merge onto prev only — candidatesFor() falls back to the
+          // persisted page fields at render time for anything not set here.
+          setCandidates((prev) => ({
+            ...prev,
+            [pageIndex]: {
+              ...prev[pageIndex],
+              ...(kind === "regen"
+                ? { regen: result.url }
+                : { angle: result.url, angleView: result.cameraView }),
+            },
+          }));
+          if (apply) setApplied((prev) => ({ ...prev, [pageIndex]: result.url }));
+          setGenStatus((prev) => {
+            const next = { ...prev };
+            delete next[slot];
+            return next;
+          });
           if (!bookId && data.bookId) setBookId(data.bookId);
+          if (result.cameraView) {
+            notify.success(`New angle ready: ${result.cameraView} view`);
+          }
         } else {
-          setPageStatus((prev) => ({ ...prev, [pageIndex]: "error" }));
-          notify.error(data.results?.[0]?.error || "Generation failed");
+          setGenStatus((prev) => ({ ...prev, [slot]: "error" }));
+          notify.error(result?.error || data.error || "Generation failed");
         }
       } catch {
-        setPageStatus((prev) => ({ ...prev, [pageIndex]: "error" }));
+        setGenStatus((prev) => ({ ...prev, [slot]: "error" }));
       }
     },
     [job.id, bookId],
   );
 
+  const applyCandidate = useCallback(
+    async (pageIndex: number, kind: CandidateKind | "redesign") => {
+      setApplying((prev) => ({ ...prev, [pageIndex]: true }));
+      try {
+        const res = await fetch(`/api/clone/${job.id}/apply-candidate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pageIndex, kind }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setApplied((prev) => ({ ...prev, [pageIndex]: data.url }));
+          notify.success(
+            kind === "redesign" ? "Reverted to redesigned result" : "Candidate applied",
+          );
+        } else {
+          notify.error(data.error || "Failed to apply");
+        }
+      } catch {
+        notify.error("Failed to apply");
+      } finally {
+        setApplying((prev) => ({ ...prev, [pageIndex]: false }));
+      }
+    },
+    [job.id],
+  );
+
   async function handleRegenerateAll() {
     setGeneratingAll(true);
     for (let i = 0; i < job.pages.length; i++) {
-      if (pageStatus[i] !== "done") {
-        await regeneratePage(i);
-      }
+      // Regenerate All keeps the old behavior: generate + apply immediately.
+      await regeneratePage(i, "regen", true);
     }
     setGeneratingAll(false);
     notify.success("All pages regenerated!");
@@ -287,22 +356,25 @@ export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepPr
       {/* Page grid */}
       <div className="space-y-2">
         {job.pages.map((page, i) => {
-          const status = pageStatus[i] || "idle";
-          const currentUrl = bestUrl(i);
-          const isRedesigned = !pageOverrides[i] && !!page.redesignedUrl;
-          const isRegenerated = !!pageOverrides[i];
+          const url = currentUrl(i);
+          const isRegenerated = !!applied[i] || !!page.reproducedUrl;
+          const isRedesigned = !isRegenerated && !!page.redesignedUrl;
 
           return (
             <ReproducePageRow
               key={i}
               page={page}
               index={i}
-              status={status}
-              currentUrl={currentUrl}
+              currentUrl={url}
+              cands={candidatesFor(i)}
+              regenStatus={genStatus[`${i}:regen`]}
+              angleStatus={genStatus[`${i}:angle`]}
               isRedesigned={isRedesigned}
               isRegenerated={isRegenerated}
+              isApplying={!!applying[i]}
               disabled={generatingAll}
-              onRegenerate={() => regeneratePage(i)}
+              onRegenerate={(kind) => regeneratePage(i, kind)}
+              onApply={(kind) => applyCandidate(i, kind)}
             />
           );
         })}
@@ -357,43 +429,50 @@ export function CloneReproduceStep({ job, onBack, onNext }: CloneReproduceStepPr
 function ReproducePageRow({
   page,
   index,
-  status,
   currentUrl,
+  cands,
+  regenStatus,
+  angleStatus,
   isRedesigned,
   isRegenerated,
+  isApplying,
   disabled,
   onRegenerate,
+  onApply,
 }: {
   page: CloneJob["pages"][number];
   index: number;
-  status: "idle" | "generating" | "done" | "error";
   currentUrl: string;
+  cands: PageCandidates;
+  regenStatus?: "generating" | "error";
+  angleStatus?: "generating" | "error";
   isRedesigned: boolean;
   isRegenerated: boolean;
+  isApplying: boolean;
   disabled: boolean;
-  onRegenerate: () => void;
+  onRegenerate: (kind: CandidateKind) => void;
+  onApply: (kind: CandidateKind | "redesign") => void;
 }) {
   const { anchorRef, open: previewOpen, position: previewPos, openPreview, closePreview } =
     usePreviewHover();
 
-  const resultLabel = isRegenerated
-    ? "Regenerated"
-    : isRedesigned
-      ? "Redesigned"
-      : status === "error"
-        ? "Error"
-        : "—";
+  const generating = regenStatus === "generating" || angleStatus === "generating";
+  const hasError = regenStatus === "error" || angleStatus === "error";
 
-  const badge =
-    status === "generating"
-      ? { text: "Generating…", className: "text-blue-600" }
-      : isRegenerated
-        ? { text: "Regenerated", className: "text-green-600" }
-        : isRedesigned
-          ? { text: "Redesigned", className: "text-amber-600" }
-          : status === "error"
-            ? { text: "Failed", className: "text-red-500" }
-            : { text: "Pending", className: "text-muted-foreground" };
+  const resultLabel = isRegenerated ? "Regenerated" : isRedesigned ? "Redesigned" : "—";
+
+  const badge = generating
+    ? { text: "Generating…", className: "text-blue-600" }
+    : isRegenerated
+      ? { text: "Regenerated", className: "text-green-600" }
+      : isRedesigned
+        ? { text: "Redesigned", className: "text-amber-600" }
+        : hasError
+          ? { text: "Failed", className: "text-red-500" }
+          : { text: "Pending", className: "text-muted-foreground" };
+
+  // A candidate slot is "active" when the current result points at it.
+  const isActive = (url?: string) => !!url && url === currentUrl;
 
   return (
     <div className="flex items-center gap-3 rounded-lg border p-3">
@@ -421,11 +500,7 @@ function ReproducePageRow({
               isRedesigned ? "border-amber-300" : isRegenerated ? "border-green-400" : ""
             }`}
           >
-            {status === "generating" ? (
-              <div className="flex h-full items-center justify-center">
-                <FontAwesomeIcon icon={faSpinner} spin className="h-3 w-3 text-muted-foreground" />
-              </div>
-            ) : currentUrl ? (
+            {currentUrl ? (
               <img src={resolveUrl(currentUrl)} alt="" className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full items-center justify-center text-[8px] text-muted-foreground">
@@ -447,6 +522,26 @@ function ReproducePageRow({
         </div>
       </div>
 
+      {/* Candidates: regen + new angle, each with a Use button */}
+      <div className="flex shrink-0 items-start gap-2">
+        <CandidateSlot
+          label="Regen"
+          url={cands.regen}
+          status={regenStatus}
+          active={isActive(cands.regen)}
+          applying={isApplying}
+          onUse={() => onApply("regen")}
+        />
+        <CandidateSlot
+          label={cands.angleView ? `Angle: ${cands.angleView}` : "Angle"}
+          url={cands.angle}
+          status={angleStatus}
+          active={isActive(cands.angle)}
+          applying={isApplying}
+          onUse={() => onApply("angle")}
+        />
+      </div>
+
       {previewOpen && previewPos && (
         <PagePreviewPopover
           title={`Page ${index + 1}`}
@@ -455,12 +550,7 @@ function ReproducePageRow({
           leftUrl={resolveUrl(page.imageUrl)}
           rightLabel="Current Result"
           rightSlot={
-            status === "generating" ? (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <FontAwesomeIcon icon={faSpinner} spin className="h-5 w-5" />
-                <span className="text-xs">Generating…</span>
-              </div>
-            ) : currentUrl ? (
+            currentUrl ? (
               <img
                 src={resolveUrl(currentUrl)}
                 alt={`Page ${index + 1} result`}
@@ -469,7 +559,7 @@ function ReproducePageRow({
                   (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
               />
-            ) : status === "error" ? (
+            ) : hasError ? (
               <span className="text-xs text-red-500">Failed — try again</span>
             ) : (
               <span className="text-xs text-muted-foreground">No result yet</span>
@@ -490,15 +580,91 @@ function ReproducePageRow({
         </p>
       </div>
 
-      {/* Regenerate button */}
-      {status !== "generating" && (
+      {/* Regenerate buttons */}
+      <div className="flex shrink-0 flex-col gap-1">
         <button
-          className="shrink-0 rounded p-1.5 hover:bg-muted disabled:opacity-40"
-          title="Regenerate with AI"
-          onClick={onRegenerate}
-          disabled={disabled}
+          className="rounded p-1.5 hover:bg-muted disabled:opacity-40"
+          title="Generate regen candidate"
+          onClick={() => onRegenerate("regen")}
+          disabled={disabled || regenStatus === "generating"}
         >
           <FontAwesomeIcon icon={faRotate} className="h-3.5 w-3.5" />
+        </button>
+        <button
+          className="rounded p-1.5 hover:bg-muted disabled:opacity-40"
+          title={`Generate new-angle candidate${page.rawData?.scene?.cameraView ? ` (now: ${page.rawData.scene.cameraView})` : ""}`}
+          onClick={() => onRegenerate("angle")}
+          disabled={disabled || angleStatus === "generating"}
+        >
+          <FontAwesomeIcon icon={faCameraRotate} className="h-3.5 w-3.5" />
+        </button>
+        {page.redesignedUrl && isRegenerated && (
+          <button
+            className="rounded p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-40"
+            title="Revert to redesigned result"
+            onClick={() => onApply("redesign")}
+            disabled={disabled || isApplying}
+          >
+            <FontAwesomeIcon icon={faRotateLeft} className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Candidate slot: mini thumbnail + Use button ---
+
+function CandidateSlot({
+  label,
+  url,
+  status,
+  active,
+  applying,
+  onUse,
+}: {
+  label: string;
+  url?: string;
+  status?: "generating" | "error";
+  active: boolean;
+  applying: boolean;
+  onUse: () => void;
+}) {
+  if (!url && !status) return null;
+
+  return (
+    <div className="w-14 text-center">
+      <div
+        className={`h-14 w-10 mx-auto overflow-hidden rounded border bg-muted ${
+          active ? "border-green-500 ring-1 ring-green-500" : ""
+        }`}
+      >
+        {status === "generating" ? (
+          <div className="flex h-full items-center justify-center">
+            <FontAwesomeIcon icon={faSpinner} spin className="h-3 w-3 text-muted-foreground" />
+          </div>
+        ) : status === "error" ? (
+          <div className="flex h-full items-center justify-center text-[8px] text-red-500">
+            Failed
+          </div>
+        ) : (
+          <img src={resolveUrl(url)} alt="" className="h-full w-full object-cover" />
+        )}
+      </div>
+      <p className="mt-0.5 truncate text-[8px] text-muted-foreground" title={label}>
+        {label}
+      </p>
+      {url && status !== "generating" && (
+        <button
+          className={`mt-0.5 w-full rounded border px-1 py-0.5 text-[9px] font-medium disabled:opacity-40 ${
+            active
+              ? "border-green-500 text-green-600"
+              : "border-input hover:bg-accent"
+          }`}
+          onClick={onUse}
+          disabled={applying || active}
+        >
+          {active ? "In use" : "Use"}
         </button>
       )}
     </div>

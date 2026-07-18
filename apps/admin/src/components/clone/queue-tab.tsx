@@ -16,11 +16,13 @@ interface JobRow {
   thumbnailUrl?: string | null;
   brand?: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 const STATUS_STYLE: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800 border-amber-200",
   queued: "bg-gray-100 text-gray-800 border-gray-200",
+  stashed: "bg-purple-100 text-purple-800 border-purple-200",
   running: "bg-blue-100 text-blue-800 border-blue-200 animate-pulse",
   reproduced: "bg-green-100 text-green-800 border-green-200",
   error: "bg-red-100 text-red-800 border-red-200",
@@ -36,7 +38,7 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-const FILTERS = ["all", "pending", "queued", "running", "reproduced", "error"] as const;
+const FILTERS = ["all", "pending", "queued", "stashed", "running", "reproduced", "error"] as const;
 type Filter = (typeof FILTERS)[number];
 
 type CloneListResponse = { data: JobRow[]; counts: Record<string, number> };
@@ -81,12 +83,21 @@ export function QueueTab({
     all: serverCounts.all ?? 0,
     pending: serverCounts.pending ?? 0,
     queued: serverCounts.queued ?? 0,
+    stashed: serverCounts.stashed ?? 0,
     running: serverCounts.running ?? 0,
     reproduced: serverCounts.reproduced ?? 0,
     error: serverCounts.error ?? 0,
   };
 
   const visible = rows;
+
+  // For terminal-status filters, show when the job finished/failed (updatedAt)
+  // instead of when it was created — matches the server-side sort key so the
+  // "latest failure" is both at the top and labeled with a meaningful time.
+  const timeColumnLabel =
+    filter === "reproduced" ? "Finished" : filter === "error" ? "Failed" : "Created";
+  const rowTimestamp = (r: JobRow): string =>
+    r.status === "reproduced" || r.status === "error" ? r.updatedAt : r.createdAt;
 
   return (
     <div className="space-y-4">
@@ -104,6 +115,15 @@ export function QueueTab({
             onClick={() => call("/api/clone/queue/resume", "Queue resumed")}
           >
             Resume queue
+          </Button>
+          <Button
+            variant="outline"
+            disabled={counts.queued === 0}
+            onClick={() =>
+              call("/api/clone/queue/stash-all", "All queued jobs stashed")
+            }
+          >
+            Stash all queued
           </Button>
         </div>
       </div>
@@ -138,7 +158,7 @@ export function QueueTab({
               <th className="text-left p-3">Status</th>
               <th className="text-left p-3">Step</th>
               <th className="text-left p-3">Retries</th>
-              <th className="text-left p-3">Created</th>
+              <th className="text-left p-3">{timeColumnLabel}</th>
               <th className="text-right p-3">Actions</th>
             </tr>
           </thead>
@@ -184,7 +204,7 @@ export function QueueTab({
                     {r.retryHistory?.length ?? 0}
                   </td>
                   <td className="p-3 text-muted-foreground whitespace-nowrap">
-                    {new Date(r.createdAt).toLocaleString()}
+                    {new Date(rowTimestamp(r)).toLocaleString()}
                   </td>
                   <td className="p-3 text-right whitespace-nowrap">
                     {r.status === "pending" && (
@@ -201,6 +221,40 @@ export function QueueTab({
                         onClick={() => call(`/api/clone/${r.id}/retry`, `Re-enqueued ${r.name}`)}
                       >
                         Retry
+                      </Button>
+                    )}
+                    {r.status === "queued" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => call(`/api/clone/${r.id}/stash`, `Stashed ${r.name}`)}
+                      >
+                        Stash
+                      </Button>
+                    )}
+                    {r.status === "stashed" && (
+                      <Button
+                        size="sm"
+                        onClick={() => call(`/api/clone/${r.id}/unstash`, `Re-enqueued ${r.name}`)}
+                      >
+                        Requeue
+                      </Button>
+                    )}
+                    {r.status === "reproduced" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Re-run "${r.name}" from scratch? This makes a fresh AI call (slow, costs money) and creates a NEW book — the old book is kept.`,
+                            )
+                          ) {
+                            void call(`/api/clone/${r.id}/rerun`, `Re-running ${r.name}`);
+                          }
+                        }}
+                      >
+                        Re-run
                       </Button>
                     )}
                   </td>

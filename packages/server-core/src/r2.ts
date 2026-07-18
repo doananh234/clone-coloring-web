@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export interface R2Config {
@@ -83,6 +83,36 @@ export async function uploadToR2(params: {
   // Store relative path only — CDN host is resolved at read time via resolveR2Url()
   const url = `/${key}`;
   return { key, url };
+}
+
+/**
+ * Server-side copy within the same bucket (no download/re-upload round
+ * trip). Used to move page images out of a temporary prefix (e.g.
+ * assets/clone-jobs/{jobId}/...) into a permanent one (assets/{bookId}/...)
+ * once a book is created — clone-job assets are purged over time and a
+ * published book must not keep depending on that storage location.
+ */
+export async function copyR2Object(params: {
+  client: S3Client;
+  config: R2Config;
+  sourceKey: string;
+  destKey: string;
+}): Promise<{ key: string; url: string }> {
+  const { client, config, sourceKey, destKey } = params;
+  const encodedSource = sourceKey
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  await client.send(
+    new CopyObjectCommand({
+      Bucket: config.bucket,
+      CopySource: `${config.bucket}/${encodedSource}`,
+      Key: destKey,
+    }),
+  );
+
+  return { key: destKey, url: `/${destKey}` };
 }
 
 /**

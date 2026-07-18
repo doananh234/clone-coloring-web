@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
+import { removeQueuedCloneJob } from "@vx/clone-core/queue-enqueue";
+import { cloneQueue } from "@/lib/queue/clone-queue";
 import { visionAnalyzeJSON } from "@vx/server-core/ai/llm-provider";
 import { CLONE_EXTRACTION_PROMPT, buildReproductionPrompt } from "@vx/server-core/ai/prompts";
 import { flushLangfuse } from "@vx/server-core/langfuse";
@@ -16,13 +18,36 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    // Allow retry from extracted, analyzed, analyzing (stale), or error states
-    const allowedStatuses = ["extracted", "analyzed", "analyzing", "error"];
+    // Allow retry from extracted, analyzed, analyzing (stale), error, parked
+    // (queued/stashed), or completed (reproduced) states. Re-analyzing a
+    // reproduced job drops its status back to analyzed/error — the user then
+    // continues the wizard (reproduce → create-book) manually.
+    const allowedStatuses = [
+      "extracted",
+      "analyzed",
+      "analyzing",
+      "error",
+      "queued",
+      "stashed",
+      "reproduced",
+    ];
     if (!allowedStatuses.includes(row.status)) {
       return NextResponse.json(
         { error: `Cannot analyze job in status: ${row.status}` },
         { status: 400 },
       );
+    }
+
+    // A queued/stashed job may still have a BullMQ record; pull it out so the
+    // worker can't pick the job up and reprocess it after this inline run.
+    if (row.status === "queued" || row.status === "stashed") {
+      const removal = await removeQueuedCloneJob(cloneQueue, jobId);
+      if (!removal.removed && removal.state !== "missing") {
+        return NextResponse.json(
+          { error: "Job is currently being processed by the worker — wait for it to finish" },
+          { status: 409 },
+        );
+      }
     }
 
     // Set job status to analyzing

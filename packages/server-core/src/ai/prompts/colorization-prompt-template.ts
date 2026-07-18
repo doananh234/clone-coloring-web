@@ -49,6 +49,40 @@ Requirements:
 The coloring must feel perfectly polished and professionally finished.
 
 ==================================================
+FULL-BLEED — EVERY PIXEL MUST BE ILLUSTRATION
+==================================================
+
+The output canvas must be 100% covered by the colored illustration. No
+white, blank, or uncolored pixel is allowed anywhere — most especially not
+near the edges where the input's border used to sit.
+
+If the input page has a printed border, decorative frame, thin rim, or
+white/colored margin around the illustration, do NOT simply erase it and
+leave the vacated area white. That produces a white halo/ring around the
+artwork and is WRONG.
+
+Instead, do BOTH of the following:
+  1. SCALE the illustration up (zoom in) so its own content — characters,
+     objects, and background — reaches every side of the canvas. The
+     illustration should bleed off the edges the way a printed full-bleed
+     book cover does.
+  2. EXTEND the illustration's own background color and texture outward
+     into any remaining space so nothing near the edge stays white. The
+     extended background must match the artwork's palette, lighting, and
+     style — a seamless continuation, not a solid flat fill.
+
+Never leave a white, cream, gray, or lightly-tinted strip, ring, or halo
+along any side. Check each of the four edges before finishing: if any
+edge shows a lighter band that doesn't belong to the illustration, redo
+by zooming/extending further.
+
+The output is ONE single view — not a collage, not a grid, not a diptych.
+
+The final image should look like a full-bleed book cover: the artwork
+touches every side of the canvas, with no printed frame, no page margin,
+and no colored strip along any side.
+
+==================================================
 TARGET STYLE & COLOR PALETTE
 ==================================================
 
@@ -114,6 +148,12 @@ Do NOT generate:
 - distorted anatomy
 - AI artifacts
 - muddy colors
+- decorative page border or printed frame
+- colored margin or rim along any side of the canvas
+- white halo / white ring / white strip where the input's border used to be
+- any uncolored, blank, cream, or lightly-tinted area near the canvas edge
+- illustration floating in the middle with empty space around it
+- collage / grid / multi-panel layout
 
 ==================================================
 FINAL OUTPUT REQUIREMENTS

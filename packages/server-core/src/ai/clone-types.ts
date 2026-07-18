@@ -51,6 +51,19 @@ export type CloneJobPage = {
   redesignedUrl?: string;
   /** Prompt used for redesign */
   redesignPrompt?: string;
+  /**
+   * Current APPLIED regeneration result (reproduce step) — what the book
+   * uses. Kept separate from redesignedUrl so regens always re-anchor on the
+   * original redesign instead of compounding on their own output. Carries a
+   * ?v= cache-buster.
+   */
+  reproducedUrl?: string;
+  /** Latest plain-regen candidate (generated but not applied). */
+  regenCandidateUrl?: string;
+  /** Latest new-angle candidate (generated but not applied). */
+  angleCandidateUrl?: string;
+  /** Camera view of the angle candidate — persisted to scene only on apply. */
+  angleCandidateView?: string;
   error?: string;
 };
 
@@ -90,6 +103,7 @@ export type CloneJob = {
     | "error"
     | "pending"
     | "queued"
+    | "stashed"
     | "running";
   sourceFileName: string;
   sourcePdfUrl: string;

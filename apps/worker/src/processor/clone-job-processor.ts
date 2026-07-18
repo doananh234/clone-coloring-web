@@ -28,6 +28,14 @@ void stepExtractEntities;
 void extractEntitiesDeps;
 
 export async function processCloneJob(jobId: string): Promise<void> {
+  // A job can be stashed between enqueue and pickup (stash removes the BullMQ
+  // record, but a race can leave one behind) — never run a stashed job.
+  const job = await db.cloneJob.findUnique({ where: { id: jobId } });
+  if (job?.status === "stashed") {
+    console.log(`[worker] skipping stashed clone job ${jobId}`);
+    return;
+  }
+
   const ctx = await JobContext.load(db, jobId);
   await db.cloneJob.update({
     where: { id: jobId },
@@ -38,7 +46,6 @@ export async function processCloneJob(jobId: string): Promise<void> {
   // Opt out only when explicitly requested:
   //   job.data.useMultiStep === true       → run legacy multi-step pipeline
   //   CLONE_USE_MULTI_STEP === "true"      → multi-step for all jobs (fallback switch)
-  const job = await db.cloneJob.findUnique({ where: { id: jobId } });
   const data = (job?.data as { useMultiStep?: boolean } | null | undefined) ?? {};
   const useMultiStep =
     typeof data.useMultiStep === "boolean"

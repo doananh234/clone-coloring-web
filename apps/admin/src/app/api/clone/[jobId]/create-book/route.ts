@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
+import { moveCloneJobImageToBook } from "@/lib/move-clone-page-to-book";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
@@ -34,34 +35,44 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const pages = (row.pages as CloneJobPage[]) || [];
+    const bookId = crypto.randomUUID();
 
-    // Build coloringPages — use redesigned URLs if available and requested
-    const coloringPages = pages
-      .filter((p) => p.imageUrl)
-      .map((p) => ({
-        id: crypto.randomUUID(),
-        url: (useRedesigned && p.redesignedUrl) ? p.redesignedUrl : p.imageUrl,
-        isPublic: false,
-        prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
-        // Store structured scene data so redesign knows characters/locations/mood
-        sceneData: p.rawData
-          ? {
-              scene: p.rawData.scene,
-              environment: p.rawData.environment,
-              characters: (p.rawData.characters || []).map((c) => ({
-                name: c.name,
-                type: c.type,
-                role: c.role,
-                characterPrompt: c.characterPrompt,
-              })),
-              locations: (p.rawData.locations || []).map((l) => ({
-                name: l.name,
-                description: l.description,
-                locationPrompt: l.locationPrompt,
-              })),
-            }
-          : undefined,
-      }));
+    // Build coloringPages — use redesigned URLs if available and requested.
+    // Images are moved out of assets/clone-jobs/{jobId}/... into
+    // assets/{bookId}/... here since clone-job assets are purged over time
+    // (see apps/worker/src/scripts/cleanup-failed.ts) — a published book
+    // must not keep depending on that temporary storage location.
+    const usablePages = pages.filter((p) => p.imageUrl);
+    const coloringPages = await Promise.all(
+      usablePages.map(async (p, i) => {
+        const sourceUrl = useRedesigned ? p.reproducedUrl || p.redesignedUrl || p.imageUrl : p.imageUrl;
+        const url = await moveCloneJobImageToBook({ sourceUrl, bookId, pageIndex: i });
+        return {
+          id: crypto.randomUUID(),
+          url,
+          isPublic: false,
+          prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
+          // Store structured scene data so redesign knows characters/locations/mood
+          sceneData: p.rawData
+            ? {
+                scene: p.rawData.scene,
+                environment: p.rawData.environment,
+                characters: (p.rawData.characters || []).map((c) => ({
+                  name: c.name,
+                  type: c.type,
+                  role: c.role,
+                  characterPrompt: c.characterPrompt,
+                })),
+                locations: (p.rawData.locations || []).map((l) => ({
+                  name: l.name,
+                  description: l.description,
+                  locationPrompt: l.locationPrompt,
+                })),
+              }
+            : undefined,
+        };
+      }),
+    );
 
     // Build a story outline summary from all pages
     const storyOutline = pages
@@ -80,6 +91,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const createdBook = await prisma.book.create({
       data: {
+        id: bookId,
         title: m.title || bd.title || row.name || "Untitled",
         subtitle: m.subtitle || bd.subtitle || "",
         description: m.description || bd.description || "",

@@ -8,7 +8,8 @@
     "./types": "./src/types.ts",
     "./retry": "./src/retry.ts",
     "./steps": "./src/steps/index.ts",
-    "./job-context": "./src/job-context.ts"
+    "./job-context": "./src/job-context.ts",
+    "./queue-enqueue": "./src/queue-enqueue.ts"
   },
   "scripts": {
     "test": "vitest run",

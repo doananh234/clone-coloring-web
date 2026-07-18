@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@vx/db";
 import { STEP_ORDER, type CloneStep, type RetryRecord } from "./types";
+import { StepFailedError } from "./retry";
 
 // Fields stored inside the CloneJob.data Json column.
 interface CloneJobDataExtras {
@@ -91,6 +92,11 @@ export class JobContext {
 
   async markFailed(err: unknown): Promise<void> {
     const prev = await this.readData();
+    // Prefer the step carried by StepFailedError — currentStep tracks the
+    // LAST COMPLETED step, so using it here mislabels the failure as the step
+    // that came just before (e.g. "create-book" instead of "generate-cover").
+    const failedStep =
+      err instanceof StepFailedError ? err.step : (this.currentStep ?? null);
     await this.db.cloneJob.updateMany({
       where: { id: this.jobId },
       data: {
@@ -98,7 +104,7 @@ export class JobContext {
         error: err instanceof Error ? err.message : String(err),
         data: {
           ...prev,
-          failedStep: this.currentStep ?? null,
+          failedStep,
           finishedAt: new Date().toISOString(),
         } as never,
       },

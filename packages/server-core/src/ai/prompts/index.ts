@@ -35,4 +35,9 @@ export { buildCharacterExtractionPrompt } from "./character-extraction-prompt";
 
 export { buildLocationExtractionPrompt } from "./location-extraction-prompt";
 
-export { buildRedesignPrompt } from "./redesign-prompts";
+export {
+  buildRedesignPrompt,
+  pickDifferentCameraView,
+  CAMERA_VIEWS,
+  type CameraView,
+} from "./redesign-prompts";
