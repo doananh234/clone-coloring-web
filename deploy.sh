@@ -68,8 +68,11 @@ rsync -az --delete \
     ./ ${SERVER}:${REMOTE_DIR}/
 
 # 2. Build images.
-echo "[2/5] Building images..."
-ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && docker compose ${COMPOSE_FILES} build --parallel"
+#    Serial build (NOT --parallel): the host is a 7.8GB box, and building the
+#    admin + worker Next.js images simultaneously OOM-hangs it. One at a time
+#    (plus the swapfile) keeps peak memory safe.
+echo "[2/5] Building images (serial)..."
+ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && docker compose ${COMPOSE_FILES} build"
 
 # 3. Bring up Postgres + apply Prisma schema before starting app containers.
 #    `db push` (no migration files) matches the local dev flow.
