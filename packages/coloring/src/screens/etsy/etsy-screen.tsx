@@ -72,7 +72,7 @@ export function EtsyScreen() {
               </thead>
               <tbody>
                 {rows.map((b: BookRow) => {
-                  const cover = resolveImg(b.squareThumbnailUrl || b.thumbnailUrl || b.coverUrl);
+                  const cover = resolveImg(b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl);
                   const price = b.etsyListing?.priceSuggestionUsd;
                   return (
                     <tr key={b.id} className="mo-row" style={{ cursor: "pointer" }} onClick={() => router.push(`${B}/books/${b.id}`)}>

@@ -17,7 +17,8 @@ import { resolveImg } from "../../data/img";
 import type { BookRow } from "../../data/types";
 
 function BookCard({ book, onOpen }: { book: BookRow; onOpen: () => void }) {
-  const cover = resolveImg(book.squareThumbnailUrl || book.thumbnailUrl || book.coverUrl);
+  // Show the actual cover (branded, with title) — fall back to the clean thumbnail.
+  const cover = resolveImg(book.coverUrl || book.squareThumbnailUrl || book.thumbnailUrl);
   const pages = book.specifications?.pages;
   const meta = [book.category, pages ? `${pages} trang` : null, book.price].filter(Boolean).join(" · ");
   return (

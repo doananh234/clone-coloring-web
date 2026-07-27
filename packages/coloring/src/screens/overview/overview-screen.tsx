@@ -174,7 +174,7 @@ export function OverviewScreen() {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
             {books.slice(0, 5).map((b) => {
-              const cover = resolveImg(b.squareThumbnailUrl || b.thumbnailUrl || b.coverUrl);
+              const cover = resolveImg(b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl);
               return (
                 <div key={b.id} style={{ cursor: "pointer" }} onClick={go(`${B}/books/${b.id}`)}>
                   <div className="mo-bookthumb" style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: "var(--neutral-100)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
