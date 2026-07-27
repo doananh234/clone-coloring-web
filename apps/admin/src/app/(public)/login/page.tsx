@@ -25,6 +25,7 @@ export default function LoginPage() {
       // Store the Firebase ID token so API routes can verify it
       setAuthToken({ accessToken: idToken, refreshToken: "" });
 
+      // New Motio admin is the main surface at root now (old dashboard → /backup).
       router.push("/");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign-in failed";

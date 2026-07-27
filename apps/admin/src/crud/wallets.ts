@@ -18,7 +18,7 @@ export const walletFields: FieldConfig[] = [
 
 export const walletCrud = createCrudPages<WalletEntity>({
   entityName: "wallets",
-  basePath: "/wallets",
+  basePath: "/backup/wallets",
   apiUrl: "/api/wallets",
   fields: walletFields,
   namespace: "wallets",

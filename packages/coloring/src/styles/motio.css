@@ -1,0 +1,162 @@
+/*
+ * Motio design-system tokens — SCOPED to `.motio-theme`.
+ * Nothing here touches :root, so the existing shadcn app theme is untouched.
+ * Ported from _ds/motio-design-system/tokens/* (colors, typography, spacing, effects, fonts).
+ */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap");
+@import "./components.css";
+
+.motio-theme {
+  /* base — carbon (brand dark, warmed toward the cream/amber theme) */
+  --carbon-950: #1a1712;
+  --carbon-900: #221d17;
+  --carbon-800: #2b251d;
+  --carbon-700: #39322a;
+  --carbon-600: #4a4238;
+  /* neutrals — warm cream tint */
+  --neutral-0: #fdfaf3;
+  --neutral-50: #f5f0e6;
+  --neutral-100: #efe8d9;
+  --neutral-200: #e8e0cf;
+  --neutral-300: #d8cdb7;
+  --neutral-400: #b0a48d;
+  --neutral-500: #8a8070;
+  --neutral-600: #6a5f4d;
+  /* volt slot — repurposed as refined amber accent */
+  --volt-200: #f6e8c8;
+  --volt-300: #eed8a0;
+  --volt-400: #dcac52;
+  --volt-500: #c9852a;
+  --volt-600: #a86e1f;
+  --volt-700: #835316;
+  /* semantic status */
+  --success: #2fa36b;
+  --success-bg: #e3f4eb;
+  --warning: #dd9a2b;
+  --warning-bg: #fbf1dc;
+  --danger: #dd5245;
+  --danger-bg: #fbe7e5;
+  --info: #4e8ff2;
+  --info-bg: #e7f0fd;
+  /* semantic aliases (shadcn-style) */
+  --background: var(--neutral-50);
+  --foreground: var(--carbon-950);
+  --card: var(--neutral-0);
+  --card-foreground: var(--carbon-950);
+  --primary: var(--volt-500);
+  --primary-foreground: var(--carbon-950);
+  --secondary: var(--carbon-950);
+  --secondary-foreground: var(--neutral-0);
+  --muted: var(--neutral-100);
+  --muted-foreground: var(--neutral-500);
+  --accent: var(--volt-500);
+  --accent-foreground: var(--carbon-950);
+  --border: var(--neutral-200);
+  --input: var(--neutral-300);
+  --ring: var(--volt-600);
+  --sidebar: var(--carbon-950);
+  --sidebar-foreground: #c9c2b3;
+  --sidebar-active: var(--volt-500);
+
+  /* typography */
+  --font-display: "Space Grotesk", sans-serif;
+  --font-sans: "Geist", sans-serif;
+  --font-mono: "Geist Mono", monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+  --text-4xl: 48px;
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.55;
+  --tracking-display: -0.02em;
+  --tracking-caps: 0.08em;
+
+  /* spacing + radius */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 999px;
+  --radius: var(--radius-md);
+  --gap-controls: 8px;
+  --gap-card: 16px;
+  --gap-section: 32px;
+
+  /* effects */
+  --shadow-sm: 0 1px 2px rgba(11, 13, 12, 0.06);
+  --shadow-md: 0 2px 8px rgba(11, 13, 12, 0.07), 0 1px 2px rgba(11, 13, 12, 0.05);
+  --shadow-lg: 0 12px 32px rgba(11, 13, 12, 0.12), 0 2px 8px rgba(11, 13, 12, 0.06);
+  --shadow-glow: 0 0 0 3px rgba(201, 133, 42, 0.32);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-med: 220ms;
+
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+.motio-theme.dark {
+  --background: #15120f;
+  --foreground: var(--neutral-50);
+  --card: var(--carbon-900);
+  --card-foreground: var(--neutral-50);
+  --secondary: var(--neutral-50);
+  --secondary-foreground: var(--carbon-950);
+  --muted: var(--carbon-800);
+  --muted-foreground: var(--neutral-400);
+  --border: var(--carbon-800);
+  --input: var(--carbon-600);
+  --success-bg: rgba(47, 163, 107, 0.16);
+  --warning-bg: rgba(221, 154, 43, 0.16);
+  --danger-bg: rgba(221, 82, 69, 0.16);
+  --info-bg: rgba(78, 143, 242, 0.16);
+}
+
+/* scoped base styles */
+.motio-theme *,
+.motio-theme *::before,
+.motio-theme *::after {
+  box-sizing: border-box;
+}
+.motio-theme h1,
+.motio-theme h2,
+.motio-theme h3 {
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-display);
+  line-height: var(--leading-tight);
+  font-weight: 600;
+  margin: 0;
+}
+.motio-theme a {
+  color: var(--foreground);
+  text-decoration: none;
+}
+.motio-theme a:hover {
+  color: var(--volt-600);
+}
+.motio-theme ::selection {
+  background: var(--volt-200);
+}
+.motio-theme .mono {
+  font-family: var(--font-mono);
+}

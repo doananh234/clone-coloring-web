@@ -1,0 +1,374 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { Icon } from "../../lib/icon";
+import { Button } from "../../components/ui/button";
+import { Card } from "../../components/ui/card";
+import { Badge } from "../../components/ui/badge";
+import { Progress } from "../../components/ui/progress";
+import { Tabs } from "../../components/ui/tabs";
+import { PreviewModal, type PreviewModalProps } from "../../components/ui/preview-modal";
+import { ImageComparison } from "../../components/ui/image-comparison";
+import { LoadingRows, EmptyState, ErrorState } from "../../components/ui/states";
+import { COLORING_BASE as B } from "../../components/shell/nav-config";
+import { useBook } from "../../data/use-book";
+import { getBookPatch } from "../../data/local-books";
+import { useGeneratePdf, useGenerateSubtitle } from "../../data/use-book-actions";
+import { useBookAi } from "../../data/use-more-actions";
+import { PageActionsRow } from "./page-actions-row";
+import { resolveImg } from "../../data/img";
+import { COLORING_WRITE_ENABLED } from "../../data/config";
+import { parsePageScene, hasSceneDetail, type ParsedScene } from "../../data/page-scene";
+import type { BookDetail, BookColoringPage } from "../../data/types";
+
+const mono = { fontFamily: "var(--font-mono)" as const };
+const cap = { fontSize: 11, fontWeight: 600 as const, color: "var(--muted-foreground)", textTransform: "uppercase" as const, letterSpacing: "var(--tracking-caps)" };
+
+function Stat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <div style={cap}>{label}</div>
+      <div style={{ ...mono, fontWeight: 700, fontSize: 22, marginTop: 4, color: "var(--neutral-400)" }}>{value}</div>
+    </div>
+  );
+}
+
+function AttrRow({ label, children, last }: { label: string; children: ReactNode; last?: boolean }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", borderBottom: last ? undefined : "1px solid var(--border)", fontSize: 13.5 }}>
+      <span style={{ color: "var(--muted-foreground)" }}>{label}</span>
+      <span style={{ textAlign: "right", minWidth: 0 }}>{children}</span>
+    </div>
+  );
+}
+
+function Thumb({ src, caption, badge, onClick }: { src?: string; caption: string; badge?: string; onClick?: () => void }) {
+  return (
+    <div style={{ cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
+      <div className="mo-bookthumb" style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: "var(--neutral-100)", border: "1px solid var(--border)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt={caption} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <Icon name="image" size={20} />
+        )}
+        {badge && <span style={{ position: "absolute", left: 6, top: 6, background: "var(--volt-500)", color: "var(--carbon-950)", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 99 }}>{badge}</span>}
+      </div>
+      <div style={{ fontSize: 12, marginTop: 6, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{caption}</div>
+    </div>
+  );
+}
+
+const CAP = { fontSize: 11, textTransform: "uppercase" as const, letterSpacing: ".04em", color: "var(--muted-foreground)", marginBottom: 4 };
+
+/** Rich per-page analyze block: scene, characters + prompts, locations + prompts, prompt. */
+function AnalyzePanel({ scene }: { scene: ParsedScene }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {scene.sceneDesc && (
+        <div><div style={CAP}>Cảnh</div><div style={{ fontSize: 13, lineHeight: 1.5 }}>{scene.sceneDesc}</div></div>
+      )}
+      {scene.characters.length > 0 && (
+        <div>
+          <div style={CAP}>Nhân vật · {scene.characters.length}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {scene.characters.map((c, i) => (
+              <div key={i} style={{ borderLeft: "2px solid var(--volt-500)", paddingLeft: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{c.name}{c.role ? <span style={{ fontWeight: 400, color: "var(--muted-foreground)" }}> · {c.role}</span> : null}</div>
+                {c.prompt && <div style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, lineHeight: 1.5, color: "var(--muted-foreground)", marginTop: 2 }}>{c.prompt}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {scene.locations.length > 0 && (
+        <div>
+          <div style={CAP}>Bối cảnh · {scene.locations.length}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {scene.locations.map((l, i) => (
+              <div key={i} style={{ borderLeft: "2px solid var(--border)", paddingLeft: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{l.name}</div>
+                {(l.prompt || l.description) && <div style={{ fontFamily: l.prompt ? "var(--font-mono)" : undefined, fontSize: 11.5, lineHeight: 1.5, color: "var(--muted-foreground)", marginTop: 2 }}>{l.prompt || l.description}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {scene.reproductionPrompt && (
+        <div><div style={CAP}>Reproduction prompt</div><div style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, lineHeight: 1.5 }}>{scene.reproductionPrompt}</div></div>
+      )}
+    </div>
+  );
+}
+
+function PageThumb({ page, index, onClick }: { page: BookColoringPage; index: number; onClick?: () => void }) {
+  const src = resolveImg(page.coloredUrl || page.url);
+  return (
+    <div onClick={onClick} className="mo-bookthumb" style={{ cursor: onClick ? "pointer" : "default", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: "var(--neutral-100)", border: "1px solid var(--border)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={`Trang ${index + 1}`} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        <Icon name="image" size={18} />
+      )}
+      <span style={{ position: "absolute", left: 6, bottom: 4, ...mono, fontSize: 10, color: "#fff", background: "rgba(11,13,12,.6)", padding: "0 4px", borderRadius: 4 }}>{String(index + 1).padStart(2, "0")}</span>
+      {page.coloredUrl && <span style={{ position: "absolute", right: 5, top: 5, background: "var(--volt-500)", color: "var(--carbon-950)", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 99 }}>MÀU</span>}
+    </div>
+  );
+}
+
+export function BookDetailScreen({ bookId }: { bookId: string }) {
+  const router = useRouter();
+  const { book, isLoading, isError } = useBook(bookId);
+  const genPdf = useGeneratePdf(bookId);
+  const genSubtitle = useGenerateSubtitle(bookId);
+  const bookAi = useBookAi(bookId);
+  const [tab, setTab] = useState<"info" | "pages">("info");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
+  const [preview, setPreview] = useState<Omit<PreviewModalProps, "open" | "onClose"> | null>(null);
+  const [previewPage, setPreviewPage] = useState<BookColoringPage | null>(null);
+  const [previewIdx, setPreviewIdx] = useState<number | null>(null);
+  const closePreview = () => { setPreview(null); setPreviewPage(null); setPreviewIdx(null); };
+
+  const makePdf = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const url = await genPdf();
+      // Open the freshly generated PDF straight away (also stays available via "Tải PDF").
+      const href = resolveImg(url);
+      if (href) window.open(href, "_blank", "noopener");
+      setMsg({ ok: "Đã tạo PDF" });
+    }
+    catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); }
+    finally { setBusy(false); }
+  };
+
+  if (isLoading) return <Card><LoadingRows rows={6} /></Card>;
+  if (isError || !book) {
+    return (
+      <Card>
+        <ErrorState sub={`Không tải được sách ${bookId}.`} />
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <Button variant="outline" size="sm" onClick={() => router.push(`${B}/books`)}>Về thư viện</Button>
+        </div>
+      </Card>
+    );
+  }
+
+  const b: BookDetail = book;
+  const cover = resolveImg(b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl);
+  const pages = b.coloringPages ?? [];
+  const colored = pages.filter((p) => p.coloredUrl).length;
+  const samples = (b.summaryPages ?? []).slice(0, 3);
+  const specs = b.specifications;
+  const edited = Boolean(getBookPatch(bookId));
+
+  const nav = (path: string) => () => router.push(path);
+
+  const openPageAt = (i: number) => {
+    if (i < 0 || i >= pages.length) return;
+    const p = pages[i];
+    const bw = resolveImg(p.url);
+    const colored = resolveImg(p.coloredUrl);
+    // Analyze data copied from the source clone job (scene/characters/locations/prompt).
+    const scene = parsePageScene(p);
+    const env = scene.environment;
+    const envLine = env ? [env.mood, env.season, env.weather, env.timeOfDay].filter(Boolean).join(" · ") : "";
+    const info: { label: string; value: ReactNode }[] = [
+      { label: "Bản", value: p.coloredUrl ? "B&W + Màu (kéo để so sánh)" : "Line-art" },
+      { label: "Công khai", value: p.isPublic ? "Có" : "Không" },
+    ];
+    if (scene.cameraView) info.push({ label: "Camera", value: scene.cameraView });
+    if (envLine) info.push({ label: "Môi trường", value: envLine });
+    setPreviewPage(p);
+    setPreviewIdx(i);
+    setPreview({
+      title: `Trang ${String(i + 1).padStart(2, "0")}`,
+      imageSrc: colored || bw,
+      imageNode: colored && bw ? <ImageComparison beforeSrc={bw} afterSrc={colored} /> : undefined,
+      badges: (
+        <>
+          <Badge tone={p.coloredUrl ? "success" : "neutral"}>{p.coloredUrl ? "Đã tô màu" : "B&W"}</Badge>
+          {p.isPublic && <Badge tone="carbon">Công khai</Badge>}
+          {hasSceneDetail(scene) && <Badge tone="neutral">Có analyze</Badge>}
+        </>
+      ),
+      desc: hasSceneDetail(scene) ? <AnalyzePanel scene={scene} /> : undefined,
+      info,
+    });
+  };
+
+  const openCoverPreview = () => {
+    setPreviewPage(null);
+    setPreview({
+      title: "Bìa trước",
+      imageSrc: cover,
+      badges: <><Badge tone="carbon">MÀU</Badge><Badge tone="carbon">THUMBNAIL</Badge></>,
+      info: [
+        { label: "Giá bán", value: b.price ? <span style={mono}>{b.price}</span> : "—" },
+        { label: "Etsy", value: <span style={{ fontSize: 12.5 }}>{b.etsyListing?.etsyTitle || "—"}</span> },
+      ],
+      actions: (
+        <>
+          <Button variant="outline" size="sm" onClick={() => router.push(`${B}/books/${bookId}/cover`)}><Icon name="image" size={15} /> Cover editor</Button>
+          {cover && (
+            <a href={cover} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+              <Button variant="outline" size="sm"><Icon name="download" size={15} /> Tải ảnh</Button>
+            </a>
+          )}
+        </>
+      ),
+    });
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div>
+        <Button variant="ghost" size="sm" onClick={nav(`${B}/books`)}><Icon name="arrow-left" size={16} /> Sách</Button>
+      </div>
+
+      {/* header row */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 24, letterSpacing: "-0.02em" }}>{b.title}</h1>
+          {b.isPublic ? <Badge tone="success" dot>Đang bán</Badge> : <Badge tone="neutral">Nháp</Badge>}
+          {b.isPremium && <Badge tone="carbon">Premium</Badge>}
+          {edited && <Badge tone="warning">Đã sửa · local</Badge>}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/edit`)}><Icon name="pen-line" size={16} /> Sửa thông tin</Button>
+          <Button variant="outline" size="sm" onClick={nav(`${B}/story`)}><Icon name="layout-grid" size={16} /> Storyboard</Button>
+          <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/cover`)}><Icon name="image" size={16} /> Cover editor</Button>
+          <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/colorize`)}><Icon name="palette" size={16} /> Tô màu AI</Button>
+          <Button variant="outline" size="sm" onClick={makePdf} disabled={busy}><Icon name="file-text" size={16} /> {busy ? "Đang tạo…" : b.pdfUrl ? "Tạo lại PDF" : "Tạo PDF"}</Button>
+          {resolveImg(b.pdfUrl) && (
+            <Button variant="outline" size="sm" onClick={() => window.open(resolveImg(b.pdfUrl)!, "_blank", "noopener")}><Icon name="download" size={16} /> Tải PDF</Button>
+          )}
+          <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED || busy} title={COLORING_WRITE_ENABLED ? undefined : "Cần bật ghi thật (staging)"}
+            onClick={async () => { setBusy(true); setMsg(null); try { await genSubtitle(); setMsg({ ok: "Đã sinh phụ đề" }); } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); } finally { setBusy(false); } }}>
+            <Icon name="sparkles" size={16} /> Sinh phụ đề AI
+          </Button>
+          <Button variant="outline" size="sm" disabled={!bookAi.enabled || busy} title={bookAi.enabled ? undefined : "Cần bật ghi thật (staging)"}
+            onClick={async () => { setBusy(true); setMsg(null); try { await bookAi.syncCategories(); setMsg({ ok: "Đã sync danh mục" }); } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); } finally { setBusy(false); } }}>
+            <Icon name="folder" size={16} /> Sync danh mục
+          </Button>
+          <Button variant="outline" size="sm" disabled title="Chưa có endpoint Etsy"><Icon name="store" size={16} /> Sync Etsy</Button>
+        </div>
+      </div>
+
+      {/* meta line */}
+      <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--muted-foreground)" }}>
+        {b.category || "Chưa phân loại"}
+        {specs?.pages ? ` · ${specs.pages} trang` : ""}
+        {b.price ? <> · <span style={mono}>{b.price}</span></> : ""}
+      </p>
+
+      {msg && (
+        <div style={{ fontSize: 12.5, padding: "8px 12px", borderRadius: "var(--radius-sm)", background: msg.err ? "var(--danger-bg)" : "var(--success-bg)", color: msg.err ? "var(--danger)" : "var(--success)" }}>{msg.err || msg.ok}</div>
+      )}
+
+      {/* stats card — Etsy/sales data has no endpoint yet */}
+      <Card>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 16 }}>
+          <Stat label="Đã bán" value="—" />
+          <Stat label="Doanh thu" value="—" />
+          <Stat label="Views 30 ngày" value="—" />
+          <Stat label="Favorites" value="—" />
+          <Stat label="Chi phí AI" value="—" />
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--muted-foreground)", marginTop: 10 }}>Số liệu Etsy/chi phí chưa có endpoint — sẽ hiện khi backend cung cấp.</div>
+      </Card>
+
+      {/* two columns */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+        {/* left */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: "1 1 260px", minWidth: 240, maxWidth: 340 }}>
+          <Card>
+            <div style={{ aspectRatio: "4 / 5", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+              {cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={cover} alt={b.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <Icon name="image" size={26} />
+              )}
+            </div>
+            <AttrRow label="Giá bán"><span style={{ ...mono, fontWeight: 600, fontSize: 16 }}>{b.price || "—"}</span></AttrRow>
+            <AttrRow label="Etsy listing" last>
+              <span style={{ fontSize: 12.5, color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", display: "inline-block", maxWidth: 180, whiteSpace: "nowrap", verticalAlign: "bottom" }}>{b.etsyListing?.etsyTitle || "—"}</span>
+            </AttrRow>
+          </Card>
+
+          <Card title="Thuộc tính">
+            <AttrRow label="Danh mục">{b.category || "—"}</AttrRow>
+            <AttrRow label="Số trang"><span style={mono}>{specs?.pages ?? pages.length}</span></AttrRow>
+            <AttrRow label="Kích thước">{specs?.dimensions || "—"}</AttrRow>
+            <AttrRow label="Độ tuổi" last={!b.tags?.length}>{specs?.ageRange || "—"}</AttrRow>
+            {b.tags && b.tags.length > 0 && (
+              <div style={{ padding: "8px 0 0" }}>
+                <div style={{ color: "var(--muted-foreground)", marginBottom: 8, fontSize: 13.5 }}>Keywords</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{b.tags.map((t, i) => <Badge tone="neutral" key={i}>{t}</Badge>)}</div>
+              </div>
+            )}
+          </Card>
+
+          <Card title="Tô màu AI">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13.5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: "var(--muted-foreground)" }}>Trang đã tô</span>
+                <span style={{ ...mono, fontWeight: 600 }}>{colored}/{pages.length}</span>
+              </div>
+              <Progress value={pages.length ? Math.round((colored / pages.length) * 100) : 0} />
+              <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/colorize`)} style={{ width: "100%" }}>Tô lại với style khác</Button>
+            </div>
+          </Card>
+        </div>
+
+        {/* right */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: "3 1 420px", minWidth: 0 }}>
+          <Tabs<"info" | "pages"> items={[{ key: "info", label: "Tổng quan" }, { key: "pages", label: `Trang sách · ${pages.length}` }]} value={tab} onChange={setTab} />
+          {tab === "info" ? (
+            <>
+              <Card title="Cover & hình màu">
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
+                  <Thumb src={cover} caption="Bìa trước" badge="MÀU" onClick={openCoverPreview} />
+                  {samples.map((s, i) => {
+                    const src = resolveImg(s.url);
+                    return <Thumb key={s.id || i} src={src} caption={`Trang mẫu ${String(i + 1).padStart(2, "0")}`} badge="MÀU" onClick={() => { setPreviewPage(null); setPreview({ title: `Trang mẫu ${String(i + 1).padStart(2, "0")}`, imageSrc: src }); }} />;
+                  })}
+                  {samples.length === 0 && !cover && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Chưa có ảnh màu.</div>}
+                </div>
+              </Card>
+              {b.description && (
+                <Card title="Mô tả"><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{b.description}</div></Card>
+              )}
+            </>
+          ) : (
+            <Card title={`Trang sách · ${pages.length}`}>
+              {pages.length === 0 ? (
+                <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
+                  {pages.map((p, i) => (
+                    <PageThumb key={p.id || i} page={p} index={i} onClick={() => openPageAt(i)} />
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+        </div>
+      </div>
+
+      <PreviewModal
+        open={!!preview}
+        onClose={closePreview}
+        {...(preview ?? {})}
+        counter={previewIdx != null ? `${previewIdx + 1} / ${pages.length}` : undefined}
+        onPrev={previewIdx != null && previewIdx > 0 ? () => openPageAt(previewIdx - 1) : undefined}
+        onNext={previewIdx != null && previewIdx < pages.length - 1 ? () => openPageAt(previewIdx + 1) : undefined}
+        actions={previewPage ? <PageActionsRow bookId={bookId} pages={pages} page={previewPage} onRemoved={closePreview} /> : preview?.actions}
+      />
+    </div>
+  );
+}

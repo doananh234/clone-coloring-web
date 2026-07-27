@@ -82,7 +82,7 @@ export const categoryFields: FieldConfig[] = [
 
 export const categoryCrud = createCrudPages<CategoryEntity>({
   entityName: "categories",
-  basePath: "/categories",
+  basePath: "/backup/categories",
   apiUrl: "/api/categories",
   fields: categoryFields,
   namespace: "categories",

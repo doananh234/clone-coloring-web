@@ -172,7 +172,7 @@ export function CloneConfirmStep({ job, onBack }: CloneConfirmStepProps) {
           </button>
           {savedCounts.characters > 0 && (
             <a
-              href="/characters"
+              href="/backup/characters"
               className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-accent"
             >
               View Characters
@@ -180,14 +180,14 @@ export function CloneConfirmStep({ job, onBack }: CloneConfirmStepProps) {
           )}
           {savedCounts.locations > 0 && (
             <a
-              href="/locations"
+              href="/backup/locations"
               className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-accent"
             >
               View Locations
             </a>
           )}
           <a
-            href="/clone"
+            href="/backup/clone"
             className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-accent"
           >
             Clone Another

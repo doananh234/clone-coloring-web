@@ -52,7 +52,7 @@ export const userFields: FieldConfig[] = [
 
 export const userCrud = createCrudPages<UserEntity>({
   entityName: "users",
-  basePath: "/users",
+  basePath: "/backup/users",
   apiUrl: "/api/users",
   fields: userFields,
   namespace: "users",

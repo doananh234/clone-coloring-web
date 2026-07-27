@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
+import { normalizeRawData } from "./book-page-meta";
 
 /**
  * stepCreateBook — writes the final Book row from a finished CloneJob.
@@ -102,7 +103,10 @@ export async function stepCreateBook(
         isPublic: false,
         prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
         // Persist full per-page LLM output — enables future indexing/search.
-        sceneData: p.rawData ? { ...p.rawData } : undefined,
+        // normalizeRawData keeps every field but guards non-object rawData: the
+        // old `{ ...p.rawData }` spread a JSON string into numeric keys ("0".."N"),
+        // which is the malformed sceneData seen on existing books.
+        sceneData: normalizeRawData(p.rawData),
       };
     }),
   );

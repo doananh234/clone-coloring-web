@@ -7517,6 +7517,7 @@ __metadata:
     "@types/react-dom": "npm:^19.0.0"
     "@vx/auth-module": "workspace:*"
     "@vx/clone-core": "workspace:*"
+    "@vx/coloring": "workspace:*"
     "@vx/core-uikit": "workspace:*"
     "@vx/db": "workspace:*"
     "@vx/eslint-config": "workspace:*"
@@ -7585,6 +7586,23 @@ __metadata:
     "@vx/db": "workspace:*"
     typescript: "npm:*"
     vitest: "npm:*"
+  languageName: unknown
+  linkType: soft
+
+"@vx/coloring@workspace:*, @vx/coloring@workspace:packages/coloring":
+  version: 0.0.0-use.local
+  resolution: "@vx/coloring@workspace:packages/coloring"
+  dependencies:
+    "@tabler/icons-react": "npm:^3.44.0"
+    "@types/react": "npm:^19.0.0"
+    "@types/react-dom": "npm:^19.0.0"
+    "@vx/core-uikit": "workspace:*"
+    typescript: "npm:^5.8.0"
+  peerDependencies:
+    "@tanstack/react-query": ^5.0.0
+    next: ^16.0.0
+    react: ^19.0.0
+    react-dom: ^19.0.0
   languageName: unknown
   linkType: soft
 

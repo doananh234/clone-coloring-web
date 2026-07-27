@@ -68,7 +68,7 @@ export function BrandSwitcher(_props: BrandSwitcherProps = {}) {
     [activeBrandId, setActiveBrand],
   );
 
-  const manageHref = "/brands";
+  const manageHref = "/backup/brands";
 
   return (
     <SidebarMenu>

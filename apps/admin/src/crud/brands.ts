@@ -59,7 +59,7 @@ export const brandFields: FieldConfig[] = [
 
 export const brandCrud = createCrudPages<BrandEntity>({
   entityName: "brands",
-  basePath: "/brands",
+  basePath: "/backup/brands",
   apiUrl: "/api/brands",
   fields: brandFields,
   namespace: "brands",

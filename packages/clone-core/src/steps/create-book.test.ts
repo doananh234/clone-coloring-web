@@ -81,6 +81,35 @@ describe("stepCreateBook — writes full rawData into sceneData", () => {
     expect(scene.locations).toEqual(RAW_DATA_WITH_EXTRA_FIELDS.locations);
   });
 
+  it("recovers rawData stored as a JSON string without producing numeric keys", async () => {
+    const { db, created } = fakeDb();
+    (db as { cloneJob: { findUnique: ReturnType<typeof vi.fn> } }).cloneJob.findUnique.mockResolvedValueOnce({
+      id: "j1",
+      name: "MyBook",
+      bookData: {},
+      // rawData persisted as a JSON string — the old `{ ...p.rawData }` spread
+      // this into { "0": "{", "1": "\"", … } (the malformed sceneData bug).
+      pages: [
+        {
+          pageNumber: 1,
+          imageUrl: "https://r2/x.png",
+          redesignedUrl: "https://r2/y.png",
+          rawData: JSON.stringify(RAW_DATA_WITH_EXTRA_FIELDS),
+        },
+      ],
+    });
+    const ctx = fakeCtx("j1");
+    await stepCreateBook(ctx, db, {
+      randomUUID: () => "uuid-1",
+      copyImage: async ({ destKey }) => `/${destKey}`,
+    });
+    const book = created[0].data as { coloringPages: Array<{ sceneData: Record<string, unknown> }> };
+    const scene = book.coloringPages[0].sceneData;
+    expect(scene["0"]).toBeUndefined(); // no numeric-key corruption
+    expect(scene.subtitle).toBe("Relaxing illustrations");
+    expect(scene.scene).toEqual({ description: "cozy corner", cameraView: "wide", composition: "" });
+  });
+
   it("still writes undefined sceneData when a page has no rawData", async () => {
     const { db, created } = fakeDb();
     (db as { cloneJob: { findUnique: ReturnType<typeof vi.fn> } }).cloneJob.findUnique.mockResolvedValueOnce({

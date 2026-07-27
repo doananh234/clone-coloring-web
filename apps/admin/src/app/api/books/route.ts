@@ -8,6 +8,10 @@ export async function GET(req: NextRequest) {
   try {
     const [data, total] = await Promise.all([
       prisma.book.findMany({
+        // List view never uses per-page arrays; omit the heavy Json columns
+        // (coloringPages ~130KB/book) so the payload drops ~90% (2.7MB→~200KB
+        // for 20 books). The book detail route returns full coloringPages.
+        omit: { coloringPages: true, summaryPages: true },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,

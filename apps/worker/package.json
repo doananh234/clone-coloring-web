@@ -9,6 +9,7 @@
     "start": "node --env-file=.env --import tsx src/index.ts",
     "dev": "node --env-file=.env --import tsx --watch src/index.ts",
     "cleanup": "node --env-file=.env --import tsx src/scripts/cleanup-failed.ts",
+    "backfill:scene": "node --env-file=.env --import tsx src/scripts/backfill-book-scene-data.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

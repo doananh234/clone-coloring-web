@@ -29,6 +29,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@vx/auth-module": "workspace:*",
     "@vx/clone-core": "workspace:*",
+    "@vx/coloring": "workspace:*",
     "@vx/core-uikit": "workspace:*",
     "@vx/db": "workspace:*",
     "@vx/server-core": "workspace:*",

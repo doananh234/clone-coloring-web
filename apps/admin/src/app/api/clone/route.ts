@@ -16,6 +16,11 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const status = url.searchParams.get("status");
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 200), 1000);
+    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
+    // Summary (grouped counts) is a separate concern — the list hook passes
+    // `counts=0` so paginating / switching tabs doesn't recompute it, and a
+    // dedicated counts request drives the tab badges without flashing empty.
+    const wantCounts = url.searchParams.get("counts") !== "0";
 
     const where = status && status !== "all" ? { status } : undefined;
 
@@ -31,12 +36,15 @@ export async function GET(req: NextRequest) {
       prisma.cloneJob.findMany({
         where,
         orderBy,
+        // List rows never use these heavy Json columns (pages = per-page image
+        // data, the bulk of a row) — omit them to cut DB transfer + memory.
+        omit: { pages: true, bookData: true },
+        skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.cloneJob.groupBy({
-        by: ["status"],
-        _count: { _all: true },
-      }),
+      wantCounts
+        ? prisma.cloneJob.groupBy({ by: ["status"], _count: { _all: true } })
+        : Promise.resolve([] as { status: string; _count: { _all: number } }[]),
     ]);
 
     const counts: Record<string, number> = { all: 0 };

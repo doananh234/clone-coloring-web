@@ -1,0 +1,792 @@
+/* Motio component classes — all scoped under .motio-theme so they never leak globally. */
+
+/* ---- Button ---- */
+.motio-theme .mo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-btn:active {
+  transform: scale(0.97);
+}
+.motio-theme .mo-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+.motio-theme .mo-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow);
+}
+.motio-theme .mo-btn--md {
+  height: 40px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+.motio-theme .mo-btn--sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.motio-theme .mo-btn--icon {
+  width: 40px;
+  padding: 0;
+}
+.motio-theme .mo-btn--primary {
+  background: var(--volt-500);
+  color: var(--carbon-950);
+}
+.motio-theme .mo-btn--primary:hover {
+  background: var(--volt-400);
+}
+.motio-theme .mo-btn--outline {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.motio-theme .mo-btn--outline:hover {
+  background: var(--muted);
+}
+.motio-theme .mo-btn--ghost {
+  background: transparent;
+  color: var(--foreground);
+}
+.motio-theme .mo-btn--ghost:hover {
+  background: var(--muted);
+}
+.motio-theme .mo-btn--danger {
+  background: var(--danger);
+  color: #fff;
+}
+.motio-theme .mo-btn--danger:hover {
+  background: #c8493d;
+}
+
+/* ---- Card ---- */
+.motio-theme .mo-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 18px;
+}
+.motio-theme .mo-card__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  margin: 0 0 14px;
+}
+
+/* ---- Badge ---- */
+.motio-theme .mo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.motio-theme .mo-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.motio-theme .mo-badge--success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.motio-theme .mo-badge--info {
+  background: var(--info-bg);
+  color: var(--info);
+}
+.motio-theme .mo-badge--warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.motio-theme .mo-badge--danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.motio-theme .mo-badge--neutral {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.motio-theme .mo-badge--carbon {
+  background: var(--carbon-950);
+  color: var(--volt-500);
+}
+
+/* ---- Input ---- */
+.motio-theme .mo-inputwrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.motio-theme .mo-inputwrap > svg {
+  position: absolute;
+  left: 10px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.motio-theme .mo-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  font-family: var(--font-sans);
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-input--icon {
+  padding-left: 34px;
+}
+.motio-theme .mo-input::placeholder {
+  color: var(--muted-foreground);
+}
+.motio-theme .mo-input:focus {
+  border-color: var(--volt-600);
+  box-shadow: var(--shadow-glow);
+}
+
+/* ---- Progress ---- */
+.motio-theme .mo-progress {
+  height: 8px;
+  width: 100%;
+  border-radius: 99px;
+  background: var(--muted);
+  overflow: hidden;
+}
+.motio-theme .mo-progress__fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--volt-500);
+  transition: width var(--dur-med) var(--ease-out);
+}
+.motio-theme .mo-progress__fill--danger {
+  background: var(--danger);
+}
+
+/* ---- Avatar ---- */
+.motio-theme .mo-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--carbon-800);
+  color: var(--volt-500);
+  font-weight: 600;
+  font-family: var(--font-display);
+  flex-shrink: 0;
+}
+
+/* ---- Dropdown ---- */
+.motio-theme .mo-dd {
+  position: relative;
+  display: inline-flex;
+}
+.motio-theme .mo-dd__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  z-index: 70;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  min-width: 200px;
+  animation: mo-dd-in var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-dd__panel--end {
+  right: 0;
+}
+.motio-theme .mo-dd__panel--start {
+  left: 0;
+}
+@keyframes mo-dd-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.motio-theme .mo-dd__header {
+  padding: 8px 10px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--muted-foreground);
+}
+.motio-theme .mo-dd__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-dd__item:hover {
+  background: var(--muted);
+}
+.motio-theme .mo-dd__item--danger {
+  color: var(--danger);
+}
+.motio-theme .mo-dd__item-sub {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+.motio-theme .mo-dd__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 4px;
+}
+
+/* ---- Sidebar nav ---- */
+.motio-theme .mo-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--sidebar-foreground);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-nav__item:hover {
+  background: var(--carbon-900);
+  color: #fff;
+}
+.motio-theme .mo-nav__item--active {
+  background: var(--carbon-800);
+  color: var(--volt-500);
+}
+.motio-theme .mo-nav__item--active:hover {
+  background: var(--carbon-800);
+  color: var(--volt-500);
+}
+.motio-theme .mo-nav__badge {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--volt-500);
+  color: var(--carbon-950);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.motio-theme .mo-nav__section {
+  padding: 16px 12px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--neutral-500);
+}
+.motio-theme .mo-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--sidebar-foreground);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-iconbtn:hover {
+  background: var(--carbon-800);
+  color: #fff;
+}
+
+/* ---- responsive helpers ---- */
+.motio-theme .mo-mobile-only {
+  /* !important so it overrides .mo-hbtn { display: inline-flex } (defined later,
+     equal specificity) — otherwise the hamburger showed on desktop where the
+     mobile drawer never renders, so clicking it did nothing. */
+  display: none !important;
+}
+@media (max-width: 900px) {
+  .motio-theme .mo-mobile-only {
+    display: inline-flex !important;
+  }
+  .motio-theme .mo-desktop-only {
+    display: none !important;
+  }
+}
+
+/* header ghost icon button (light surface) */
+.motio-theme .mo-hbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  border-radius: var(--radius-full);
+  position: relative;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-hbtn:hover {
+  background: var(--muted);
+}
+/* ---- Tabs ---- */
+.motio-theme .mo-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.motio-theme .mo-tab {
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-tab:hover {
+  background: var(--muted);
+}
+.motio-theme .mo-tab--active {
+  background: var(--carbon-950);
+  border-color: var(--carbon-950);
+  color: var(--volt-500);
+}
+.motio-theme .mo-tab__count {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  opacity: 0.8;
+}
+
+/* ---- Field label ---- */
+.motio-theme .mo-flabel {
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: block;
+}
+
+/* ---- Select ---- */
+.motio-theme select.mo-input {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236E766A' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+/* ---- RadioGroup ---- */
+.motio-theme .mo-radio-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-radio-opt:hover {
+  background: var(--muted);
+}
+.motio-theme .mo-radio-opt--on {
+  border-color: var(--volt-600);
+  box-shadow: var(--shadow-glow);
+  background: transparent;
+}
+.motio-theme .mo-radio-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--input);
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.motio-theme .mo-radio-opt--on .mo-radio-dot {
+  border-color: var(--volt-600);
+}
+.motio-theme .mo-radio-dot::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--volt-600);
+  transform: scale(0);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-radio-opt--on .mo-radio-dot::after {
+  transform: scale(1);
+}
+
+/* ---- Switch ---- */
+.motio-theme .mo-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.motio-theme .mo-switch__track {
+  width: 38px;
+  height: 22px;
+  border-radius: 99px;
+  background: var(--input);
+  position: relative;
+  flex-shrink: 0;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-switch__track--on {
+  background: var(--volt-500);
+}
+.motio-theme .mo-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-switch__track--on .mo-switch__thumb {
+  transform: translateX(16px);
+  background: var(--carbon-950);
+}
+
+/* ---- Slider ---- */
+.motio-theme .mo-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--muted);
+  outline: none;
+  cursor: pointer;
+}
+.motio-theme .mo-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--volt-500);
+  border: 2px solid var(--carbon-950);
+  cursor: grab;
+}
+.motio-theme .mo-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--volt-500);
+  border: 2px solid var(--carbon-950);
+  cursor: grab;
+}
+
+/* ---- Cover editor draggable text ---- */
+.motio-theme .mo-cov-layer {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  z-index: 3;
+  user-select: none;
+  touch-action: none;
+}
+.motio-theme .mo-cov-layer:active {
+  cursor: grabbing;
+}
+.motio-theme .mo-cov-title {
+  width: 82%;
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--carbon-950);
+  text-align: center;
+  border: 1.5px dashed var(--volt-600);
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.5);
+}
+.motio-theme .mo-cov-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: var(--volt-500);
+  border: 2px solid var(--carbon-950);
+  cursor: nwse-resize;
+  box-sizing: border-box;
+}
+.motio-theme .mo-cov-sub {
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--carbon-800);
+}
+.motio-theme .mo-cov-sub:hover,
+.motio-theme .mo-cov-badge:hover {
+  outline: 1.5px dashed var(--volt-600);
+}
+.motio-theme .mo-cov-badge {
+  white-space: nowrap;
+  background: var(--volt-500);
+  color: var(--carbon-950);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 99px;
+}
+.motio-theme .mo-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 99px;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+.motio-theme .mo-swatch--on {
+  border-color: var(--volt-500);
+}
+.motio-theme .mo-colorpick {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px dashed var(--neutral-300);
+  border-radius: 99px;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+}
+.motio-theme .mo-colorpick::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.motio-theme .mo-colorpick::-webkit-color-swatch {
+  border: none;
+  border-radius: 99px;
+}
+.motio-theme .mo-colorpick::-moz-color-swatch {
+  border: none;
+  border-radius: 99px;
+}
+
+/* ---- FileUpload dropzone ---- */
+.motio-theme .mo-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 28px 16px;
+  border: 1.5px dashed var(--input);
+  border-radius: var(--radius-md);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-drop:hover {
+  border-color: var(--volt-600);
+  background: var(--muted);
+}
+.motio-theme .mo-drop--filled {
+  border-style: solid;
+  border-color: var(--volt-600);
+  color: var(--foreground);
+}
+
+/* ---- Stepper ---- */
+.motio-theme .mo-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+.motio-theme .mo-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.motio-theme .mo-step__num {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-step--active .mo-step__num {
+  border-color: var(--volt-600);
+  background: var(--volt-500);
+  color: var(--carbon-950);
+  box-shadow: var(--shadow-glow);
+}
+.motio-theme .mo-step--done .mo-step__num {
+  border-color: var(--volt-600);
+  background: var(--carbon-950);
+  color: var(--volt-500);
+}
+.motio-theme .mo-step__label {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.motio-theme .mo-step__label small {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--muted-foreground);
+}
+.motio-theme .mo-step__label span {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.motio-theme .mo-step__line {
+  flex: 1;
+  min-width: 24px;
+  height: 2px;
+  background: var(--border);
+  margin: 0 14px;
+}
+.motio-theme .mo-step__line--done {
+  background: var(--volt-600);
+}
+
+/* ---- Skeleton shimmer ---- */
+.motio-theme .mo-skel {
+  background: linear-gradient(90deg, var(--muted), var(--neutral-200), var(--muted));
+  background-size: 200% 100%;
+  animation: mo-shimmer 1.2s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+@keyframes mo-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ---- Table row hover (shared) ---- */
+.motio-theme .mo-row {
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-row:hover {
+  background: var(--neutral-50);
+}
+
+.motio-theme .mo-bookthumb {
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-bookthumb:hover {
+  border-color: var(--volt-600);
+}
+.motio-theme .mo-bookcard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.motio-theme .mo-bookcard:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.motio-theme .mo-hbtn__count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 99px;
+  background: var(--volt-500);
+  color: var(--carbon-950);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--card);
+}

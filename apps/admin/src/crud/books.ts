@@ -193,7 +193,7 @@ export const bookFields: FieldConfig[] = [
 
 export const bookCrud = createCrudPages<BookEntity>({
   entityName: "books",
-  basePath: "/books",
+  basePath: "/backup/books",
   apiUrl: "/api/books",
   fields: bookFields,
   namespace: "books",
