@@ -6,6 +6,7 @@ import { Icon } from "../../lib/icon";
 import { Avatar } from "../ui/avatar";
 import { NAV, isNavActive } from "./nav-config";
 import { useJobCounts, attentionJobCount } from "../../data/use-job-counts";
+import { useColoringAuth } from "../../hooks/coloring-auth";
 
 export interface SidebarProps {
   collapsed: boolean;
@@ -50,6 +51,8 @@ function Wordmark({ collapsed }: { collapsed: boolean }) {
 
 export function Sidebar({ collapsed, onToggleCollapse, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const { user, logout } = useColoringAuth();
+  const displayName = user?.name || "Người dùng";
   const attention = attentionJobCount(useJobCounts());
   // Live badge per nav item (jobs → # needing action: errors + waiting-to-confirm; 0 hides it).
   const badgeFor = (id: string): number | undefined => (id === "jobs" && attention > 0 ? attention : undefined);
@@ -92,7 +95,7 @@ export function Sidebar({ collapsed, onToggleCollapse, onNavigate }: SidebarProp
       </div>
 
       {/* nav */}
-      <nav style={{ flex: 1, overflowY: "auto", padding: "4px 12px" }}>
+      <nav style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 12px" }}>
         {NAV.map((sec) => (
           <div key={sec.section}>
             {!collapsed && <div className="mo-nav__section">{sec.section}</div>}
@@ -122,31 +125,24 @@ export function Sidebar({ collapsed, onToggleCollapse, onNavigate }: SidebarProp
         ))}
       </nav>
 
-      {/* footer */}
-      <div style={{ padding: "10px 16px 18px", borderTop: "1px solid var(--carbon-800)" }}>
+      {/* footer — signed-in account + logout (real user from Firebase auth) */}
+      <div style={{ padding: "12px 16px 18px", borderTop: "1px solid var(--carbon-800)", flexShrink: 0 }}>
         {collapsed ? (
-          <div style={{ display: "flex", justifyContent: "center", paddingTop: 10 }}>
-            <Avatar name="Bao Nguyen" size="sm" />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <Avatar name={displayName} size="sm" />
+            <button type="button" className="mo-iconbtn" style={{ width: 30, height: 30 }} onClick={() => logout()} aria-label="Đăng xuất" title="Đăng xuất">
+              <Icon name="log-out" size={16} />
+            </button>
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 10 }}>
-            <Avatar name="Bao Nguyen" size="sm" />
-            <div style={{ lineHeight: 1.25 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>Bao Nguyen</div>
-              <div style={{ fontSize: 11, color: "var(--neutral-500)" }}>Admin</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Avatar name={displayName} size="sm" />
+            <div style={{ lineHeight: 1.25, minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</div>
+              <div style={{ fontSize: 11, color: "var(--neutral-400)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email || "Admin"}</div>
             </div>
-          </div>
-        )}
-        {collapsed && (
-          <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
-            <button
-              type="button"
-              className="mo-iconbtn"
-              style={{ width: 30, height: 30, transform: "rotate(180deg)" }}
-              onClick={onToggleCollapse}
-              aria-label="Mở rộng sidebar"
-            >
-              <Icon name="chevrons-left" size={18} />
+            <button type="button" className="mo-iconbtn" style={{ width: 30, height: 30, flexShrink: 0 }} onClick={() => logout()} aria-label="Đăng xuất" title="Đăng xuất">
+              <Icon name="log-out" size={16} />
             </button>
           </div>
         )}
