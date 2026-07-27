@@ -55,6 +55,9 @@ export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJob
   const pa = usePipelineActions(jobId);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Redesign intensity (old admin exposed 30/50). Drives both regen candidates —
+  // the backend's redesign-page only takes changePercent (no camera-angle param).
+  const [changePercent, setChangePercent] = useState(30);
 
   const run = (key: string, fn: () => Promise<void>, confirmMsg?: string) => async () => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
@@ -131,16 +134,23 @@ export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJob
             </div>
           )}
 
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={capLabel}>Mức thay đổi khi regen</span>
+            {[30, 50, 70].map((p) => (
+              <Button key={p} size="sm" variant={changePercent === p ? "primary" : "outline"} disabled={busy !== null} onClick={() => setChangePercent(p)}>{p}%</Button>
+            ))}
+          </div>
+
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             <Candidate label="Hình gốc" src={page.imageUrl} />
-            <Candidate label="Redesign 30%" src={redesign} selected={!!redo && redesign === redo} empty
+            <Candidate label={`Redesign ${changePercent}%`} src={redesign} selected={!!redo && redesign === redo} empty
               disabled={!pa.enabled} busy={busy === "redesign"}
               onChoose={run("redesign", () => pa.applyCandidate(idx, "redesign"))}
-              regen={{ label: redesign ? "Regen 30%" : "Tạo bản 30%", busy: busy === "regen30", onClick: run("regen30", () => pa.regenPage(idx, 30)) }} />
-            <Candidate label="30% + đổi camera" src={angle} hint={angle ? "Gợi ý" : undefined} selected={!!redo && angle === redo} empty
+              regen={{ label: redesign ? `Regen ${changePercent}%` : `Tạo bản ${changePercent}%`, busy: busy === "regen30", onClick: run("regen30", () => pa.regenPage(idx, changePercent)) }} />
+            <Candidate label="Bản thay thế (camera)" src={angle} hint={angle ? "Gợi ý" : undefined} selected={!!redo && angle === redo} empty
               disabled={!pa.enabled} busy={busy === "angle"}
               onChoose={run("angle", () => pa.applyCandidate(idx, "angle"))}
-              regen={{ label: angle ? "Regen camera" : "Tạo bản camera", busy: busy === "regencam", onClick: run("regencam", () => pa.regenPage(idx, 30)) }} />
+              regen={{ label: angle ? `Regen ${changePercent}%` : `Tạo bản ${changePercent}%`, busy: busy === "regencam", onClick: run("regencam", () => pa.regenPage(idx, changePercent)) }} />
           </div>
 
           {err && <div style={{ padding: "10px 12px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12.5 }}>{err}</div>}

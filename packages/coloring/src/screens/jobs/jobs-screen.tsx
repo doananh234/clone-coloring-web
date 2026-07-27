@@ -43,7 +43,7 @@ export function JobsScreen() {
   const router = useRouter();
   // URL-backed so tab/page/search survive reload + are shareable.
   const [tab] = useQueryParam("tab", "all");
-  const [q, setQ] = useQueryParam("q", "");
+  const [q] = useQueryParam("q", "");
   const [page, setPage] = useQueryNumber("page", 1);
   const setParams = useSetQueryParams();
   const LIMIT = 50;
@@ -118,7 +118,7 @@ export function JobsScreen() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <Tabs items={tabs} value={tab} onChange={changeTab} />
         <div style={{ width: 260, maxWidth: "100%" }}>
-          <Input icon="search" placeholder="Tìm job, brand, id…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input icon="search" placeholder="Tìm job, brand, id…" value={q} onChange={(e) => setParams({ q: e.target.value || null, page: null })} />
         </div>
       </div>
 

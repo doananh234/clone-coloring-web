@@ -14,7 +14,7 @@ import { LoadingRows, EmptyState, ErrorState } from "../../components/ui/states"
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useBook } from "../../data/use-book";
 import { getBookPatch } from "../../data/local-books";
-import { useGeneratePdf, useGenerateSubtitle } from "../../data/use-book-actions";
+import { useGeneratePdf, useGenerateSubtitle, useReclone } from "../../data/use-book-actions";
 import { useBookAi } from "../../data/use-more-actions";
 import { PageActionsRow } from "./page-actions-row";
 import { resolveImg } from "../../data/img";
@@ -123,6 +123,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const { book, isLoading, isError } = useBook(bookId);
   const genPdf = useGeneratePdf(bookId);
   const genSubtitle = useGenerateSubtitle(bookId);
+  const reclone = useReclone(bookId);
   const bookAi = useBookAi(bookId);
   const [tab, setTab] = useState<"info" | "pages">("info");
   const [busy, setBusy] = useState(false);
@@ -254,6 +255,15 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
             onClick={async () => { setBusy(true); setMsg(null); try { await bookAi.syncCategories(); setMsg({ ok: "Đã sync danh mục" }); } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); } finally { setBusy(false); } }}>
             <Icon name="folder" size={16} /> Sync danh mục
           </Button>
+          <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED || busy} title={COLORING_WRITE_ENABLED ? undefined : "Cần bật ghi thật (staging)"}
+            onClick={async () => {
+              if (!window.confirm("Re-clone sách này? Sẽ tạo clone job MỚI để chạy lại toàn bộ pipeline (analyze → redesign → reproduce → tạo book). Tốn phí AI; book hiện tại vẫn giữ.")) return;
+              setBusy(true); setMsg(null);
+              try { const jobId = await reclone(); router.push(`${B}/jobs/${jobId}`); }
+              catch (e) { setMsg({ err: e instanceof Error ? e.message : "Re-clone thất bại" }); setBusy(false); }
+            }}>
+            <Icon name="copy" size={16} /> {busy ? "Đang xử lý…" : "Re-clone"}
+          </Button>
           <Button variant="outline" size="sm" disabled title="Chưa có endpoint Etsy"><Icon name="store" size={16} /> Sync Etsy</Button>
         </div>
       </div>
@@ -367,7 +377,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
         counter={previewIdx != null ? `${previewIdx + 1} / ${pages.length}` : undefined}
         onPrev={previewIdx != null && previewIdx > 0 ? () => openPageAt(previewIdx - 1) : undefined}
         onNext={previewIdx != null && previewIdx < pages.length - 1 ? () => openPageAt(previewIdx + 1) : undefined}
-        actions={previewPage ? <PageActionsRow bookId={bookId} pages={pages} page={previewPage} onRemoved={closePreview} /> : preview?.actions}
+        actions={previewPage ? <PageActionsRow bookId={bookId} pages={pages} page={previewPage} coverMeta={(b.data?.coverMeta ?? undefined) as Record<string, unknown> | undefined} onRemoved={closePreview} /> : preview?.actions}
       />
     </div>
   );

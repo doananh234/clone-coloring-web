@@ -25,6 +25,17 @@ export function usePageActions(bookId: string) {
     enabled: COLORING_WRITE_ENABLED,
     /** PUT book squareThumbnailUrl + thumbnailUrl = this page. */
     setThumbnail: (pageUrl: string) => put({ squareThumbnailUrl: pageUrl, thumbnailUrl: pageUrl }),
+    /**
+     * Use this page as the book's cover *source* (the clean illustration the cover
+     * editor edits text onto). Merges into existing coverMeta so other cover fields
+     * survive, and refreshes the thumbnails so lists reflect the choice.
+     */
+    setCover: (pageUrl: string, currentMeta?: Record<string, unknown>) =>
+      put({
+        coverMeta: { ...(currentMeta ?? {}), sourceThumbnailUrl: pageUrl },
+        squareThumbnailUrl: pageUrl,
+        thumbnailUrl: pageUrl,
+      }),
     /** Flip isPublic on one page (sends the full updated array). */
     togglePublic: (pages: BookColoringPage[], pageId: string) =>
       put({ coloringPages: pages.map((p) => (p.id === pageId ? { ...p, isPublic: !p.isPublic } : p)) }),

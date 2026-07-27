@@ -14,12 +14,26 @@ import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { useBook } from "../../data/use-book";
 import { useEntityList } from "../../data/use-entity-list";
-import { useSaveCover } from "../../data/use-cover-actions";
+import { useSaveCover, useGenerateCover, type GeneratedCover } from "../../data/use-cover-actions";
 import { resolveImg } from "../../data/img";
 import { composeCover } from "../../lib/compose-cover";
 import { CoverCanvas, type CoverLayout } from "./cover-canvas";
 
-const FONTS = ["Space Grotesk", "Geist", "Geist Mono"];
+// Loaded via the Google Fonts @import in motio.css. Kid/cover-friendly display
+// faces + clean sans/serif so covers can vary in personality.
+const FONTS = [
+  "Space Grotesk",
+  "Fredoka",
+  "Baloo 2",
+  "Quicksand",
+  "Poppins",
+  "Nunito",
+  "Chewy",
+  "Pacifico",
+  "Fraunces",
+  "Geist",
+  "Geist Mono",
+];
 // Hex so the native color picker + canvas share one value.
 const SWATCHES = ["#1a1712", "#8a8070", "#c9852a", "#ffffff", "#dd5245", "#4e8ff2"];
 const DEFAULT_LAYOUT: CoverLayout = { title: { x: 50, y: 30 }, sub: { x: 50, y: 62 }, badge: { x: 50, y: 88 }, titleSize: 30, color: "#0b0d0c" };
@@ -29,6 +43,7 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const { book, isLoading, isError } = useBook(bookId);
   const { items: styles } = useEntityList("coloring-styles");
   const saveCover = useSaveCover(bookId);
+  const genCover = useGenerateCover();
   const [tab, setTab] = useState<"text" | "ai">("text");
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -40,6 +55,9 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const [prompt, setPrompt] = useState("");
   const [aiStyle, setAiStyle] = useState("");
   const [keepText, setKeepText] = useState(true);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+  const [aiResults, setAiResults] = useState<GeneratedCover[]>([]);
 
   useEffect(() => {
     if (book) {
@@ -98,6 +116,29 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
     finally { setBusy(null); }
   };
 
+  // AI cover: compose the book's colored pages + title into 3 candidate covers.
+  const doGenAi = async () => {
+    setAiErr(null); setAiResults([]); setAiBusy(true);
+    try {
+      const genTitle = `${book.title || "Coloring Book"}${prompt.trim() ? ` — ${prompt.trim()}` : ""}`;
+      const pageImgs = (book.coloringPages ?? [])
+        .map((p) => resolveImg(p.coloredUrl || p.url))
+        .filter((u): u is string => Boolean(u))
+        .slice(0, 6);
+      const imgs = pageImgs.length ? pageImgs : cleanBase ? [cleanBase] : [];
+      const out = await Promise.all([0, 1, 2].map(() => genCover.generate(genTitle, imgs)));
+      setAiResults(out);
+    } catch (e) { setAiErr(e instanceof Error ? e.message : "Gen bìa AI thất bại."); }
+    finally { setAiBusy(false); }
+  };
+
+  const applyAiCover = async (base64: string) => {
+    setBusy("save"); setMsg(null);
+    try { await saveCover.save(base64); setMsg({ ok: "Đã lưu bìa từ bản AI." }); }
+    catch (e) { setMsg({ err: e instanceof Error ? e.message : "Lưu bìa thất bại." }); }
+    finally { setBusy(null); }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -129,7 +170,7 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
       {tab === "text" ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
           <div style={{ flex: "2 1 400px", minWidth: 0 }}>
-            <CoverCanvas image={cleanBase} brand={brand} text={coverText} layout={layout} onLayout={setLayout} />
+            <CoverCanvas image={cleanBase} brand={brand} text={coverText} layout={layout} onLayout={setLayout} font={font} />
           </div>
           <div style={{ flex: "1 1 300px", minWidth: 280 }}>
             <Card title="Chữ đang chọn · Tiêu đề">
@@ -164,8 +205,9 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
                 </div>
                 <Select label="Coloring style" value={aiStyle} onChange={setAiStyle} options={styleOptions} placeholder="Chọn style" />
                 <Switch label="Giữ bố cục chữ hiện tại" checked={keepText} onChange={setKeepText} />
-                <Button disabled={!COLORING_WRITE_ENABLED} style={{ width: "100%" }}><Icon name="sparkles" size={18} /> Gen 3 phương án</Button>
-                {!COLORING_WRITE_ENABLED && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Gen AI cần bật ghi thật (staging) + backend.</div>}
+                <Button disabled={!genCover.enabled || aiBusy} onClick={doGenAi} style={{ width: "100%" }}><Icon name="sparkles" size={18} /> {aiBusy ? "Đang gen…" : "Gen 3 phương án"}</Button>
+                {!genCover.enabled && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Gen AI cần bật ghi thật (staging) + backend.</div>}
+                {aiErr && <div style={{ fontSize: 12, color: "var(--danger)" }}>{aiErr}</div>}
               </div>
             </Card>
           </div>
@@ -184,16 +226,29 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted-foreground)", textAlign: "center", marginTop: 6 }}>Bìa hiện tại</div>
                 </div>
-                {["A", "B", "C"].map((v) => (
-                  <div key={v}>
-                    <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", border: "1px dashed var(--neutral-300)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
-                      <Icon name="sparkles" size={20} />
+                {["A", "B", "C"].map((v, i) => {
+                  const r = aiResults[i];
+                  return (
+                    <div key={v}>
+                      <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", border: r ? "1px solid var(--border)" : "1px dashed var(--neutral-300)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", background: "var(--neutral-100)" }}>
+                        {r ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={r.previewUrl} alt={`Phương án ${v}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : (
+                          <Icon name="sparkles" size={20} />
+                        )}
+                      </div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted-foreground)", textAlign: "center", marginTop: 6 }}>Phương án {v}</div>
+                      {r && (
+                        <Button size="sm" style={{ width: "100%", marginTop: 6 }} disabled={busy !== null || !saveCover.enabled} onClick={() => applyAiCover(r.base64)}>
+                          {busy === "save" ? "Đang lưu…" : "Lưu làm bìa"}
+                        </Button>
+                      )}
                     </div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted-foreground)", textAlign: "center", marginTop: 6 }}>Phương án {v}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-              <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 12 }}>Bấm “Gen 3 phương án” để tạo các bản mới (cần backend AI).</div>
+              <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 12 }}>Bấm “Gen 3 phương án” để tạo bìa mới từ tiêu đề + trang màu (dùng backend AI). Prompt bổ sung được ghép vào tiêu đề.</div>
             </Card>
           </div>
         </div>

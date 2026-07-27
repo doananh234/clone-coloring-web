@@ -30,3 +30,28 @@ export function useSaveCover(bookId: string) {
     },
   };
 }
+
+export interface GeneratedCover {
+  previewUrl: string;
+  base64: string;
+}
+
+/**
+ * AI cover generation via /generate/compose-cover. The backend composes the book's
+ * colored pages + title into one cover image and returns a base64 PNG. Any extra
+ * prompt is folded into the title (the endpoint only takes { title, imageDataUrls }).
+ */
+export function useGenerateCover() {
+  return {
+    enabled: COLORING_WRITE_ENABLED,
+    generate: async (title: string, imageUrls: string[]): Promise<GeneratedCover> => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL);
+      const res = await httpPost<{ success?: boolean; previewUrl?: string; base64?: string }>(
+        `${COLORING_API_BASE}/generate/compose-cover`,
+        { title, imageDataUrls: imageUrls },
+      );
+      if (!res?.base64) throw new Error("Gen bìa AI thất bại (thiếu ảnh trả về).");
+      return { previewUrl: res.previewUrl || `data:image/png;base64,${res.base64}`, base64: res.base64 };
+    },
+  };
+}

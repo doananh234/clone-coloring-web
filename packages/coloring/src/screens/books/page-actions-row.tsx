@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { Select } from "../../components/ui/form-controls";
+import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useEntityList } from "../../data/use-entity-list";
 import { usePageActions } from "../../data/use-page-actions";
 import type { BookColoringPage } from "../../data/types";
@@ -12,13 +14,17 @@ export function PageActionsRow({
   bookId,
   pages,
   page,
+  coverMeta,
   onRemoved,
 }: {
   bookId: string;
   pages: BookColoringPage[];
   page: BookColoringPage;
+  /** Current book coverMeta — merged when setting this page as cover source. */
+  coverMeta?: Record<string, unknown>;
   onRemoved: () => void;
 }) {
+  const router = useRouter();
   const actions = usePageActions(bookId);
   const { items: styles } = useEntityList("coloring-styles");
   const [styleId, setStyleId] = useState("");
@@ -55,6 +61,9 @@ export function PageActionsRow({
         <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
         <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("thumb", () => actions.setThumbnail(page.coloredUrl || page.url))}>
           <Icon name="image" size={15} /> Set thumbnail
+        </Button>
+        <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("cover", () => actions.setCover(page.coloredUrl || page.url, coverMeta), () => router.push(`${B}/books/${bookId}/cover`))}>
+          <Icon name="image" size={15} /> {busy === "cover" ? "Đang đặt…" : "Làm bìa"}
         </Button>
         <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("pub", () => actions.togglePublic(pages, page.id))}>
           {page.isPublic ? "Ẩn" : "Công khai"}

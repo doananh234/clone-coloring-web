@@ -12,10 +12,10 @@ import { LoadingRows, ErrorState, EmptyState } from "../../components/ui/states"
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useCloneJob } from "../../data/use-clone-job";
 import { getLocalJob } from "../../data/local-store";
-import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { JobPipelineTab } from "./job-pipeline-tab";
 import { JobCompareTab } from "./job-compare-tab";
 import { metaFor } from "../../data/status";
+import { useQueueActions, rowActionFor } from "../../data/use-queue-actions";
 import type { CloneJobDetail, CloneJobPage } from "../../data/types";
 
 const capLabel = {
@@ -107,6 +107,9 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
   const localJob = getLocalJob(jobId);
   const { job: fetched, isLoading, isError } = useCloneJob(localJob ? "" : jobId);
   const [tab, setTab] = useState<"pipeline" | "pages" | "info">("pages");
+  const qa = useQueueActions();
+  const [pending, setPending] = useState(false);
+  const [actErr, setActErr] = useState<string | null>(null);
 
   // Local drafts render straight from the store (never fetched).
   const job: CloneJobDetail | undefined = localJob
@@ -148,6 +151,22 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
   const meta = metaFor(job.status);
   const isLocal = Boolean(localJob);
   const pct = job.totalPages > 0 ? Math.round((job.analyzedPages / job.totalPages) * 100) : meta.bucket === "done" ? 100 : 0;
+  // Same status-driven action as the list row (e.g. a completed/"reproduced" job → "Chạy lại" regen).
+  const rowAction = isLocal ? null : rowActionFor(job.status);
+
+  const runRowAction = async () => {
+    if (!rowAction) return;
+    if (rowAction.confirm && !window.confirm(rowAction.confirm)) return;
+    setPending(true);
+    setActErr(null);
+    try {
+      await qa[rowAction.key](job.id);
+    } catch (e) {
+      setActErr(e instanceof Error ? e.message : "Thao tác thất bại");
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -168,9 +187,23 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
             <span style={mono}>{job.id}</span> · tạo {fmtDate(job.createdAt)}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED} title={COLORING_WRITE_ENABLED ? undefined : "Bật ghi thật (staging) để dùng"}>Tạm dừng</Button>
-          <Button variant="danger" size="sm" disabled={!COLORING_WRITE_ENABLED} title={COLORING_WRITE_ENABLED ? undefined : "Bật ghi thật (staging) để dùng"}>Hủy job</Button>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {rowAction && (
+              <Button
+                variant={rowAction.variant}
+                size="sm"
+                disabled={!qa.enabled || pending}
+                title={qa.enabled ? undefined : "Bật ghi thật (staging) để dùng"}
+                onClick={runRowAction}
+              >
+                {pending ? "…" : rowAction.label}
+              </Button>
+            )}
+          </div>
+          {actErr && (
+            <div style={{ padding: "6px 10px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12 }}>{actErr}</div>
+          )}
         </div>
       </div>
 

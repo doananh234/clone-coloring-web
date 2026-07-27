@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryParam, useQueryNumber } from "../../hooks/use-query-param";
+import { useQueryParam, useQueryNumber, useSetQueryParams } from "../../hooks/use-query-param";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
@@ -48,9 +48,14 @@ export function BooksScreen() {
   const router = useRouter();
   // URL-backed state so pagination/search/filters survive reload + are shareable.
   const [page, setPage] = useQueryNumber("page", 1);
-  const [q, setQ] = useQueryParam("q", "");
-  const [cat, setCat] = useQueryParam("cat", "");
-  const [status, setStatus] = useQueryParam("status", "all");
+  const [q] = useQueryParam("q", "");
+  const [cat] = useQueryParam("cat", "");
+  const [status] = useQueryParam("status", "all");
+  const setParams = useSetQueryParams();
+  // Changing any filter resets to page 1 (else you land on an out-of-range/empty page).
+  const setQ = (v: string) => setParams({ q: v || null, page: null });
+  const setCat = (v: string) => setParams({ cat: v || null, page: null });
+  const setStatus = (v: string) => setParams({ status: v === "all" ? null : v, page: null });
   const { books, total, totalPages, isLoading, isError } = useBooks(page, 24);
 
   const patched = useMemo(() => books.map(applyBookPatch), [books]);

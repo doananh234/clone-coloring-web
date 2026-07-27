@@ -41,12 +41,15 @@ export function CoverCanvas({
   text,
   layout,
   onLayout,
+  font,
 }: {
   image?: string;
   brand?: string;
   text: CoverText;
   layout: CoverLayout;
   onLayout: (next: CoverLayout) => void;
+  /** Selected font family — applied to title + subtitle so the preview matches export. */
+  font?: string;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const drag = useRef<DragState | null>(null);
@@ -110,12 +113,12 @@ export function CoverCanvas({
               <div style={{ position: "absolute", left: "50%", top: 14, transform: "translateX(-50%)", fontSize: 11, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--carbon-800)", fontWeight: 600, pointerEvents: "none", zIndex: 3, textShadow: "0 1px 2px rgba(255,255,255,.6)" }}>{brand}</div>
             )}
 
-            <div className="mo-cov-layer mo-cov-title" style={{ left: `${layout.title.x}%`, top: `${layout.title.y}%`, fontSize: layout.titleSize, color: layout.color }} onPointerDown={startDrag("title")}>
+            <div className="mo-cov-layer mo-cov-title" style={{ left: `${layout.title.x}%`, top: `${layout.title.y}%`, fontSize: layout.titleSize, color: layout.color, fontFamily: font || undefined }} onPointerDown={startDrag("title")}>
               {text.title}
               <span className="mo-cov-handle" onPointerDown={startResize} title="Kéo để đổi cỡ chữ" />
             </div>
             {text.subtitle && (
-              <div className="mo-cov-layer mo-cov-sub" style={{ left: `${layout.sub.x}%`, top: `${layout.sub.y}%` }} onPointerDown={startDrag("sub")}>{text.subtitle}</div>
+              <div className="mo-cov-layer mo-cov-sub" style={{ left: `${layout.sub.x}%`, top: `${layout.sub.y}%`, fontFamily: font || undefined }} onPointerDown={startDrag("sub")}>{text.subtitle}</div>
             )}
             {text.badge && (
               <span className="mo-cov-layer mo-cov-badge" style={{ left: `${layout.badge.x}%`, top: `${layout.badge.y}%` }} onPointerDown={startDrag("badge")}>{text.badge}</span>

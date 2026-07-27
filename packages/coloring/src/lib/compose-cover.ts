@@ -98,6 +98,19 @@ export async function composeCover(
 
   const scale = side / PREVIEW_W;
   const family = `${font}, "Space Grotesk", sans-serif`;
+  // Ensure the selected web font is loaded before drawing, else the canvas falls
+  // back to a system font in the exported PNG (the DOM preview may have loaded it,
+  // but a just-picked font can still be pending). Failures are non-fatal.
+  if (typeof document !== "undefined" && document.fonts) {
+    try {
+      await Promise.all([
+        document.fonts.load(`700 ${layout.titleSize * scale}px "${font}"`),
+        document.fonts.load(`500 ${13 * scale}px "${font}"`),
+      ]);
+    } catch {
+      /* fall back to whatever is available */
+    }
+  }
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
