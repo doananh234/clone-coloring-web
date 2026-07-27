@@ -22,7 +22,7 @@ function BookCard({ book, onOpen }: { book: BookRow; onOpen: () => void }) {
   const meta = [book.category, pages ? `${pages} trang` : null, book.price].filter(Boolean).join(" · ");
   return (
     <div className="mo-bookcard" onClick={onOpen}>
-      <div style={{ aspectRatio: "4 / 5", borderRadius: "var(--radius-md)", background: "var(--neutral-100)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
+      <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", background: "var(--neutral-100)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={cover} alt={book.title} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />

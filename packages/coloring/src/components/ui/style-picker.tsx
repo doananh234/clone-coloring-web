@@ -23,7 +23,7 @@ export function StylePicker({ items, value, onChange, clearable, loading, emptyT
   if (loading) {
     return (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
-        {Array.from({ length: 3 }).map((_, i) => <div key={i} className="mo-skel" style={{ aspectRatio: "3 / 4", borderRadius: "var(--radius-md)" }} />)}
+        {Array.from({ length: 3 }).map((_, i) => <div key={i} className="mo-skel" style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)" }} />)}
       </div>
     );
   }
@@ -43,7 +43,7 @@ export function StylePicker({ items, value, onChange, clearable, loading, emptyT
             onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onChange(clearable && active ? "" : s.id)}
             style={{ cursor: "pointer" }}
           >
-            <div style={{ position: "relative", aspectRatio: "3 / 4", borderRadius: "var(--radius-md)", overflow: "hidden", border: `${active ? 2 : 1}px solid ${active ? "var(--volt-600)" : "var(--border)"}`, boxShadow: active ? "var(--shadow-glow)" : undefined, background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+            <div style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: `${active ? 2 : 1}px solid ${active ? "var(--volt-600)" : "var(--border)"}`, boxShadow: active ? "var(--shadow-glow)" : undefined, background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
               {s.image ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={s.image} alt={s.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />

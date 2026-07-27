@@ -286,7 +286,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
         {/* left */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: "1 1 260px", minWidth: 240, maxWidth: 340 }}>
           <Card>
-            <div style={{ aspectRatio: "4 / 5", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+            <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
               {cover ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={cover} alt={b.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />

@@ -78,7 +78,7 @@ export function EtsyScreen() {
                     <tr key={b.id} className="mo-row" style={{ cursor: "pointer" }} onClick={() => router.push(`${B}/books/${b.id}`)}>
                       <td style={td}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                          <span style={{ width: 34, height: 44, borderRadius: 6, overflow: "hidden", background: "var(--neutral-100)", border: "1px solid var(--border)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+                          <span style={{ width: 44, height: 44, borderRadius: 6, overflow: "hidden", background: "var(--neutral-100)", border: "1px solid var(--border)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
                             {cover ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={cover} alt={b.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />

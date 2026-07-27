@@ -177,7 +177,7 @@ export function OverviewScreen() {
               const cover = resolveImg(b.squareThumbnailUrl || b.thumbnailUrl || b.coverUrl);
               return (
                 <div key={b.id} style={{ cursor: "pointer" }} onClick={go(`${B}/books/${b.id}`)}>
-                  <div className="mo-bookthumb" style={{ aspectRatio: "3 / 4", borderRadius: "var(--radius-sm)", background: "var(--neutral-100)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
+                  <div className="mo-bookthumb" style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: "var(--neutral-100)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
                     {cover ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={cover} alt={b.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -191,7 +191,7 @@ export function OverviewScreen() {
             })}
             {moreBooks > 0 && (
               <div style={{ cursor: "pointer" }} onClick={go(`${B}/books`)}>
-                <div style={{ aspectRatio: "3 / 4", borderRadius: "var(--radius-sm)", background: "var(--neutral-50)", border: "1px dashed var(--neutral-300)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--muted-foreground)" }}>
+                <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: "var(--neutral-50)", border: "1px dashed var(--neutral-300)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--muted-foreground)" }}>
                   +{moreBooks} sách
                 </div>
               </div>
