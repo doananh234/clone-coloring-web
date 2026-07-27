@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryParam, useQueryNumber } from "../../hooks/use-query-param";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
@@ -45,10 +46,11 @@ function BookCard({ book, onOpen }: { book: BookRow; onOpen: () => void }) {
 
 export function BooksScreen() {
   const router = useRouter();
-  const [page, setPage] = useState(1);
-  const [q, setQ] = useState("");
-  const [cat, setCat] = useState("");
-  const [status, setStatus] = useState("all");
+  // URL-backed state so pagination/search/filters survive reload + are shareable.
+  const [page, setPage] = useQueryNumber("page", 1);
+  const [q, setQ] = useQueryParam("q", "");
+  const [cat, setCat] = useQueryParam("cat", "");
+  const [status, setStatus] = useQueryParam("status", "all");
   const { books, total, totalPages, isLoading, isError } = useBooks(page, 24);
 
   const patched = useMemo(() => books.map(applyBookPatch), [books]);
@@ -95,7 +97,7 @@ export function BooksScreen() {
         </div>
       )}
 
-      <Pagination page={page} totalPages={totalPages} onPrev={() => setPage((p) => Math.max(1, p - 1))} onNext={() => setPage((p) => Math.min(totalPages, p + 1))} />
+      <Pagination page={page} totalPages={totalPages} onPrev={() => setPage(Math.max(1, page - 1))} onNext={() => setPage(Math.min(totalPages, page + 1))} />
     </div>
   );
 }

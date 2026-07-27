@@ -13,6 +13,7 @@ import { Pagination } from "../../components/ui/pagination";
 import { LoadingRows, EmptyState, ErrorState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useCloneJobs } from "../../data/use-clone-jobs";
+import { useQueryParam, useQueryNumber, useSetQueryParams } from "../../hooks/use-query-param";
 import { useJobCounts } from "../../data/use-job-counts";
 import { useLocalJobs } from "../../data/local-store";
 import { useQueueActions, rowActionFor } from "../../data/use-queue-actions";
@@ -40,9 +41,11 @@ function progressOf(j: CloneJobRow): number {
 
 export function JobsScreen() {
   const router = useRouter();
-  const [tab, setTab] = useState("all");
-  const [q, setQ] = useState("");
-  const [page, setPage] = useState(1);
+  // URL-backed so tab/page/search survive reload + are shareable.
+  const [tab] = useQueryParam("tab", "all");
+  const [q, setQ] = useQueryParam("q", "");
+  const [page, setPage] = useQueryNumber("page", 1);
+  const setParams = useSetQueryParams();
   const LIMIT = 50;
 
   const activeTab = STATUS_TABS.find((t) => t.key === tab) ?? STATUS_TABS[0];
@@ -52,7 +55,7 @@ export function JobsScreen() {
   const counts = useJobCounts();
   const tabTotal = countFor(activeTab, counts);
   const totalPages = Math.max(1, Math.ceil(tabTotal / LIMIT));
-  const changeTab = (key: string) => { setTab(key); setPage(1); };
+  const changeTab = (key: string) => setParams({ tab: key === "all" ? null : key, page: null });
   const local = useLocalJobs();
   const qa = useQueueActions();
   const [actErr, setActErr] = useState<string | null>(null);
@@ -213,8 +216,8 @@ export function JobsScreen() {
         <Pagination
           page={page}
           totalPages={totalPages}
-          onPrev={() => setPage((p) => Math.max(1, p - 1))}
-          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+          onPrev={() => setPage(Math.max(1, page - 1))}
+          onNext={() => setPage(Math.min(totalPages, page + 1))}
         />
       )}
     </div>

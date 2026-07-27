@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ColoringApp } from "@vx/coloring/screens";
 
 export default async function ColoringCatchAllPage({
@@ -6,5 +7,11 @@ export default async function ColoringCatchAllPage({
   params: Promise<{ slug?: string[] }>;
 }) {
   const slug = (await params).slug ?? [];
-  return <ColoringApp slug={slug} />;
+  // Suspense boundary required because screens read useSearchParams (URL-backed
+  // pagination/tab/filter state).
+  return (
+    <Suspense>
+      <ColoringApp slug={slug} />
+    </Suspense>
+  );
 }
