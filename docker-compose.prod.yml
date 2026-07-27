@@ -8,6 +8,11 @@
 
 services:
   admin:
+    build:
+      args:
+        # Enable real write actions on prod (bake NEXT_PUBLIC_COLORING_WRITE=1
+        # into the client bundle at build time). Removes the write-gate.
+        NEXT_PUBLIC_COLORING_WRITE: "1"
     env_file:
       - apps/admin/.env.prod
 

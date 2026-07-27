@@ -17,6 +17,10 @@ RUN yarn install --immutable
 FROM base AS build
 COPY --from=deps /app /app
 COPY apps/admin apps/admin
+# NEXT_PUBLIC_* are inlined at build time. Default 0 (writes gated); prod sets 1
+# via docker-compose.prod.yml build args to enable real write actions.
+ARG NEXT_PUBLIC_COLORING_WRITE=0
+ENV NEXT_PUBLIC_COLORING_WRITE=$NEXT_PUBLIC_COLORING_WRITE
 RUN yarn workspace @vx/db prisma generate
 RUN yarn workspace @vx/admin build
 
