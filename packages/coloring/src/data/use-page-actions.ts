@@ -40,22 +40,15 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
       await httpPost(`${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`, { pageIndex, newAngle, apply: true });
       inval();
     },
-    /** PUT book squareThumbnailUrl + thumbnailUrl = this page. */
+    /** PUT book thumbnailUrl (+ squareThumbnailUrl) = this page — the LIST thumbnail. */
     setThumbnail: (pageUrl: string) => put({ squareThumbnailUrl: pageUrl, thumbnailUrl: pageUrl }),
     /**
-     * Use this page as the book's cover *source* (the clean illustration the cover
-     * editor edits text onto). coverMeta lives INSIDE the Book.data JSON column (not a
-     * top-level column), so we merge into the full data blob — sending coverMeta at the
-     * top level makes Prisma 500. Also refresh the thumbnails so lists reflect the choice.
+     * Set this page as the book's COVER image (coverUrl) — matches the old
+     * handleSetAsCover. Distinct from setThumbnail: coverUrl is the cover shown on the
+     * book; thumbnailUrl is the list thumbnail. (The cover editor is a separate flow
+     * that composes text onto coverMeta.sourceThumbnailUrl and also saves coverUrl.)
      */
-    setCover: (pageUrl: string, currentData?: Record<string, unknown>) => {
-      const currentMeta = (currentData?.coverMeta as Record<string, unknown> | undefined) ?? {};
-      return put({
-        data: { ...(currentData ?? {}), coverMeta: { ...currentMeta, sourceThumbnailUrl: pageUrl } },
-        squareThumbnailUrl: pageUrl,
-        thumbnailUrl: pageUrl,
-      });
-    },
+    setCover: (pageUrl: string) => put({ coverUrl: pageUrl }),
     /** Flip isPublic on one page (sends the full updated array). */
     togglePublic: (pages: BookColoringPage[], pageId: string) =>
       put({ coloringPages: pages.map((p) => (p.id === pageId ? { ...p, isPublic: !p.isPublic } : p)) }),

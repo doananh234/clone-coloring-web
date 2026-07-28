@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { Select } from "../../components/ui/form-controls";
-import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useEntityList } from "../../data/use-entity-list";
 import { usePageActions } from "../../data/use-page-actions";
 import type { BookColoringPage } from "../../data/types";
@@ -24,7 +22,6 @@ export function PageActionsRow({
   bookData?: Record<string, unknown>;
   onRemoved: () => void;
 }) {
-  const router = useRouter();
   const cloneJobId = typeof bookData?.cloneJobId === "string" ? bookData.cloneJobId : undefined;
   const actions = usePageActions(bookId, cloneJobId);
   // Book page maps 1:1 by array index to its source clone job page.
@@ -72,10 +69,10 @@ export function PageActionsRow({
           </>
         )}
         <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
-        <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("thumb", () => actions.setThumbnail(page.coloredUrl || page.url))}>
+        <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đặt trang này làm ảnh thu nhỏ (thumbnail) trong danh sách" onClick={run("thumb", () => actions.setThumbnail(page.coloredUrl || page.url))}>
           <Icon name="image" size={15} /> Set thumbnail
         </Button>
-        <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("cover", () => actions.setCover(page.coloredUrl || page.url, bookData), () => router.push(`${B}/books/${bookId}/cover`))}>
+        <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đặt trang này làm ảnh bìa (coverUrl) của sách" onClick={run("cover", () => actions.setCover(page.coloredUrl || page.url))}>
           <Icon name="image" size={15} /> {busy === "cover" ? "Đang đặt…" : "Làm bìa"}
         </Button>
         <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("pub", () => actions.togglePublic(pages, page.id))}>
