@@ -14,14 +14,14 @@ export function PageActionsRow({
   bookId,
   pages,
   page,
-  coverMeta,
+  bookData,
   onRemoved,
 }: {
   bookId: string;
   pages: BookColoringPage[];
   page: BookColoringPage;
-  /** Current book coverMeta — merged when setting this page as cover source. */
-  coverMeta?: Record<string, unknown>;
+  /** Full book.data JSON blob — merged (with coverMeta) when setting this page as cover source. */
+  bookData?: Record<string, unknown>;
   onRemoved: () => void;
 }) {
   const router = useRouter();
@@ -62,7 +62,7 @@ export function PageActionsRow({
         <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("thumb", () => actions.setThumbnail(page.coloredUrl || page.url))}>
           <Icon name="image" size={15} /> Set thumbnail
         </Button>
-        <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("cover", () => actions.setCover(page.coloredUrl || page.url, coverMeta), () => router.push(`${B}/books/${bookId}/cover`))}>
+        <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("cover", () => actions.setCover(page.coloredUrl || page.url, bookData), () => router.push(`${B}/books/${bookId}/cover`))}>
           <Icon name="image" size={15} /> {busy === "cover" ? "Đang đặt…" : "Làm bìa"}
         </Button>
         <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("pub", () => actions.togglePublic(pages, page.id))}>

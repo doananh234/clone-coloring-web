@@ -27,15 +27,18 @@ export function usePageActions(bookId: string) {
     setThumbnail: (pageUrl: string) => put({ squareThumbnailUrl: pageUrl, thumbnailUrl: pageUrl }),
     /**
      * Use this page as the book's cover *source* (the clean illustration the cover
-     * editor edits text onto). Merges into existing coverMeta so other cover fields
-     * survive, and refreshes the thumbnails so lists reflect the choice.
+     * editor edits text onto). coverMeta lives INSIDE the Book.data JSON column (not a
+     * top-level column), so we merge into the full data blob — sending coverMeta at the
+     * top level makes Prisma 500. Also refresh the thumbnails so lists reflect the choice.
      */
-    setCover: (pageUrl: string, currentMeta?: Record<string, unknown>) =>
-      put({
-        coverMeta: { ...(currentMeta ?? {}), sourceThumbnailUrl: pageUrl },
+    setCover: (pageUrl: string, currentData?: Record<string, unknown>) => {
+      const currentMeta = (currentData?.coverMeta as Record<string, unknown> | undefined) ?? {};
+      return put({
+        data: { ...(currentData ?? {}), coverMeta: { ...currentMeta, sourceThumbnailUrl: pageUrl } },
         squareThumbnailUrl: pageUrl,
         thumbnailUrl: pageUrl,
-      }),
+      });
+    },
     /** Flip isPublic on one page (sends the full updated array). */
     togglePublic: (pages: BookColoringPage[], pageId: string) =>
       put({ coloringPages: pages.map((p) => (p.id === pageId ? { ...p, isPublic: !p.isPublic } : p)) }),

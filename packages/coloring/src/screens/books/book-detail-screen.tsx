@@ -377,7 +377,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
         counter={previewIdx != null ? `${previewIdx + 1} / ${pages.length}` : undefined}
         onPrev={previewIdx != null && previewIdx > 0 ? () => openPageAt(previewIdx - 1) : undefined}
         onNext={previewIdx != null && previewIdx < pages.length - 1 ? () => openPageAt(previewIdx + 1) : undefined}
-        actions={previewPage ? <PageActionsRow bookId={bookId} pages={pages} page={previewPage} coverMeta={(b.data?.coverMeta ?? undefined) as Record<string, unknown> | undefined} onRemoved={closePreview} /> : preview?.actions}
+        actions={previewPage ? <PageActionsRow bookId={bookId} pages={pages} page={previewPage} bookData={(b.data ?? undefined) as Record<string, unknown> | undefined} onRemoved={closePreview} /> : preview?.actions}
       />
     </div>
   );
