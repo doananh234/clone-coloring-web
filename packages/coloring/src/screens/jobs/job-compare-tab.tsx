@@ -7,6 +7,7 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/states";
 import { usePipelineActions, type CandidateKind } from "../../data/use-pipeline-actions";
+import { resolveImg } from "../../data/img";
 import type { CloneJobPage } from "../../data/types";
 
 const mono = { fontFamily: "var(--font-mono)" as const };
@@ -137,12 +138,12 @@ export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJob
           )}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-            <Candidate label="Hình gốc" src={page.imageUrl} />
-            <Candidate label="Regen" src={regenCand} selected={!!regenCand && page.reproducedUrl === regenCand} empty
+            <Candidate label="Hình gốc" src={resolveImg(page.imageUrl)} />
+            <Candidate label="Regen" src={resolveImg(regenCand)} selected={!!regenCand && page.reproducedUrl === regenCand} empty
               disabled={!pa.enabled} busy={busy === "applyregen"}
               onChoose={run("applyregen", () => pa.applyCandidate(idx, "regen"))}
               regen={{ label: regenCand ? "Regen lại" : "Tạo bản regen", busy: busy === "genregen", onClick: run("genregen", () => pa.regenCandidate(idx, false)) }} />
-            <Candidate label={angleView ? `Đổi camera · ${angleView}` : "Đổi camera"} src={angle} hint={angle ? "Góc mới" : undefined} selected={!!angle && page.reproducedUrl === angle} empty
+            <Candidate label={angleView ? `Đổi camera · ${angleView}` : "Đổi camera"} src={resolveImg(angle)} hint={angle ? "Góc mới" : undefined} selected={!!angle && page.reproducedUrl === angle} empty
               disabled={!pa.enabled} busy={busy === "applyangle"}
               onChoose={run("applyangle", () => pa.applyCandidate(idx, "angle"))}
               regen={{ label: angle ? "Đổi góc khác" : "Tạo góc mới", busy: busy === "genangle", onClick: run("genangle", () => pa.regenCandidate(idx, true)) }} />
