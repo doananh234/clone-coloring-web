@@ -26,6 +26,9 @@ export function PageActionsRow({
   const actions = usePageActions(bookId, cloneJobId);
   // Book page maps 1:1 by array index to its source clone job page.
   const pageIndex = pages.findIndex((p) => p.id === page.id);
+  // Cover / thumbnail / square are set from the COLORED version (like the old
+  // "Set Colored as …" lightbox actions) → only offered once the page is colorized.
+  const colored = page.coloredUrl;
   const { items: styles } = useEntityList("coloring-styles");
   const [styleId, setStyleId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -68,13 +71,20 @@ export function PageActionsRow({
             </Button>
           </>
         )}
-        <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
-        <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đặt trang này làm ảnh thu nhỏ (thumbnail) trong danh sách" onClick={run("thumb", () => actions.setThumbnail(page.coloredUrl || page.url))}>
-          <Icon name="image" size={15} /> Set thumbnail
-        </Button>
-        <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đặt trang này làm ảnh bìa (coverUrl) của sách" onClick={run("cover", () => actions.setCover(page.coloredUrl || page.url))}>
-          <Icon name="image" size={15} /> {busy === "cover" ? "Đang đặt…" : "Làm bìa"}
-        </Button>
+        {colored && (
+          <>
+            <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
+            <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đặt bản màu làm ảnh bìa (coverUrl)" onClick={run("cover", () => actions.setCover(colored))}>
+              <Icon name="image" size={15} /> {busy === "cover" ? "Đang đặt…" : "Làm bìa"}
+            </Button>
+            <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đặt bản màu làm thumbnail 3:4 (thumbnailUrl)" onClick={run("thumb", () => actions.setThumbnail(colored))}>
+              <Icon name="image" size={15} /> Set thumbnail
+            </Button>
+            <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đặt bản màu làm ảnh vuông 1:1 (squareThumbnailUrl)" onClick={run("square", () => actions.setSquare(colored))}>
+              <Icon name="image" size={15} /> Set vuông
+            </Button>
+          </>
+        )}
         <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("pub", () => actions.togglePublic(pages, page.id))}>
           {page.isPublic ? "Ẩn" : "Công khai"}
         </Button>

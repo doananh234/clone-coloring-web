@@ -40,15 +40,13 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
       await httpPost(`${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`, { pageIndex, newAngle, apply: true });
       inval();
     },
-    /** PUT book thumbnailUrl (+ squareThumbnailUrl) = this page — the LIST thumbnail. */
-    setThumbnail: (pageUrl: string) => put({ squareThumbnailUrl: pageUrl, thumbnailUrl: pageUrl }),
-    /**
-     * Set this page as the book's COVER image (coverUrl) — matches the old
-     * handleSetAsCover. Distinct from setThumbnail: coverUrl is the cover shown on the
-     * book; thumbnailUrl is the list thumbnail. (The cover editor is a separate flow
-     * that composes text onto coverMeta.sourceThumbnailUrl and also saves coverUrl.)
-     */
+    // The 3 old lightbox actions ("Set Colored as …"), each on its own column:
+    /** Set the book COVER image (coverUrl). */
     setCover: (pageUrl: string) => put({ coverUrl: pageUrl }),
+    /** Set the 3:4 list thumbnail (thumbnailUrl). */
+    setThumbnail: (pageUrl: string) => put({ thumbnailUrl: pageUrl }),
+    /** Set the square (1:1) thumbnail (squareThumbnailUrl). */
+    setSquare: (pageUrl: string) => put({ squareThumbnailUrl: pageUrl }),
     /** Flip isPublic on one page (sends the full updated array). */
     togglePublic: (pages: BookColoringPage[], pageId: string) =>
       put({ coloringPages: pages.map((p) => (p.id === pageId ? { ...p, isPublic: !p.isPublic } : p)) }),
