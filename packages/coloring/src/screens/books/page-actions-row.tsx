@@ -42,6 +42,7 @@ export function PageActionsRow({
   const [err, setErr] = useState<string | null>(null);
   // Regen/Đổi góc generate a candidate WITHOUT applying → user previews + chooses.
   const [cand, setCand] = useState<Candidate | null>(null);
+  const [zoom, setZoom] = useState(false);
 
   const styleOptions = styles.map((s) => ({ label: s.name, value: s.id }));
   const chosen = styleId || styleOptions[0]?.value || "";
@@ -63,6 +64,7 @@ export function PageActionsRow({
   const doGen = (newAngle: boolean) => async () => {
     setBusy(newAngle ? "angle" : "regen");
     setErr(null);
+    setZoom(false);
     try {
       const r = await actions.genCandidate(pageIndex, newAngle);
       setCand({ url: r.url, cameraView: r.cameraView, kind: newAngle ? "angle" : "regen" });
@@ -131,19 +133,28 @@ export function PageActionsRow({
 
       {cand && (
         <div style={{ display: "flex", gap: 12, alignItems: "center", padding: 10, border: "1px solid var(--volt-600)", borderRadius: "var(--radius-md)", background: "var(--neutral-100)" }}>
-          <div style={{ width: 76, height: 76, flexShrink: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff" }}>
+          <div onClick={() => setZoom(true)} title="Bấm để phóng to" style={{ width: 120, height: 120, flexShrink: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff", cursor: "zoom-in", position: "relative" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={resolveImg(cand.url)} alt="bản mới" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            <span style={{ position: "absolute", right: 4, bottom: 4, background: "rgba(11,13,12,.6)", color: "#fff", borderRadius: 4, padding: 3, display: "flex" }}><Icon name="search" size={12} /></span>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>
               {cand.kind === "angle" ? "Bản đổi góc" : "Bản regen"}{cand.cameraView ? ` · góc ${cand.cameraView}` : ""}
             </div>
-            <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Xem trước — bấm “Áp dụng” để dùng cho trang này, hoặc “Tạo lại” để thử bản khác.</div>
+            <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Bấm ảnh để phóng to. “Áp dụng” để dùng cho trang này, “Tạo lại” để thử bản khác.</div>
           </div>
           <Button size="sm" disabled={busy !== null} onClick={applyCand}>{busy === "apply" ? "Đang áp dụng…" : "Áp dụng"}</Button>
           <Button variant="outline" size="sm" disabled={busy !== null} onClick={doGen(cand.kind === "angle")}>{busy === "regen" || busy === "angle" ? "Đang tạo…" : "Tạo lại"}</Button>
           <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => setCand(null)}>Bỏ</Button>
+        </div>
+      )}
+
+      {zoom && cand && (
+        <div onClick={() => setZoom(false)} style={{ position: "fixed", inset: 0, background: "rgba(11,13,12,.82)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, cursor: "zoom-out" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={resolveImg(cand.url)} alt="bản mới (phóng to)" style={{ maxWidth: "92vw", maxHeight: "88vh", objectFit: "contain", borderRadius: "var(--radius-md)", background: "#fff", boxShadow: "var(--shadow-lg)" }} />
+          <button type="button" onClick={() => setZoom(false)} aria-label="Đóng" style={{ position: "fixed", top: 16, right: 16, background: "rgba(255,255,255,.15)", border: "none", borderRadius: 99, width: 40, height: 40, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="x" size={20} /></button>
         </div>
       )}
 
