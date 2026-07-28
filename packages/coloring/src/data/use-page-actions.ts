@@ -30,14 +30,30 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
     /** Whether Regen/Đổi góc are available (book has a source clone job). */
     canRegen: Boolean(cloneJobId),
     /**
-     * Regenerate a page via its source clone job. newAngle=false → same camera
-     * ("Regen"); true → a new camera angle ("Đổi góc"). apply:true writes the
-     * result onto both the job page and this book page.
+     * Generate a candidate via the source clone job WITHOUT applying it, so the user
+     * can preview + choose. newAngle=false → "Regen" (same camera, regenCandidateUrl);
+     * true → "Đổi góc" (new camera, angleCandidateUrl). Returns the candidate image url
+     * (from the reproduce response) — the book page is NOT changed yet.
      */
-    regenPage: async (pageIndex: number, newAngle: boolean) => {
+    genCandidate: async (pageIndex: number, newAngle: boolean): Promise<{ url: string; cameraView?: string }> => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
       if (!cloneJobId) throw new Error("Sách này không có clone job nguồn để regen.");
-      await httpPost(`${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`, { pageIndex, newAngle, apply: true });
+      const res = await httpPost<{ results?: { url?: string; cameraView?: string }[] }>(
+        `${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`,
+        { pageIndex, newAngle, apply: false },
+      );
+      const r = res?.results?.[0];
+      if (!r?.url) throw new Error("Không tạo được bản mới.");
+      return { url: r.url, cameraView: r.cameraView };
+    },
+    /**
+     * Apply a previously generated candidate to this page (sets the job page's
+     * reproducedUrl AND updates the book page image). kind "regen" | "angle".
+     */
+    applyCandidate: async (pageIndex: number, kind: "regen" | "angle") => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+      if (!cloneJobId) throw new Error("Sách này không có clone job nguồn.");
+      await httpPost(`${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/apply-candidate`, { pageIndex, kind });
       inval();
     },
     // The 3 old lightbox actions ("Set Colored as …"), each on its own column:
