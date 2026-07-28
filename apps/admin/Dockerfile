@@ -21,12 +21,19 @@ COPY apps/admin apps/admin
 # via docker-compose.prod.yml build args to enable real write actions.
 ARG NEXT_PUBLIC_COLORING_WRITE=0
 ENV NEXT_PUBLIC_COLORING_WRITE=$NEXT_PUBLIC_COLORING_WRITE
+# On prod the app IS the coloring upstream — empty = rewrite /coloring-api → /api
+# same-origin (no self-proxy hop that times out at ~30s on slow AI routes).
+ARG COLORING_API_UPSTREAM=""
+ENV COLORING_API_UPSTREAM=$COLORING_API_UPSTREAM
 RUN yarn workspace @vx/db prisma generate
 RUN yarn workspace @vx/admin build
 
 # --- runner ---
 FROM base AS runner
 ENV NODE_ENV=production
+# Same-origin coloring API (see build stage) — also set at runtime in case Next
+# re-evaluates rewrites() on start.
+ENV COLORING_API_UPSTREAM=""
 COPY --from=build /app /app
 WORKDIR /app/apps/admin
 EXPOSE 3000
