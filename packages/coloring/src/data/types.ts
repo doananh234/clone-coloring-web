@@ -32,6 +32,7 @@ export interface CloneJobPage {
   /** Candidate slots (present only on jobs that ran the regen/angle flow). */
   redesignCandidateUrl?: string;
   angleCandidateUrl?: string;
+  angleCandidateView?: string;
   regenCandidateUrl?: string;
   /** Per-page analyze data (present only if the job stored it). */
   rawData?: {

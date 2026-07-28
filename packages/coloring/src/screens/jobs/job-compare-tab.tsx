@@ -55,9 +55,6 @@ export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJob
   const pa = usePipelineActions(jobId);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  // Redesign intensity (old admin exposed 30/50). Drives both regen candidates —
-  // the backend's redesign-page only takes changePercent (no camera-angle param).
-  const [changePercent, setChangePercent] = useState(30);
 
   const run = (key: string, fn: () => Promise<void>, confirmMsg?: string) => async () => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
@@ -79,10 +76,13 @@ export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJob
   const idx = Math.min(sel, pages.length - 1);
   const page = pages[idx];
   const redo = reproduced(page);
+  // Two candidate slots, matching the old clone-reproduce-step: "Regen" and
+  // "Đổi camera" — BOTH generated via /reproduce (regenCandidateUrl / angleCandidateUrl),
+  // applied via apply-candidate kind "regen" / "angle". (/redesign-page is a different,
+  // earlier step and is NOT how the old UI's regen/camera buttons worked.)
+  const regenCand = page.regenCandidateUrl;
   const angle = page.angleCandidateUrl;
-  // The "redesign" candidate lives on page.redesignedUrl (what /redesign-page writes
-  // and what apply-candidate kind="redesign" reads) — NOT redesignCandidateUrl.
-  const redesign = page.redesignedUrl;
+  const angleView = page.angleCandidateView;
   const raw = page.rawData;
   const scene = raw?.scene;
   const sceneDesc = typeof scene === "string" ? scene : scene?.description;
@@ -136,23 +136,16 @@ export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJob
             </div>
           )}
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={capLabel}>Mức thay đổi khi regen</span>
-            {[30, 50, 70].map((p) => (
-              <Button key={p} size="sm" variant={changePercent === p ? "primary" : "outline"} disabled={busy !== null} onClick={() => setChangePercent(p)}>{p}%</Button>
-            ))}
-          </div>
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             <Candidate label="Hình gốc" src={page.imageUrl} />
-            <Candidate label={`Redesign ${changePercent}%`} src={redesign} selected={!!redesign && page.reproducedUrl === redesign} empty
-              disabled={!pa.enabled} busy={busy === "redesign"}
-              onChoose={run("redesign", () => pa.applyCandidate(idx, "redesign"))}
-              regen={{ label: redesign ? `Regen ${changePercent}%` : `Tạo bản ${changePercent}%`, busy: busy === "regen30", onClick: run("regen30", () => pa.regenPage(idx, changePercent)) }} />
-            <Candidate label="Bản thay thế (camera)" src={angle} hint={angle ? "Góc mới" : undefined} selected={!!angle && page.reproducedUrl === angle} empty
-              disabled={!pa.enabled} busy={busy === "angle"}
-              onChoose={run("angle", () => pa.applyCandidate(idx, "angle"))}
-              regen={{ label: angle ? "Regen camera" : "Tạo bản camera", busy: busy === "regencam", onClick: run("regencam", () => pa.regenCandidate(idx, true)) }} />
+            <Candidate label="Regen" src={regenCand} selected={!!regenCand && page.reproducedUrl === regenCand} empty
+              disabled={!pa.enabled} busy={busy === "applyregen"}
+              onChoose={run("applyregen", () => pa.applyCandidate(idx, "regen"))}
+              regen={{ label: regenCand ? "Regen lại" : "Tạo bản regen", busy: busy === "genregen", onClick: run("genregen", () => pa.regenCandidate(idx, false)) }} />
+            <Candidate label={angleView ? `Đổi camera · ${angleView}` : "Đổi camera"} src={angle} hint={angle ? "Góc mới" : undefined} selected={!!angle && page.reproducedUrl === angle} empty
+              disabled={!pa.enabled} busy={busy === "applyangle"}
+              onChoose={run("applyangle", () => pa.applyCandidate(idx, "angle"))}
+              regen={{ label: angle ? "Đổi góc khác" : "Tạo góc mới", busy: busy === "genangle", onClick: run("genangle", () => pa.regenCandidate(idx, true)) }} />
           </div>
 
           {err && <div style={{ padding: "10px 12px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12.5 }}>{err}</div>}
