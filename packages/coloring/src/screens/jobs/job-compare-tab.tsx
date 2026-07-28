@@ -80,7 +80,9 @@ export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJob
   const page = pages[idx];
   const redo = reproduced(page);
   const angle = page.angleCandidateUrl;
-  const redesign = page.redesignCandidateUrl || redo;
+  // The "redesign" candidate lives on page.redesignedUrl (what /redesign-page writes
+  // and what apply-candidate kind="redesign" reads) — NOT redesignCandidateUrl.
+  const redesign = page.redesignedUrl;
   const raw = page.rawData;
   const scene = raw?.scene;
   const sceneDesc = typeof scene === "string" ? scene : scene?.description;
@@ -143,14 +145,14 @@ export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJob
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             <Candidate label="Hình gốc" src={page.imageUrl} />
-            <Candidate label={`Redesign ${changePercent}%`} src={redesign} selected={!!redo && redesign === redo} empty
+            <Candidate label={`Redesign ${changePercent}%`} src={redesign} selected={!!redesign && page.reproducedUrl === redesign} empty
               disabled={!pa.enabled} busy={busy === "redesign"}
               onChoose={run("redesign", () => pa.applyCandidate(idx, "redesign"))}
               regen={{ label: redesign ? `Regen ${changePercent}%` : `Tạo bản ${changePercent}%`, busy: busy === "regen30", onClick: run("regen30", () => pa.regenPage(idx, changePercent)) }} />
-            <Candidate label="Bản thay thế (camera)" src={angle} hint={angle ? "Gợi ý" : undefined} selected={!!redo && angle === redo} empty
+            <Candidate label="Bản thay thế (camera)" src={angle} hint={angle ? "Góc mới" : undefined} selected={!!angle && page.reproducedUrl === angle} empty
               disabled={!pa.enabled} busy={busy === "angle"}
               onChoose={run("angle", () => pa.applyCandidate(idx, "angle"))}
-              regen={{ label: angle ? `Regen ${changePercent}%` : `Tạo bản ${changePercent}%`, busy: busy === "regencam", onClick: run("regencam", () => pa.regenPage(idx, changePercent)) }} />
+              regen={{ label: angle ? "Regen camera" : "Tạo bản camera", busy: busy === "regencam", onClick: run("regencam", () => pa.regenCandidate(idx, true)) }} />
           </div>
 
           {err && <div style={{ padding: "10px 12px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12.5 }}>{err}</div>}
