@@ -11,8 +11,12 @@ const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (staging).";
  * Per-page actions on a book's coloring pages, replicating the existing
  * book-detail-page.tsx handlers. All behind the write flag (default local = off).
  * PUT sends real Book columns (coloringPages / squareThumbnailUrl) directly.
+ *
+ * `cloneJobId` (from book.data.cloneJobId) enables Regen / Đổi góc: a book page
+ * maps 1:1 by index to its source clone job page, so /reproduce {pageIndex, apply:true}
+ * regenerates and writes straight back onto the book page.
  */
-export function usePageActions(bookId: string) {
+export function usePageActions(bookId: string, cloneJobId?: string) {
   const qc = useQueryClient();
   const inval = () => qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
   const put = async (data: Record<string, unknown>) => {
@@ -23,6 +27,19 @@ export function usePageActions(bookId: string) {
 
   return {
     enabled: COLORING_WRITE_ENABLED,
+    /** Whether Regen/Đổi góc are available (book has a source clone job). */
+    canRegen: Boolean(cloneJobId),
+    /**
+     * Regenerate a page via its source clone job. newAngle=false → same camera
+     * ("Regen"); true → a new camera angle ("Đổi góc"). apply:true writes the
+     * result onto both the job page and this book page.
+     */
+    regenPage: async (pageIndex: number, newAngle: boolean) => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+      if (!cloneJobId) throw new Error("Sách này không có clone job nguồn để regen.");
+      await httpPost(`${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`, { pageIndex, newAngle, apply: true });
+      inval();
+    },
     /** PUT book squareThumbnailUrl + thumbnailUrl = this page. */
     setThumbnail: (pageUrl: string) => put({ squareThumbnailUrl: pageUrl, thumbnailUrl: pageUrl }),
     /**

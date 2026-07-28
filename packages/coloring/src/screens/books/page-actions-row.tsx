@@ -25,7 +25,10 @@ export function PageActionsRow({
   onRemoved: () => void;
 }) {
   const router = useRouter();
-  const actions = usePageActions(bookId);
+  const cloneJobId = typeof bookData?.cloneJobId === "string" ? bookData.cloneJobId : undefined;
+  const actions = usePageActions(bookId, cloneJobId);
+  // Book page maps 1:1 by array index to its source clone job page.
+  const pageIndex = pages.findIndex((p) => p.id === page.id);
   const { items: styles } = useEntityList("coloring-styles");
   const [styleId, setStyleId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -58,6 +61,16 @@ export function PageActionsRow({
         <Button size="sm" disabled={disabled || !chosen || busy !== null} onClick={run("colorize", () => actions.colorize(page.id, page.url, chosen))}>
           <Icon name="palette" size={15} /> {busy === "colorize" ? "Đang tô…" : "Tô màu"}
         </Button>
+        {actions.canRegen && (
+          <>
+            <Button variant="outline" size="sm" disabled={disabled || busy !== null || pageIndex < 0} title="Vẽ lại trang (giữ nguyên góc)" onClick={run("regen", () => actions.regenPage(pageIndex, false))}>
+              <Icon name="sparkles" size={15} /> {busy === "regen" ? "Đang regen…" : "Regen"}
+            </Button>
+            <Button variant="outline" size="sm" disabled={disabled || busy !== null || pageIndex < 0} title="Vẽ lại trang với góc camera mới" onClick={run("angle", () => actions.regenPage(pageIndex, true))}>
+              <Icon name="sparkles" size={15} /> {busy === "angle" ? "Đang đổi góc…" : "Đổi góc"}
+            </Button>
+          </>
+        )}
         <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
         <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("thumb", () => actions.setThumbnail(page.coloredUrl || page.url))}>
           <Icon name="image" size={15} /> Set thumbnail
