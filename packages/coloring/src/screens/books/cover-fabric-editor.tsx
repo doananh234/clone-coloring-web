@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Canvas, Textbox } from "fabric";
 import { COVER_CANVAS_SIDE as S, ELEMENT_ORDER, type CoverDoc, type CoverElement, type CoverElementKey } from "../../lib/cover-doc";
 import { COLORING_IMG_BASE } from "../../data/config";
@@ -35,13 +35,31 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
   ref,
 ) {
   const elRef = useRef<HTMLCanvasElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<Canvas | null>(null);
   const boxesRef = useRef<Partial<Record<CoverElementKey, Textbox>>>({});
   const naturalSideRef = useRef<number>(S);
+  // CSS scale factor: the Fabric surface is a fixed S×S canvas scaled down to
+  // fit the container width. Transform doesn't change the S-px coordinate
+  // system, so text positions stay correct + inside the frame.
+  const [scale, setScale] = useState(1);
   // Keep the latest doc/onChange in refs so fabric event handlers stay stable.
   const docRef = useRef(doc); docRef.current = doc;
   const onChangeRef = useRef(onChange); onChangeRef.current = onChange;
   const onSelectRef = useRef(onSelect); onSelectRef.current = onSelect;
+
+  // Track the wrapper width → scale = width / S. Without this the Fabric canvas
+  // renders at its native S px (Fabric forces the element + .canvas-container to
+  // S px, overriding CSS width:100%), overflowing the layout massively.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const update = () => { const w = el.clientWidth; if (w > 0) setScale(w / S); };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Init canvas once (client-only).
   useEffect(() => {
@@ -161,9 +179,17 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
 
   return (
     <div style={{ background: "var(--carbon-950)", borderRadius: "var(--radius-lg)", padding: 24 }}>
-      <div style={{ position: "relative", width: "min(420px, 100%)", margin: "0 auto", aspectRatio: "1 / 1" }}>
-        <canvas ref={elRef} style={{ width: "100%", height: "100%", borderRadius: 6 }} />
-        <div style={{ position: "absolute", inset: 24, border: "1.5px dashed var(--volt-600)", borderRadius: 4, opacity: 0.5, pointerEvents: "none" }} />
+      {/* Responsive square. overflow:hidden clips the fixed S×S inner surface
+          (its layout box stays S px; the CSS transform only shrinks it visually
+          to the wrapper width). aspectRatio keeps the frame square. */}
+      <div
+        ref={wrapperRef}
+        style={{ position: "relative", width: "100%", maxWidth: 520, margin: "0 auto", aspectRatio: "1 / 1", overflow: "hidden", borderRadius: 6, minHeight: 0 }}
+      >
+        <div style={{ width: S, height: S, transformOrigin: "top left", transform: `scale(${scale})` }}>
+          <canvas ref={elRef} />
+        </div>
+        <div style={{ position: "absolute", inset: "5%", border: "1.5px dashed var(--volt-600)", borderRadius: 4, opacity: 0.5, pointerEvents: "none", zIndex: 2 }} />
       </div>
     </div>
   );
