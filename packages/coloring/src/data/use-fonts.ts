@@ -26,6 +26,7 @@ export function injectFontFaces(fonts: FontRecord[]): void {
       const face = new FontFace(f.name, `url(${JSON.stringify(f.fileUrl)})`);
       document.fonts.add(face);
       face.load().catch(() => {
+        document.fonts.delete?.(face);
         injected.delete(dedupeKey);
       });
     } catch {
