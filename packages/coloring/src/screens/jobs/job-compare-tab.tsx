@@ -12,6 +12,7 @@ import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { usePipelineActions, type CandidateKind } from "../../data/use-pipeline-actions";
 import { useStyleFromImage } from "../../data/use-more-actions";
 import { resolveImg } from "../../data/img";
+import { useBook } from "../../data/use-book";
 import type { CloneJobPage } from "../../data/types";
 
 const mono = { fontFamily: "var(--font-mono)" as const };
@@ -56,10 +57,14 @@ function Candidate({ label, src, hint, selected, empty, onChoose, disabled, busy
   );
 }
 
-export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJobPage[] }) {
+export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: CloneJobPage[]; bookId?: string }) {
   const router = useRouter();
   const [sel, setSel] = useState(0);
   const pa = usePipelineActions(jobId);
+  // The book created from this job — to preview the cover currently in use.
+  // Only shown on the first page (the cover is derived from the source page).
+  const { book } = useBook(bookId || "");
+  const coverUrl = resolveImg(book?.coverUrl ?? undefined);
   const styleSvc = useStyleFromImage("coloring-styles");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -169,16 +174,47 @@ export function JobCompareTab({ jobId, pages }: { jobId: string; pages: CloneJob
             </div>
           )}
 
-          {/* Before/after: original vs the current generated (reproduced/redesigned)
-              page — the key check for whether regen actually improved the page. */}
-          {redo && page.imageUrl && (
+          {/* Big view: original↔gen comparison. On the FIRST page, the book's
+              current cover is shown large right beside it (the cover is derived
+              from the source page, so it only belongs on page 01). */}
+          {(idx === 0 || (redo && page.imageUrl)) && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={capLabel}>So sánh gốc ↔ đã gen</span>
-                <Badge tone="carbon">Kéo để so sánh</Badge>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={capLabel}>{redo && page.imageUrl ? "So sánh gốc ↔ đã gen" : "Hình gốc"}</span>
+                {redo && page.imageUrl && <Badge tone="carbon">Kéo để so sánh</Badge>}
               </div>
-              <div style={{ maxWidth: 420 }}>
-                <ImageComparison beforeSrc={resolveImg(page.imageUrl) ?? ""} afterSrc={resolveImg(redo) ?? ""} beforeLabel="Gốc" afterLabel="Đã gen" />
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+                <div style={{ flex: "1 1 340px", maxWidth: 420, minWidth: 0 }}>
+                  {redo && page.imageUrl ? (
+                    <ImageComparison beforeSrc={resolveImg(page.imageUrl) ?? ""} afterSrc={resolveImg(redo) ?? ""} beforeLabel="Gốc" afterLabel="Đã gen" />
+                  ) : page.imageUrl ? (
+                    <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={resolveImg(page.imageUrl)} alt="Hình gốc" style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
+                    </div>
+                  ) : null}
+                </div>
+                {idx === 0 && (
+                  <div style={{ flex: "1 1 300px", maxWidth: 420, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={capLabel}>Cover đang dùng</span>
+                      {coverUrl && <Badge tone="carbon">Bìa job</Badge>}
+                    </div>
+                    <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+                      {coverUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={coverUrl} alt="Cover đang dùng" style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
+                      ) : (
+                        <span style={{ fontSize: 12 }}>Chưa có bìa</span>
+                      )}
+                    </div>
+                    {bookId && (
+                      <Button variant="outline" size="sm" style={{ width: "100%" }} onClick={() => router.push(`${B}/books/${bookId}/cover`)}>
+                        <Icon name="image" size={14} /> Sửa bìa
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

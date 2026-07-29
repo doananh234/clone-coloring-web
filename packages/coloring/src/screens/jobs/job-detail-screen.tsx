@@ -232,7 +232,7 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
       {tab === "pipeline" ? (
         <JobPipelineTab job={job} isLocal={isLocal} onViewPages={() => setTab("pages")} />
       ) : tab === "pages" ? (
-        <JobCompareTab jobId={job.id} pages={job.pages} />
+        <JobCompareTab jobId={job.id} pages={job.pages} bookId={job.resultBookId ?? job.bookId ?? undefined} />
       ) : (
         <InfoTab job={job} />
       )}
