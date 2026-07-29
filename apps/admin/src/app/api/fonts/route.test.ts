@@ -12,7 +12,15 @@ vi.mock("@vx/server-core/r2", () => ({
 
 import { GET, POST } from "./route";
 
-const b64 = Buffer.from("fake-font").toString("base64");
+// TrueType magic bytes (0x00 0x01 0x00 0x00) + padding so it passes the
+// magic-byte sniff for .ttf/.otf declared formats.
+const ttfBytes = Buffer.concat([Buffer.from([0x00, 0x01, 0x00, 0x00]), Buffer.from("payload")]);
+const b64 = ttfBytes.toString("base64");
+// WOFF2 magic bytes ("wOF2") for the woff2 happy path.
+const woff2Bytes = Buffer.concat([Buffer.from("wOF2"), Buffer.from("payload")]);
+const woff2B64 = woff2Bytes.toString("base64");
+// A non-font body (plain text) — must be rejected by the byte check.
+const nonFontB64 = Buffer.from("fake-font").toString("base64");
 
 describe("/api/fonts", () => {
   beforeEach(() => { create.mockReset(); findMany.mockReset(); });
@@ -40,9 +48,23 @@ describe("/api/fonts", () => {
     expect(res.status).toBe(400);
   });
 
+  it("POST rejects a valid format but non-font byte body", async () => {
+    const res = await POST(new NextRequest("http://localhost/api/fonts", { method: "POST", body: JSON.stringify({ name: "F", base64: nonFontB64, format: "ttf" }) }));
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe("File không phải font hợp lệ");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("POST rejects woff2 format with non-woff2 (ttf) bytes", async () => {
+    const res = await POST(new NextRequest("http://localhost/api/fonts", { method: "POST", body: JSON.stringify({ name: "F", base64: b64, format: "woff2" }) }));
+    expect(res.status).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("POST uploads + creates a font row", async () => {
     create.mockResolvedValue({ id: "f9", name: "Foo", fileUrl: "https://r2/fonts/x.woff2", format: "woff2" });
-    const res = await POST(new NextRequest("http://localhost/api/fonts", { method: "POST", body: JSON.stringify({ name: "Foo", base64: b64, format: "woff2" }) }));
+    const res = await POST(new NextRequest("http://localhost/api/fonts", { method: "POST", body: JSON.stringify({ name: "Foo", base64: woff2B64, format: "woff2" }) }));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.font.id).toBe("f9");
