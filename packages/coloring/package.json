@@ -9,6 +9,10 @@
     "./screens": "./src/screens/index.ts",
     "./styles.css": "./src/styles/motio.css"
   },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
     "@vx/core-uikit": "workspace:*"
@@ -20,8 +24,11 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.8.0"
+    "jsdom": "^26.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
   }
 }

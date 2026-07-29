@@ -7594,10 +7594,13 @@ __metadata:
   resolution: "@vx/coloring@workspace:packages/coloring"
   dependencies:
     "@tabler/icons-react": "npm:^3.44.0"
+    "@testing-library/jest-dom": "npm:^6.0.0"
     "@types/react": "npm:^19.0.0"
     "@types/react-dom": "npm:^19.0.0"
     "@vx/core-uikit": "workspace:*"
+    jsdom: "npm:^26.0.0"
     typescript: "npm:^5.8.0"
+    vitest: "npm:^3.0.0"
   peerDependencies:
     "@tanstack/react-query": ^5.0.0
     next: ^16.0.0
