@@ -37,6 +37,13 @@ import {
   IconSparkles,
   IconShield,
   IconStack2,
+  IconUpload,
+  IconLoader2,
+  IconEye,
+  IconEyeOff,
+  IconAlignLeft,
+  IconAlignCenter,
+  IconAlignRight,
   type IconProps as TablerIconProps,
 } from "@tabler/icons-react";
 import type { ComponentType } from "react";
@@ -81,6 +88,13 @@ const REGISTRY: Record<string, ComponentType<TablerIconProps>> = {
   sparkles: IconSparkles,
   shield: IconShield,
   layers: IconStack2,
+  upload: IconUpload,
+  loader: IconLoader2,
+  eye: IconEye,
+  "eye-off": IconEyeOff,
+  "align-left": IconAlignLeft,
+  "align-center": IconAlignCenter,
+  "align-right": IconAlignRight,
 };
 
 export type IconName = keyof typeof REGISTRY | (string & {});

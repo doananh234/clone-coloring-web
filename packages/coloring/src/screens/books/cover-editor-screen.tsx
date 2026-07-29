@@ -1,42 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
-import { Input } from "../../components/ui/input";
 import { Tabs } from "../../components/ui/tabs";
-import { Select, Slider, Switch } from "../../components/ui/form-controls";
+import { Select, Switch } from "../../components/ui/form-controls";
 import { LoadingRows, ErrorState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { useBook } from "../../data/use-book";
 import { useEntityList } from "../../data/use-entity-list";
 import { useSaveCover, useGenerateCover, type GeneratedCover } from "../../data/use-cover-actions";
+import { useCoverDesign, type CoverStylePack } from "../../data/use-cover-design";
 import { resolveImg } from "../../data/img";
-import { composeCover } from "../../lib/compose-cover";
-import { CoverCanvas, type CoverLayout } from "./cover-canvas";
-
-// Loaded via the Google Fonts @import in motio.css. Kid/cover-friendly display
-// faces + clean sans/serif so covers can vary in personality.
-const FONTS = [
-  "Space Grotesk",
-  "Fredoka",
-  "Baloo 2",
-  "Quicksand",
-  "Poppins",
-  "Nunito",
-  "Chewy",
-  "Pacifico",
-  "Fraunces",
-  "Geist",
-  "Geist Mono",
-];
-// Hex so the native color picker + canvas share one value.
-const SWATCHES = ["#1a1712", "#8a8070", "#c9852a", "#ffffff", "#dd5245", "#4e8ff2"];
-const DEFAULT_LAYOUT: CoverLayout = { title: { x: 50, y: 30 }, sub: { x: 50, y: 62 }, badge: { x: 50, y: 88 }, titleSize: 30, color: "#0b0d0c" };
+import { CoverFabricEditor, type CoverEditorHandle } from "./cover-fabric-editor";
+import { CoverElementPanel } from "./cover-element-panel";
+import { defaultCoverDoc, normalizeCoverDoc, type CoverDoc, type CoverElement, type CoverElementKey } from "../../lib/cover-doc";
 
 export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const router = useRouter();
@@ -44,11 +26,15 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const { items: styles } = useEntityList("coloring-styles");
   const saveCover = useSaveCover(bookId);
   const genCover = useGenerateCover();
+  const coverDesign = useCoverDesign();
   const [tab, setTab] = useState<"text" | "ai">("text");
-  const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [font, setFont] = useState(FONTS[0]);
-  const [layout, setLayout] = useState<CoverLayout>(DEFAULT_LAYOUT);
+  const editorRef = useRef<CoverEditorHandle>(null);
+  const [doc, setDoc] = useState<CoverDoc | null>(null);
+  const [selectedKey, setSelectedKey] = useState<CoverElementKey | null>("title");
+  const [docLoaded, setDocLoaded] = useState(false);
+  // Cover text-style extracted from the source cover (title/sub/brand fonts + colors).
+  const [pack, setPack] = useState<CoverStylePack | null>(null);
+  const [reBusy, setReBusy] = useState(false);
   const [busy, setBusy] = useState<"save" | "export" | null>(null);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
   // AI tab
@@ -59,12 +45,28 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [aiResults, setAiResults] = useState<GeneratedCover[]>([]);
 
+  // Seed the cover doc once the book loads (badge = page count, seeded from the
+  // pack auto-extracted at create-book time). Restores from book.data.coverLayout
+  // when present so edits persist across reloads.
   useEffect(() => {
-    if (book) {
-      setTitle((t) => t || book.title || "");
-      setSubtitle((s) => s || book.subtitle || "");
-    }
-  }, [book]);
+    if (!book || docLoaded) return;
+    const badge = book.specifications?.pages ? `${book.specifications.pages} trang tô màu` : "";
+    const pack = (book.data?.coverStylePack ?? null) as CoverStylePack | null;
+    const seed = {
+      title: book.title || "",
+      subtitle: book.subtitle || "",
+      badge,
+      titleFont: pack?.fontPairs?.[0]?.display,
+      titleColor: pack?.palettes?.[0]?.primary,
+    };
+    const stored = book.data?.coverLayout;
+    setDoc(stored ? normalizeCoverDoc(stored, seed) : defaultCoverDoc(seed));
+    setPack(pack);
+    setDocLoaded(true);
+  }, [book, docLoaded]);
+
+  const patchEl = (k: CoverElementKey, patch: Partial<CoverElement>) =>
+    setDoc((d) => (d ? { ...d, elements: { ...d.elements, [k]: { ...d.elements[k], ...patch } } } : d));
 
   if (isLoading) return <Card><LoadingRows rows={5} /></Card>;
   if (isError || !book) {
@@ -84,16 +86,40 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const cleanBase = resolveImg(coverMeta.sourceThumbnailUrl || book.squareThumbnailUrl || book.thumbnailUrl || book.coverUrl);
   // Cover (with text) is only the "current" reference in the AI tab.
   const cover = resolveImg(book.coverUrl || book.squareThumbnailUrl || book.thumbnailUrl);
-  const brand = "";
   const styleOptions = styles.map((s) => ({ label: s.name, value: s.id }));
-  const badge = book.specifications?.pages ? `${book.specifications.pages} trang tô màu` : "";
-  const coverText = { title, subtitle, badge };
+
+  // Apply the extracted pack onto the doc's title element (font + color only).
+  const applyPackToDoc = (p: CoverStylePack) => {
+    const f = p.fontPairs?.[0]?.display;
+    const primary = p.palettes?.[0]?.primary;
+    patchEl("title", {
+      ...(f ? { fontFamily: f } : {}),
+      ...(primary && /^#[0-9a-fA-F]{6}$/.test(primary) ? { color: primary } : {}),
+    });
+  };
+
+  // Re-run cover-design on the source cover and re-apply font + color.
+  const doReextract = async () => {
+    if (!cleanBase) { setMsg({ err: "Chưa có ảnh nền để trích style." }); return; }
+    setReBusy(true); setMsg(null);
+    try {
+      const p = await coverDesign.run(cleanBase, {
+        title: doc?.elements.title.text || book.title || "Coloring Book",
+        subtitle: doc?.elements.subtitle.text || undefined,
+        category: book.category || undefined,
+      });
+      setPack(p);
+      applyPackToDoc(p);
+      setMsg({ ok: "Đã trích lại style từ bìa gốc." });
+    } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Trích style thất bại." }); }
+    finally { setReBusy(false); }
+  };
 
   const doExport = async () => {
-    if (!cleanBase) { setMsg({ err: "Chưa có ảnh nền để render." }); return; }
+    if (!editorRef.current) return;
     setBusy("export"); setMsg(null);
     try {
-      const { blob } = await composeCover(cleanBase, coverText, layout, font);
+      const { blob } = await editorRef.current.export();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -106,12 +132,13 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   };
 
   const doSave = async () => {
-    if (!cleanBase) { setMsg({ err: "Chưa có ảnh nền để lưu." }); return; }
+    if (!editorRef.current || !doc) return;
     setBusy("save"); setMsg(null);
     try {
-      const { base64 } = await composeCover(cleanBase, coverText, layout, font);
+      const { base64 } = await editorRef.current.export();
       await saveCover.save(base64);
-      setMsg({ ok: "Đã lưu bìa (coverUrl)." });
+      await saveCover.saveLayout(doc);
+      setMsg({ ok: "Đã lưu bìa (coverUrl + layout)." });
     } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Lưu bìa thất bại." }); }
     finally { setBusy(null); }
   };
@@ -169,29 +196,33 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
 
       {tab === "text" ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
-          <div style={{ flex: "2 1 400px", minWidth: 0 }}>
-            <CoverCanvas image={cleanBase} brand={brand} text={coverText} layout={layout} onLayout={setLayout} font={font} />
+          <div style={{ flex: "2 1 420px", minWidth: 0 }}>
+            {doc && (
+              <CoverFabricEditor ref={editorRef} image={cleanBase} doc={doc} onChange={setDoc}
+                selectedKey={selectedKey} onSelect={setSelectedKey} />
+            )}
+            <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 8 }}>
+              Kéo thả từng lớp chữ để dời/đổi cỡ · nét đứt = vùng an toàn · <span style={{ fontFamily: "var(--font-mono)" }}>xuất theo độ phân giải ảnh gốc</span>
+            </div>
           </div>
-          <div style={{ flex: "1 1 300px", minWidth: 280 }}>
-            <Card title="Chữ đang chọn · Tiêu đề">
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <label style={{ display: "block" }}><span className="mo-flabel">Tiêu đề</span><Input value={title} onChange={(e) => setTitle(e.target.value)} /></label>
-                <label style={{ display: "block" }}><span className="mo-flabel">Phụ đề</span><Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} /></label>
-                <Select label="Font" value={font} onChange={setFont} options={FONTS} />
-                <Slider label="Cỡ chữ" value={layout.titleSize} min={14} max={72} unit=" px" onChange={(v) => setLayout({ ...layout, titleSize: v })} />
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Màu chữ</div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    {SWATCHES.map((c) => (
-                      <span key={c} className={`mo-swatch${layout.color.toLowerCase() === c ? " mo-swatch--on" : ""}`} style={{ background: c, borderColor: c === "#ffffff" && layout.color.toLowerCase() !== c ? "var(--neutral-300)" : undefined }} onClick={() => setLayout({ ...layout, color: c })} />
-                    ))}
-                    <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
-                    <input type="color" className="mo-colorpick" value={/^#[0-9a-fA-F]{6}$/.test(layout.color) ? layout.color : "#0b0d0c"} onChange={(e) => setLayout({ ...layout, color: e.target.value })} title="Chọn màu tùy ý" />
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--muted-foreground)" }}>{layout.color}</span>
-                  </div>
+          <div style={{ flex: "1 1 320px", minWidth: 300 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              {pack ? <Badge tone="success" dot>Style bìa từ sách gốc</Badge> : <Badge tone="neutral">Chưa có style bìa gốc</Badge>}
+              {pack?.palettes?.[0] && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", fontSize: 12, color: "var(--muted-foreground)" }}>
+                  {(["background", "primary", "secondary", "accent"] as const).map((k) => {
+                    const c = pack.palettes![0][k];
+                    return c ? <span key={k} title={`${k}: ${c}`} style={{ width: 16, height: 16, borderRadius: 4, background: c, border: "1px solid var(--border)" }} /> : null;
+                  })}
                 </div>
-              </div>
-            </Card>
+              )}
+            </div>
+            {doc && <CoverElementPanel doc={doc} selectedKey={selectedKey} onSelect={setSelectedKey} onPatch={patchEl} />}
+            <div style={{ marginTop: 12 }}>
+              <Button variant="outline" size="sm" onClick={doReextract} disabled={reBusy || !coverDesign.enabled || !cleanBase}>
+                <Icon name="sparkles" size={15} /> {reBusy ? "Đang trích…" : "Trích lại style từ bìa"}
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
