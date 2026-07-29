@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { httpPost, httpPut } from "@vx/core-uikit/api";
 import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
+import type { CoverDoc } from "../lib/cover-doc";
 
 const LOCAL = "Chỉ chạy ở chế độ ghi thật (bật NEXT_PUBLIC_COLORING_WRITE=1, upstream staging).";
 
@@ -27,6 +28,11 @@ export function useSaveCover(bookId: string) {
       await httpPut(`${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}`, { coverUrl });
       qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
       return coverUrl;
+    },
+    saveLayout: async (doc: CoverDoc): Promise<void> => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL);
+      await httpPut(`${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}`, { coverLayout: doc });
+      qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
     },
   };
 }
