@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
-    "@vx/core-uikit": "workspace:*"
+    "@vx/core-uikit": "workspace:*",
+    "fabric": "^6.5.1"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0",
