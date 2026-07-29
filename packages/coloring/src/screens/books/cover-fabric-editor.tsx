@@ -43,6 +43,11 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
   // fit the container width. Transform doesn't change the S-px coordinate
   // system, so text positions stay correct + inside the frame.
   const [scale, setScale] = useState(1);
+  // Flips true once the (async) Fabric canvas is initialized. The background /
+  // doc / selection effects depend on it so they RE-RUN after init — otherwise
+  // on first mount they run while canvasRef is still null (init awaits
+  // import("fabric")) and the initial background image never loads.
+  const [ready, setReady] = useState(false);
   // Keep the latest doc/onChange in refs so fabric event handlers stay stable.
   const docRef = useRef(doc); docRef.current = doc;
   const onChangeRef = useRef(onChange); onChangeRef.current = onChange;
@@ -71,6 +76,7 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
       if (disposed) return;
       canvas = new fabric.Canvas(elRef.current, { width: S, height: S, backgroundColor: "#efe8d9", selection: false, preserveObjectStacking: true });
       canvasRef.current = canvas;
+      setReady(true);
 
       canvas.on("selection:created", (e) => onSelectRef.current(keyOf(e.selected?.[0])));
       canvas.on("selection:updated", (e) => onSelectRef.current(keyOf(e.selected?.[0])));
@@ -89,7 +95,7 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
         });
       });
     })();
-    return () => { disposed = true; canvas?.dispose(); canvasRef.current = null; boxesRef.current = {}; };
+    return () => { disposed = true; canvas?.dispose(); canvasRef.current = null; boxesRef.current = {}; setReady(false); };
   }, []);
 
   // Background image (cover-fit), reloaded when `image` changes.
@@ -112,7 +118,7 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
       } catch { /* leave cream background; export will still work if user retries */ }
     })();
     return () => { cancelled = true; };
-  }, [image]);
+  }, [image, ready]);
 
   // Sync textboxes from doc (create/update/remove per visibility). Runs on every doc change.
   useEffect(() => {
@@ -141,7 +147,9 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
           applyStyle(existing, el);
           existing.set({ left: el.left, top: el.top });
         } else {
-          const tb = new fabric.Textbox(el.text, { originX: "center", originY: "center", left: el.left, top: el.top, width: S * 0.82, editable: false });
+          // Wrap width = the safe frame width (90% of S, matching the dashed
+          // safe-zone). Long text wraps and never spills outside the image.
+          const tb = new fabric.Textbox(el.text, { originX: "center", originY: "center", left: el.left, top: el.top, width: S * 0.9, editable: false });
           tb.set({ data: { key } });
           applyStyle(tb, el);
           canvas.add(tb);
@@ -152,7 +160,7 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc]);
+  }, [doc, ready]);
 
   // Reflect external selection onto the canvas.
   useEffect(() => {
@@ -161,7 +169,7 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
     if (!selectedKey) { canvas.discardActiveObject(); canvas.requestRenderAll(); return; }
     const tb = boxesRef.current[selectedKey];
     if (tb && canvas.getActiveObject() !== tb) { canvas.setActiveObject(tb); canvas.requestRenderAll(); }
-  }, [selectedKey]);
+  }, [selectedKey, ready]);
 
   useImperativeHandle(ref, () => ({
     async export() {
