@@ -33,6 +33,7 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const [docLoaded, setDocLoaded] = useState(false);
   // Cover text-style extracted from the source cover (title/sub/brand fonts + colors).
   const [pack, setPack] = useState<CoverStylePack | null>(null);
+  const [baseOverride, setBaseOverride] = useState<string | null>(null);
   const [reBusy, setReBusy] = useState(false);
   const [busy, setBusy] = useState<"save" | "export" | null>(null);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
@@ -81,11 +82,22 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
 
   // Text tab edits on the CLEAN illustration (no baked-in text), matching the
   // old editor: coverMeta.sourceThumbnailUrl → square/thumbnail (kept text-free).
+  // `baseOverride` lets the user pick a different page as the background via the
+  // thumbnail strip below the canvas; it wins over the stored coverMeta source.
   const coverMeta = (book.data?.coverMeta ?? {}) as { sourceThumbnailUrl?: string };
-  const cleanBase = resolveImg(coverMeta.sourceThumbnailUrl || book.squareThumbnailUrl || book.thumbnailUrl || book.coverUrl);
+  const fullCoverMeta = (book.data?.coverMeta ?? {}) as Record<string, unknown>;
+  const activeBaseRaw = baseOverride
+    || coverMeta.sourceThumbnailUrl || book.squareThumbnailUrl || book.thumbnailUrl || book.coverUrl || "";
+  const cleanBase = resolveImg(activeBaseRaw);
   // Cover (with text) is only the "current" reference in the AI tab.
   const cover = resolveImg(book.coverUrl || book.squareThumbnailUrl || book.thumbnailUrl);
   const styleOptions = styles.map((s) => ({ label: s.name, value: s.id }));
+  // Candidate background images for the thumbnail strip: current cover sources +
+  // the book's colored pages (falls back to line art when no colored version).
+  const bgCandidates = [...new Set([
+    coverMeta.sourceThumbnailUrl, book.squareThumbnailUrl, book.thumbnailUrl,
+    ...(book.coloringPages ?? []).map((p) => p.coloredUrl || p.url),
+  ].filter((u): u is string => Boolean(u)))];
 
   // Apply the extracted pack onto the doc's title element (font + color only).
   const applyPackToDoc = (p: CoverStylePack) => {
@@ -137,6 +149,7 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
       const { base64 } = await editorRef.current.export();
       await saveCover.save(base64);
       await saveCover.saveLayout(doc);
+      if (activeBaseRaw) await saveCover.saveCoverSource(activeBaseRaw, fullCoverMeta);
       setMsg({ ok: "Đã lưu bìa (coverUrl + layout)." });
     } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Lưu bìa thất bại." }); }
     finally { setBusy(null); }
@@ -203,6 +216,44 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
             <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 8 }}>
               Kéo thả từng lớp chữ để dời/đổi cỡ · nét đứt = vùng an toàn · <span style={{ fontFamily: "var(--font-mono)" }}>xuất theo độ phân giải ảnh gốc</span>
             </div>
+            {bgCandidates.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Ảnh nền bìa — chọn trang để làm nền</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {bgCandidates.map((u) => {
+                    const active = u === activeBaseRaw;
+                    return (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setBaseOverride(u)}
+                        title={active ? "Đang dùng làm nền" : "Dùng ảnh này làm nền"}
+                        style={{
+                          position: "relative",
+                          width: 64,
+                          height: 64,
+                          padding: 0,
+                          borderRadius: "var(--radius-md)",
+                          border: active ? "2px solid var(--volt-500)" : "1px solid var(--border)",
+                          background: "var(--neutral-100)",
+                          overflow: "hidden",
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={resolveImg(u)} alt="Ảnh nền" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        {active && (
+                          <span style={{ position: "absolute", right: 2, top: 2, background: "var(--volt-500)", color: "#fff", borderRadius: 99, width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Icon name="check" size={12} />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ flex: "1 1 320px", minWidth: 300 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>

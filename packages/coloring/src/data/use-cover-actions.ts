@@ -34,6 +34,18 @@ export function useSaveCover(bookId: string) {
       await httpPut(`${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}`, { coverLayout: doc });
       qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
     },
+    /**
+     * Persist the chosen background image so reopening the editor restores it.
+     * The books PUT merges `coverMeta` into Book.data but REPLACES the whole
+     * coverMeta object — so spread the existing meta to preserve other fields.
+     */
+    saveCoverSource: async (sourceThumbnailUrl: string, currentMeta: Record<string, unknown>): Promise<void> => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL);
+      await httpPut(`${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}`, {
+        coverMeta: { ...currentMeta, sourceThumbnailUrl },
+      });
+      qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
+    },
   };
 }
 
