@@ -10,7 +10,6 @@ import { Tabs } from "../../components/ui/tabs";
 import { Select, Switch } from "../../components/ui/form-controls";
 import { LoadingRows, ErrorState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
-import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { useBook } from "../../data/use-book";
 import { useEntityList } from "../../data/use-entity-list";
 import { useSaveCover, useGenerateCover, type GeneratedCover } from "../../data/use-cover-actions";
