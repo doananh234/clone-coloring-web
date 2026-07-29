@@ -130,6 +130,7 @@ async function reproduceSinglePage(
   pageIndex: number,
   newAngle: boolean,
   apply: boolean,
+  changePercent: number,
 ): Promise<NextResponse> {
   const jobPages = (row.pages as CloneJobPage[]) || [];
   const jobPage = jobPages[pageIndex];
@@ -169,6 +170,7 @@ async function reproduceSinglePage(
       key: `assets/clone-jobs/${jobId}/reproduce/page-${paddedPage}-${kind}.png`,
       traceEntityId: jobId,
       cameraView,
+      changePercent,
       r2Client,
       r2Config,
     });
@@ -334,11 +336,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
     const body = await req.json().catch(() => ({}));
-    const { pageIndex, newAngle, apply } = body as {
+    const { pageIndex, newAngle, apply, changePercent } = body as {
       pageIndex?: number;
       newAngle?: boolean;
       apply?: boolean;
+      changePercent?: number;
     };
+    // Clamp to a sane 5–95% range; fall back to the legacy 30% default.
+    const pct = Math.min(95, Math.max(5, Number(changePercent) || 30));
 
     const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
     if (!row) {
@@ -346,7 +351,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     if (pageIndex !== undefined) {
-      return reproduceSinglePage(jobId, row, pageIndex, !!newAngle, !!apply);
+      return reproduceSinglePage(jobId, row, pageIndex, !!newAngle, !!apply, pct);
     }
     return reproducePendingPages(jobId, row);
   } catch (error) {

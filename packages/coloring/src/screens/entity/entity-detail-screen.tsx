@@ -12,7 +12,9 @@ import { useEntity, type EntityRecord } from "../../data/use-entity";
 import { getEntityPatch } from "../../data/local-entities";
 import { useEntityActions } from "../../data/use-entity-actions";
 import { useStyleTest, useCategoryIcon } from "../../data/use-more-actions";
+import { ColorizeTestModal } from "../../components/ui/colorize-test-modal";
 import { humanize, displayFields } from "./entity-fields";
+import { StyleResultView } from "./style-result-view";
 import { resolveImg } from "../../data/img";
 
 export interface EntityKindConfig {
@@ -51,6 +53,7 @@ export function EntityDetailScreen({ kind, id }: { kind: string; id: string }) {
   const catIcon = useCategoryIcon();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
+  const [testOpen, setTestOpen] = useState(false);
 
   const run = (key: string, fn: () => Promise<void>, opts?: { confirm?: string; onDone?: () => void; ok?: string }) => async () => {
     if (opts?.confirm && !window.confirm(opts.confirm)) return;
@@ -108,22 +111,17 @@ export function EntityDetailScreen({ kind, id }: { kind: string; id: string }) {
           )}
           {isStyle && (
             <Button variant="outline" size="sm" disabled={!styleTest.enabled || busy !== null} title={styleTest.enabled ? undefined : "Cần bật ghi thật (staging)"}
-              onClick={run("test", async () => {
-                const directive = (entity.generationDirective as string) || (entity.colorizationDirective as string) || "";
-                const refs = Array.isArray(entity.referenceImages) ? (entity.referenceImages as { url?: string }[]).map((r) => r.url).filter(Boolean) as string[] : [];
-                let url: string;
-                if (kind === "art-styles") {
-                  const prompt = window.prompt("Prompt test (mô tả trang muốn vẽ):", "a cute cat playing") || "";
-                  if (!prompt) return;
-                  url = await styleTest.test({ prompt, generationDirective: directive, referenceImageUrls: refs });
-                } else {
-                  const imageUrl = window.prompt("URL ảnh B&W để tô thử:", "") || "";
-                  if (!imageUrl) return;
-                  url = await styleTest.test({ imageUrl, colorizationDirective: directive, referenceImageUrls: refs });
-                }
-                if (url) window.open(url, "_blank");
-              }, { ok: "Đã tạo ảnh test (mở tab mới)" })}>
-              <Icon name="wand" size={16} /> {busy === "test" ? "Đang test…" : "Test style"}
+              onClick={kind === "coloring-styles"
+                ? () => setTestOpen(true)
+                : run("test", async () => {
+                    const directive = (entity.generationDirective as string) || "";
+                    const refs = Array.isArray(entity.referenceImages) ? (entity.referenceImages as { url?: string }[]).map((r) => r.url).filter(Boolean) as string[] : [];
+                    const prompt = window.prompt("Prompt test (mô tả trang muốn vẽ):", "a cute cat playing") || "";
+                    if (!prompt) return;
+                    const url = await styleTest.test({ prompt, generationDirective: directive, referenceImageUrls: refs });
+                    if (url) window.open(url, "_blank");
+                  }, { ok: "Đã tạo ảnh test (mở tab mới)" })}>
+              <Icon name={kind === "coloring-styles" ? "palette" : "wand"} size={16} /> {busy === "test" ? "Đang test…" : kind === "coloring-styles" ? "Test tô màu" : "Test style"}
             </Button>
           )}
           {kind === "categories" && (
@@ -169,26 +167,46 @@ export function EntityDetailScreen({ kind, id }: { kind: string; id: string }) {
         </div>
       </div>
 
-      {fields.length > 0 && (
-        <Card title="Chi tiết">
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {fields.map((f) => (
-              <div key={f.key}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "var(--tracking-caps)", marginBottom: 6 }}>
-                  {humanize(f.key)}
-                </div>
-                {Array.isArray(f.value) ? (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {f.value.map((v, i) => <Badge tone="neutral" key={i}>{v}</Badge>)}
-                  </div>
-                ) : (
-                  <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{f.value}</p>
-                )}
-              </div>
-            ))}
-          </div>
+      {isStyle ? (
+        <Card title="Chi tiết style">
+          <StyleResultView data={entity} omit={["description", "tags", "type", "role"]} />
         </Card>
+      ) : (
+        fields.length > 0 && (
+          <Card title="Chi tiết">
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {fields.map((f) => (
+                <div key={f.key}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "var(--tracking-caps)", marginBottom: 6 }}>
+                    {humanize(f.key)}
+                  </div>
+                  {Array.isArray(f.value) ? (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {f.value.map((v, i) => <Badge tone="neutral" key={i}>{v}</Badge>)}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{f.value}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )
       )}
+
+      {kind === "coloring-styles" && (() => {
+        const refUrls = Array.isArray(entity.referenceImages) ? (entity.referenceImages as { url?: string }[]).map((r) => r.url).filter(Boolean) as string[] : [];
+        return (
+          <ColorizeTestModal
+            open={testOpen}
+            onClose={() => setTestOpen(false)}
+            styleName={name}
+            referenceImages={refUrls.map((u) => resolveImg(u) ?? "").filter(Boolean)}
+            referenceImageUrls={refUrls}
+            colorizationDirective={(entity.colorizationDirective as string) || ""}
+          />
+        );
+      })()}
     </div>
   );
 }

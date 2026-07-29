@@ -37,7 +37,7 @@ export function SettingsScreen() {
           {COLORING_WRITE_ENABLED ? <Badge tone="danger" dot>Bật (ghi API thật)</Badge> : <Badge tone="success" dot>Tắt (local-safe)</Badge>}
         </Row>
         <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 12 }}>
-          Đổi qua env: <span style={mono}>NEXT_PUBLIC_COLORING_API_BASE</span>, <span style={mono}>NEXT_PUBLIC_COLORING_WRITE=1</span>, <span style={mono}>COLORING_API_UPSTREAM</span> (staging).
+          Ghi thật luôn bật (UI production). Đổi qua env: <span style={mono}>NEXT_PUBLIC_COLORING_API_BASE</span>, <span style={mono}>COLORING_API_UPSTREAM</span>. Đặt <span style={mono}>NEXT_PUBLIC_COLORING_WRITE=0</span> để về chế độ local-safe.
         </div>
       </Card>
 

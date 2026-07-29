@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { httpPost } from "@vx/core-uikit/api";
 import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
+import { uploadImageFile } from "./use-upload-image";
 
 const LOCAL = "Chỉ chạy ở chế độ ghi thật (staging).";
 const guard = () => {
@@ -18,6 +19,8 @@ export function useStyleFromImage(kind: "art-styles" | "coloring-styles") {
       guard();
       return httpPost<Record<string, unknown>>(`${COLORING_API_BASE}/${kind}/analyze`, { imageUrls });
     },
+    /** Upload a local image file to R2 and return its public URL (for the analyze step). */
+    upload: (file: File): Promise<string> => uploadImageFile(file, `extract/${kind}`),
     create: async (data: Record<string, unknown>): Promise<{ id?: string }> => {
       guard();
       const res = await httpPost<{ id?: string; data?: { id?: string } }>(`${COLORING_API_BASE}/${kind}`, data);

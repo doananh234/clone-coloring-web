@@ -15,9 +15,11 @@ export const COLORING_IMG_BASE =
   "https://image.lagroups.org";
 
 /**
- * Whether write forms PUT to the real API. DEFAULT false → writes stay in the
- * local sandbox (localStorage). Only set NEXT_PUBLIC_COLORING_WRITE=1 when the
- * upstream (COLORING_API_UPSTREAM) points at a SAFE staging DB — never prod.
+ * Whether write forms hit the real API. Always ON — the /coloring surface is the
+ * production admin UI now (migrated off the old UI), so every action must run for
+ * real. The localStorage sandbox branch is kept as dead-safe fallback but is no
+ * longer reachable. To temporarily force the old local-only behavior, set
+ * NEXT_PUBLIC_COLORING_WRITE=0.
  */
-export const COLORING_WRITE_ENABLED = process.env.NEXT_PUBLIC_COLORING_WRITE === "1";
+export const COLORING_WRITE_ENABLED = process.env.NEXT_PUBLIC_COLORING_WRITE !== "0";
 

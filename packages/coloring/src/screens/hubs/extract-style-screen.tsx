@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
@@ -11,6 +11,7 @@ import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { useStyleFromImage } from "../../data/use-more-actions";
 import { resolveImg } from "../../data/img";
+import { StyleResultView } from "../entity/style-result-view";
 
 export interface ExtractStyleScreenProps {
   kind: "art-styles" | "coloring-styles";
@@ -29,9 +30,23 @@ export function ExtractStyleScreen({ kind }: ExtractStyleScreenProps) {
   const [name, setName] = useState("");
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState<"analyze" | "create" | null>(null);
+  const [uploading, setUploading] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const fileInputs = useRef<(HTMLInputElement | null)[]>([]);
 
   const imgs = urls.map((u) => u.trim()).filter(Boolean);
+
+  const setUrlAt = (i: number, val: string) => setUrls((arr) => arr.map((x, j) => (j === i ? val : x)));
+
+  const onPickFile = async (i: number, file: File | undefined) => {
+    if (!file) return;
+    setUploading(i); setErr(null);
+    try {
+      const url = await svc.upload(file);
+      setUrlAt(i, url);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Upload ảnh thất bại"); }
+    finally { setUploading(null); }
+  };
 
   const analyze = async () => {
     if (imgs.length === 0) return;
@@ -48,14 +63,10 @@ export function ExtractStyleScreen({ kind }: ExtractStyleScreenProps) {
     if (!result) return;
     setBusy("create"); setErr(null);
     try {
-      const { id } = await svc.create({ ...result, name: name || result.name, referenceImages: imgs.map((url) => ({ url })) });
+      const { id } = await svc.create({ ...result, name: name || result.name, referenceImageUrls: imgs });
       router.push(id ? `${B}/entity/${kind}/${id}` : `${B}${m.back}`);
     } catch (e) { setErr(e instanceof Error ? e.message : "Tạo style thất bại"); setBusy(null); }
   };
-
-  const resultFields = result
-    ? Object.entries(result).filter(([k, v]) => typeof v === "string" && v.trim() && !["name", "id"].includes(k))
-    : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 900 }}>
@@ -84,7 +95,17 @@ export function ExtractStyleScreen({ kind }: ExtractStyleScreenProps) {
                       <Icon name="image" size={16} />
                     )}
                   </div>
-                  <Input placeholder={`URL ảnh ${i + 1}`} value={u} onChange={(e) => setUrls((arr) => arr.map((x, j) => (j === i ? e.target.value : x)))} />
+                  <Input placeholder={`URL ảnh ${i + 1} (hoặc bấm tải lên)`} value={u} onChange={(e) => setUrlAt(i, e.target.value)} />
+                  <input
+                    ref={(el) => { fileInputs.current[i] = el; }}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => { onPickFile(i, e.target.files?.[0]); e.target.value = ""; }}
+                  />
+                  <Button variant="outline" size="sm" title={svc.enabled ? "Tải ảnh lên" : "Cần bật ghi thật (staging)"} disabled={!svc.enabled || uploading !== null || busy !== null} onClick={() => fileInputs.current[i]?.click()}>
+                    <Icon name={uploading === i ? "loader" : "upload"} size={16} />
+                  </Button>
                 </div>
               ))}
               <Button onClick={analyze} disabled={!svc.enabled || busy !== null || imgs.length === 0}>
@@ -105,12 +126,7 @@ export function ExtractStyleScreen({ kind }: ExtractStyleScreenProps) {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <label style={{ display: "block" }}><span className="mo-flabel">Tên style</span><Input value={name} onChange={(e) => setName(e.target.value)} /></label>
-                {resultFields.map(([k, v]) => (
-                  <div key={k}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "var(--tracking-caps)", marginBottom: 4 }}>{k}</div>
-                    <div style={{ fontSize: 13, lineHeight: 1.55 }}>{String(v)}</div>
-                  </div>
-                ))}
+                <StyleResultView data={result} />
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: 14 }}>
                   <Button variant="ghost" onClick={() => setResult(null)}>Làm lại</Button>
                   <Button onClick={create} disabled={busy !== null || !name.trim()}>{busy === "create" ? "Đang tạo…" : "Tạo style"}</Button>

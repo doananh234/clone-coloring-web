@@ -43,11 +43,13 @@ export async function generateVariation(opts: {
   key: string;
   traceEntityId: string;
   cameraView?: CameraView;
+  /** How much the variation differs from the source (default 30%). */
+  changePercent?: number;
   r2Client: R2Client;
   r2Config: R2Config;
 }): Promise<string> {
-  const { sourceImageUrl, key, traceEntityId, cameraView, r2Client, r2Config } = opts;
-  const fullPrompt = buildRedesignPrompt(30, cameraView ? { cameraView } : {});
+  const { sourceImageUrl, key, traceEntityId, cameraView, changePercent = 30, r2Client, r2Config } = opts;
+  const fullPrompt = buildRedesignPrompt(changePercent, cameraView ? { cameraView } : {});
   const img = await editImage(resolveR2Url(sourceImageUrl), fullPrompt, {
     trace: { caller: "clone/reproduce", entityType: "cloneJob", entityId: traceEntityId },
   });

@@ -18,9 +18,10 @@ export function useColorizeBook(bookId: string): (
   styleId: string,
   pages: ColorizePage[],
   onProgress: (done: number, total: number) => void,
+  useReference?: boolean,
 ) => Promise<{ done: number; failed: number }> {
   const qc = useQueryClient();
-  return async (styleId, pages, onProgress) => {
+  return async (styleId, pages, onProgress, useReference = true) => {
     if (!COLORING_WRITE_ENABLED) throw new Error("Chỉ chạy ở chế độ ghi thật (staging).");
     let done = 0;
     let failed = 0;
@@ -31,6 +32,7 @@ export function useColorizeBook(bookId: string): (
           coloringStyleId: styleId,
           bookId,
           pageId: p.id,
+          useReference,
         });
       } catch {
         failed++;

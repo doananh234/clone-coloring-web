@@ -89,6 +89,24 @@ TARGET STYLE & COLOR PALETTE
 ${colorizationDirective}
 
 ==================================================
+COLOR FIDELITY (MATCH THE REFERENCE EXACTLY)
+==================================================
+
+If reference images are provided, the colored output MUST match their color
+saturation, contrast, and vibrancy EXACTLY — sample the actual colors from the
+reference, do not approximate.
+
+MANDATORY:
+- Reproduce the FULL saturation and richness of the reference — do NOT lighten,
+  fade, pastel-ize, or desaturate the colors.
+- Match the reference's tonal CONTRAST: keep deep, saturated shadows and bright
+  highlights. Do not flatten the value range toward mid-gray.
+- Fills must be fully opaque and vivid like a printed coloring-book cover, not
+  a light watercolor wash (unless the reference itself is a wash).
+- The result should look as saturated and punchy as the reference when placed
+  side by side — a viewer must not be able to tell the recolor is "weaker".
+
+==================================================
 RENDERING QUALITY
 ==================================================
 

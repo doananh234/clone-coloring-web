@@ -7,11 +7,15 @@ import { flushLangfuse } from "@vx/server-core/langfuse";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageUrl, coloringStyleId, bookId, pageId } = body as {
+    const { imageUrl, coloringStyleId, bookId, pageId, useReference = true } = body as {
       imageUrl: string;
       coloringStyleId: string;
       bookId?: string;
       pageId?: string;
+      /** When true (default), the style's colored reference images are sent as a
+       *  visual anchor alongside the directive. When false, colorize from the
+       *  directive text only (prompt-only mode). */
+      useReference?: boolean;
     };
 
     if (!imageUrl) {
@@ -34,10 +38,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Colorize the image with style reference images as visual anchor
-    const referenceImageUrls = ((style.referenceImages as { url: string }[]) || []).map((r) =>
-      resolveR2Url(r.url),
-    );
+    // Colorize the image with style reference images as visual anchor.
+    // Prompt-only mode (useReference=false) relies on the directive text alone.
+    const referenceImageUrls = useReference
+      ? ((style.referenceImages as { url: string }[]) || []).map((r) => resolveR2Url(r.url))
+      : [];
     const img = await colorizeImage(resolveR2Url(imageUrl), style.colorizationDirective, {
       referenceImageUrls,
       trace: { caller: "coloring-styles/colorize" },

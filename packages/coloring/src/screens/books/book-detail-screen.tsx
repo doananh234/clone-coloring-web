@@ -13,6 +13,7 @@ import { ImageComparison } from "../../components/ui/image-comparison";
 import { LoadingRows, EmptyState, ErrorState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useBook } from "../../data/use-book";
+import { useBookJob } from "../../data/use-book-job";
 import { getBookPatch } from "../../data/local-books";
 import { useGeneratePdf, useGenerateSubtitle, useReclone } from "../../data/use-book-actions";
 import { useBookAi } from "../../data/use-more-actions";
@@ -125,6 +126,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const genSubtitle = useGenerateSubtitle(bookId);
   const reclone = useReclone(bookId);
   const bookAi = useBookAi(bookId);
+  const { jobId: relatedJobId } = useBookJob(bookId);
   const [tab, setTab] = useState<"info" | "pages">("info");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
@@ -239,6 +241,11 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
           {edited && <Badge tone="warning">Đã sửa · local</Badge>}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {relatedJobId && (
+            <Button variant="outline" size="sm" onClick={nav(`${B}/jobs/${relatedJobId}`)} title="Mở clone job đã tạo sách này để so sánh trang">
+              <Icon name="copy" size={16} /> Job liên quan
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/edit`)}><Icon name="pen-line" size={16} /> Sửa thông tin</Button>
           <Button variant="outline" size="sm" onClick={nav(`${B}/story`)}><Icon name="layout-grid" size={16} /> Storyboard</Button>
           <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/cover`)}><Icon name="image" size={16} /> Cover editor</Button>

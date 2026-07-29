@@ -22,6 +22,7 @@ export function ColorizeScreen({ bookId }: { bookId: string }) {
   const { items: styles, isLoading: stylesLoading } = useEntityList("coloring-styles");
   const colorize = useColorizeBook(bookId);
   const [styleId, setStyleId] = useState("");
+  const [useReference, setUseReference] = useState(true);
   const [prog, setProg] = useState<{ done: number; total: number } | null>(null);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
   const [running, setRunning] = useState(false);
@@ -40,7 +41,10 @@ export function ColorizeScreen({ bookId }: { bookId: string }) {
 
   const pages = (book.coloringPages ?? []).map((p) => ({ id: p.id, url: p.url }));
   const styleItems = styles.map((s) => ({ id: s.id, name: s.name, image: resolveImg(s.thumbnailUrl || s.referenceImageUrl || undefined) }));
-  const chosen = styleId || styleItems[0]?.id || "";
+  // Coloring style auto-extracted from the source cover at create-book time.
+  const sourceStyleId = (book.data?.coloringStyleId as string) || "";
+  const sourceStyleExists = Boolean(sourceStyleId) && styleItems.some((s) => s.id === sourceStyleId);
+  const chosen = styleId || (sourceStyleExists ? sourceStyleId : "") || styleItems[0]?.id || "";
 
   const run = async () => {
     if (!chosen || pages.length === 0) return;
@@ -48,7 +52,7 @@ export function ColorizeScreen({ bookId }: { bookId: string }) {
     setMsg(null);
     setProg({ done: 0, total: pages.length });
     try {
-      const { done, failed } = await colorize(chosen, pages, (d, t) => setProg({ done: d, total: t }));
+      const { done, failed } = await colorize(chosen, pages, (d, t) => setProg({ done: d, total: t }), useReference);
       setMsg({ ok: `Tô màu xong ${done - failed}/${done} trang${failed ? ` · ${failed} lỗi` : ""}` });
     } catch (e) {
       setMsg({ err: e instanceof Error ? e.message : "Tô màu thất bại" });
@@ -77,6 +81,32 @@ export function ColorizeScreen({ bookId }: { bookId: string }) {
           <div>
             <div className="mo-flabel" style={{ marginBottom: 8 }}>Coloring style</div>
             <StylePicker items={styleItems} value={chosen} onChange={setStyleId} loading={stylesLoading} emptyText="Chưa có coloring-style." />
+            {sourceStyleExists && chosen === sourceStyleId && (
+              <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 8 }}>Đang dùng coloring style trích từ bìa gốc (auto khi clone). Đổi style khác nếu muốn.</div>
+            )}
+          </div>
+
+          <div>
+            <div className="mo-flabel" style={{ marginBottom: 8 }}>Chế độ tô</div>
+            <div style={{ display: "inline-flex", padding: 3, gap: 3, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", background: "var(--neutral-100)" }} role="group" aria-label="Chế độ tô">
+              {([
+                { key: true, label: "Prompt + ảnh tham chiếu", icon: "image" as const },
+                { key: false, label: "Chỉ prompt (directive)", icon: "wand" as const },
+              ]).map((opt) => {
+                const active = useReference === opt.key;
+                return (
+                  <button key={String(opt.key)} type="button" onClick={() => setUseReference(opt.key)}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", borderRadius: "var(--radius-sm)", background: active ? "var(--card)" : "transparent", color: active ? "var(--foreground)" : "var(--muted-foreground)", boxShadow: active ? "var(--shadow-sm)" : undefined }}>
+                    <Icon name={opt.icon} size={15} /> {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 6 }}>
+              {useReference
+                ? "Gửi kèm ảnh màu tham chiếu của style làm neo thị giác → bám sát bộ màu/phong cách gốc hơn."
+                : "Chỉ dùng directive (mô tả + hex palette dạng chữ). Nhẹ hơn, nhưng bám màu kém chính xác hơn ảnh tham chiếu."}
+            </div>
           </div>
 
           {prog && (

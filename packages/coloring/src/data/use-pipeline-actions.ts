@@ -35,7 +35,8 @@ export function usePipelineActions(jobId: string) {
     regenPage: (pageIndex: number, changePercent = 30) => post(`/redesign-page`, { pageIndex, changePercent }),
     // "regen"/"angle" candidates → /reproduce per-page (writes regenCandidateUrl / angleCandidateUrl).
     // newAngle=false → regenCandidateUrl; newAngle=true → angleCandidateUrl + angleCandidateView.
-    regenCandidate: (pageIndex: number, newAngle: boolean) => post(`/reproduce`, { pageIndex, newAngle }),
+    // changePercent controls how much the variation differs from the source (default 30%).
+    regenCandidate: (pageIndex: number, newAngle: boolean, changePercent = 30) => post(`/reproduce`, { pageIndex, newAngle, changePercent }),
     applyCandidate: (pageIndex: number, kind: CandidateKind) => post(`/apply-candidate`, { pageIndex, kind }),
   };
 }

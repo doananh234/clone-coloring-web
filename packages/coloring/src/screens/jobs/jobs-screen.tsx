@@ -19,6 +19,7 @@ import { useLocalJobs } from "../../data/local-store";
 import { useQueueActions, rowActionFor } from "../../data/use-queue-actions";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { metaFor, STATUS_TABS, countFor } from "../../data/status";
+import { resolveImg } from "../../data/img";
 import type { CloneJobRow } from "../../data/types";
 
 const th = {
@@ -37,6 +38,15 @@ const mono = { fontFamily: "var(--font-mono)" };
 function progressOf(j: CloneJobRow): number {
   if (j.totalPages > 0) return Math.round((j.analyzedPages / j.totalPages) * 100);
   return metaFor(j.status).bucket === "done" ? 100 : 0;
+}
+
+/** DD/MM/YYYY HH:MM — for the Created/Updated columns. */
+function fmtDateTime(s?: string | null): string {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "—";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export function JobsScreen() {
@@ -131,7 +141,7 @@ export function JobsScreen() {
           <EmptyState icon="copy" title="Chưa có clone job" sub="Tạo clone job đầu tiên từ một PDF nguồn." />
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 820 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 1040 }}>
               <thead>
                 <tr>
                   <th style={th}>Job</th>
@@ -139,6 +149,8 @@ export function JobsScreen() {
                   <th style={th}>Bước</th>
                   <th style={th}>Tiến độ</th>
                   <th style={th}>Trạng thái</th>
+                  <th style={th}>Ngày tạo</th>
+                  <th style={th}>Ngày update</th>
                   <th style={th} />
                 </tr>
               </thead>
@@ -154,11 +166,23 @@ export function JobsScreen() {
                       onClick={() => router.push(`${B}/jobs/${j.id}`)}
                     >
                       <td style={td}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontWeight: 600 }}>{j.name || "—"}</span>
-                          {"__local" in j && <Badge tone="warning">Nháp</Badge>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 34, height: 44, borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+                            {resolveImg(j.thumbnailUrl || undefined) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={resolveImg(j.thumbnailUrl || undefined)} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              <Icon name="book-open" size={14} />
+                            )}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontWeight: 600 }}>{j.name || "—"}</span>
+                              {"__local" in j && <Badge tone="warning">Nháp</Badge>}
+                            </div>
+                            <div style={{ ...mono, fontSize: 11, color: "var(--muted-foreground)" }}>{j.id.slice(0, 8)}</div>
+                          </div>
                         </div>
-                        <div style={{ ...mono, fontSize: 11, color: "var(--muted-foreground)" }}>{j.id.slice(0, 8)}</div>
                       </td>
                       <td style={td}>
                         <div>{j.brand || "—"}</div>
@@ -175,6 +199,8 @@ export function JobsScreen() {
                           {meta.label}
                         </Badge>
                       </td>
+                      <td style={{ ...td, ...mono, fontSize: 12, whiteSpace: "nowrap", color: "var(--muted-foreground)" }}>{fmtDateTime(j.createdAt)}</td>
+                      <td style={{ ...td, ...mono, fontSize: 12, whiteSpace: "nowrap", color: "var(--muted-foreground)" }}>{fmtDateTime(j.updatedAt)}</td>
                       <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
                         {(() => {
                           const a = "__local" in j ? null : rowActionFor(j.status);
