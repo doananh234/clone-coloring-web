@@ -235,3 +235,15 @@ model CloneJobStatusCount {
   count     Int      @default(0)
   updatedAt DateTime @updatedAt
 }
+
+model Font {
+  id        String   @id @default(cuid())
+  name      String
+  fileUrl   String
+  format    String
+  weight    Int?
+  isPublic  Boolean  @default(true)
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
