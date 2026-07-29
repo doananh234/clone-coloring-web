@@ -174,48 +174,48 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
             </div>
           )}
 
-          {/* Big view: original↔gen comparison. On the FIRST page, the book's
-              current cover is shown large right beside it (the cover is derived
-              from the source page, so it only belongs on page 01). */}
+          {/* Big view: two EQUAL columns, each with its own header so titles and
+              images line up. Left = original↔gen comparison; right (page 01 only)
+              = the book's current cover (derived from the source page). */}
           {(idx === 0 || (redo && page.imageUrl)) && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={capLabel}>{redo && page.imageUrl ? "So sánh gốc ↔ đã gen" : "Hình gốc"}</span>
-                {redo && page.imageUrl && <Badge tone="carbon">Kéo để so sánh</Badge>}
-              </div>
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-                <div style={{ flex: "1 1 340px", maxWidth: 420, minWidth: 0 }}>
-                  {redo && page.imageUrl ? (
-                    <ImageComparison beforeSrc={resolveImg(page.imageUrl) ?? ""} afterSrc={resolveImg(redo) ?? ""} beforeLabel="Gốc" afterLabel="Đã gen" />
-                  ) : page.imageUrl ? (
-                    <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={resolveImg(page.imageUrl)} alt="Hình gốc" style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
-                    </div>
-                  ) : null}
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+              {/* left: comparison / original */}
+              <div style={{ flex: "1 1 340px", maxWidth: 420, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minHeight: 26 }}>
+                  <span style={capLabel}>{redo && page.imageUrl ? "So sánh gốc ↔ đã gen" : "Hình gốc"}</span>
+                  {redo && page.imageUrl && <Badge tone="carbon">Kéo để so sánh</Badge>}
                 </div>
-                {idx === 0 && (
-                  <div style={{ flex: "1 1 300px", maxWidth: 420, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={capLabel}>Cover đang dùng</span>
-                      {coverUrl && <Badge tone="carbon">Bìa job</Badge>}
-                    </div>
-                    <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
-                      {coverUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={coverUrl} alt="Cover đang dùng" style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
-                      ) : (
-                        <span style={{ fontSize: 12 }}>Chưa có bìa</span>
-                      )}
-                    </div>
-                    {bookId && (
-                      <Button variant="outline" size="sm" style={{ width: "100%" }} onClick={() => router.push(`${B}/books/${bookId}/cover`)}>
-                        <Icon name="image" size={14} /> Sửa bìa
-                      </Button>
+                {redo && page.imageUrl ? (
+                  <ImageComparison beforeSrc={resolveImg(page.imageUrl) ?? ""} afterSrc={resolveImg(redo) ?? ""} beforeLabel="Gốc" afterLabel="Đã gen" />
+                ) : page.imageUrl ? (
+                  <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={resolveImg(page.imageUrl)} alt="Hình gốc" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  </div>
+                ) : null}
+              </div>
+              {/* right: current cover (page 01 only) */}
+              {idx === 0 && (
+                <div style={{ flex: "1 1 340px", maxWidth: 420, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minHeight: 26 }}>
+                    <span style={capLabel}>Cover đang dùng</span>
+                    {coverUrl && <Badge tone="carbon">Bìa job</Badge>}
+                  </div>
+                  <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+                    {coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={coverUrl} alt="Cover đang dùng" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                    ) : (
+                      <span style={{ fontSize: 12 }}>Chưa có bìa</span>
                     )}
                   </div>
-                )}
-              </div>
+                  {bookId && (
+                    <Button variant="outline" size="sm" style={{ width: "100%" }} onClick={() => router.push(`${B}/books/${bookId}/cover`)}>
+                      <Icon name="image" size={14} /> Sửa bìa
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
