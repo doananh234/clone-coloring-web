@@ -4,9 +4,9 @@ import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Icon } from "../../lib/icon";
 import { Select, Slider } from "../../components/ui/form-controls";
+import { FontPicker } from "./font-picker";
 import { ELEMENT_ORDER, ELEMENT_LABELS, type CoverDoc, type CoverElement, type CoverElementKey } from "../../lib/cover-doc";
 
-const FONTS = ["Space Grotesk", "Fredoka", "Baloo 2", "Quicksand", "Poppins", "Nunito", "Chewy", "Pacifico", "Fraunces", "Geist", "Geist Mono"];
 const SWATCHES = ["#1a1712", "#8a8070", "#c9852a", "#ffffff", "#dd5245", "#4e8ff2", "#0b0d0c"];
 const WEIGHTS = [{ label: "Thường", value: "400" }, { label: "Vừa", value: "500" }, { label: "Đậm vừa", value: "600" }, { label: "Đậm", value: "700" }];
 const ALIGNS: { key: CoverElement["textAlign"]; icon: string }[] = [
@@ -18,14 +18,11 @@ export interface CoverElementPanelProps {
   selectedKey: CoverElementKey | null;
   onSelect: (k: CoverElementKey) => void;
   onPatch: (k: CoverElementKey, patch: Partial<CoverElement>) => void;
-  /** Font names to offer (built-in for Phase 1; built-in + uploaded in Phase 2). */
-  fontOptions?: string[];
 }
 
-export function CoverElementPanel({ doc, selectedKey, onSelect, onPatch, fontOptions }: CoverElementPanelProps) {
+export function CoverElementPanel({ doc, selectedKey, onSelect, onPatch }: CoverElementPanelProps) {
   const key = selectedKey ?? "title";
   const el = doc.elements[key];
-  const fonts = [...new Set([el.fontFamily, ...(fontOptions ?? FONTS)])];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -53,7 +50,7 @@ export function CoverElementPanel({ doc, selectedKey, onSelect, onPatch, fontOpt
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <label style={{ display: "block" }}><span className="mo-flabel">Nội dung</span>
             <Input value={el.text} onChange={(e) => onPatch(key, { text: e.target.value })} /></label>
-          <Select label="Font" value={el.fontFamily} onChange={(v) => onPatch(key, { fontFamily: v })} options={fonts} />
+          <FontPicker value={el.fontFamily} onChange={(v) => onPatch(key, { fontFamily: v })} />
           <Select label="Độ đậm" value={String(el.fontWeight)} onChange={(v) => onPatch(key, { fontWeight: Number(v) as CoverElement["fontWeight"] })} options={WEIGHTS} />
           <Slider label="Cỡ chữ" value={el.fontSize} min={16} max={220} unit=" px" onChange={(v) => onPatch(key, { fontSize: v })} />
           <Slider label="Giãn chữ" value={el.letterSpacing} min={-10} max={40} unit=" px" onChange={(v) => onPatch(key, { letterSpacing: v })} />
