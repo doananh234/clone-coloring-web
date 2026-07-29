@@ -32,6 +32,8 @@ export function resolvePageTitle(slug: string[]): string {
       return "Kênh bán & hệ thống";
     case "etsy":
       return "Etsy listings";
+    case "fonts":
+      return "Quản lý font";
     case "entity": {
       const map: Record<string, string> = {
         characters: "Nhân vật",

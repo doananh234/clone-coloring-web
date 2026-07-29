@@ -18,6 +18,7 @@ import { ExtractStyleScreen } from "./hubs/extract-style-screen";
 import { UsersScreen } from "./system/users-screen";
 import { AiCostScreen } from "./system/ai-cost-screen";
 import { SettingsScreen } from "./system/settings-screen";
+import { FontsScreen } from "./system/fonts-screen";
 import { EntityDetailScreen } from "./entity/entity-detail-screen";
 import { EntityEditScreen } from "./entity/entity-edit-screen";
 import { EtsyScreen } from "./etsy/etsy-screen";
@@ -57,6 +58,7 @@ function screenFor(slug: string[], title: string) {
   if (top === "system" && sub === "ai-cost") return <AiCostScreen />;
   if (top === "system" && sub === "settings") return <SettingsScreen />;
   if (top === "system" && !sub) return <SystemScreen />;
+  if (top === "fonts") return <FontsScreen />;
   if (top === "entity" && slug[1] && slug[2] && slug[3] === "edit") return <EntityEditScreen kind={slug[1]} id={slug[2]} />;
   if (top === "entity" && slug[1] && slug[2]) return <EntityDetailScreen kind={slug[1]} id={slug[2]} />;
   if (top === "etsy" && !sub) return <EtsyScreen />;

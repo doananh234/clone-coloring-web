@@ -44,6 +44,7 @@ import {
   IconAlignLeft,
   IconAlignCenter,
   IconAlignRight,
+  IconTypography,
   type IconProps as TablerIconProps,
 } from "@tabler/icons-react";
 import type { ComponentType } from "react";
@@ -95,6 +96,7 @@ const REGISTRY: Record<string, ComponentType<TablerIconProps>> = {
   "align-left": IconAlignLeft,
   "align-center": IconAlignCenter,
   "align-right": IconAlignRight,
+  type: IconTypography,
 };
 
 export type IconName = keyof typeof REGISTRY | (string & {});

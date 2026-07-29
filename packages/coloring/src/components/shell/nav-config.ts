@@ -40,6 +40,7 @@ export const NAV: NavSection[] = [
         href: `${COLORING_BASE}/system`,
         icon: "settings",
       },
+      { id: "fonts", label: "Quản lý font", href: `${COLORING_BASE}/fonts`, icon: "type" },
     ],
   },
 ];
