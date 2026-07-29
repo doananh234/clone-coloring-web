@@ -162,6 +162,23 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
 
   const b: BookDetail = book;
   const cover = resolveImg(b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl);
+  // Distinct cover / colored image versions, shown as separate thumbnails
+  // (deduped by URL): the composed cover (with text), the clean colored square,
+  // the thumbnail, and the source colored image the cover was built from.
+  const coverMetaObj = (b.data?.coverMeta ?? {}) as { sourceThumbnailUrl?: string };
+  const seenVer = new Set<string>();
+  const coverVersions = (
+    [
+      { url: b.coverUrl, caption: "Bìa (có chữ)", badge: "BÌA" },
+      { url: b.squareThumbnailUrl, caption: "Ảnh màu (vuông)", badge: "MÀU" },
+      { url: b.thumbnailUrl, caption: "Thumbnail", badge: "MÀU" },
+      { url: coverMetaObj.sourceThumbnailUrl, caption: "Nguồn bìa (màu)", badge: "MÀU" },
+    ] as { url?: string | null; caption: string; badge: string }[]
+  ).filter((v): v is { url: string; caption: string; badge: string } => {
+    if (!v.url || seenVer.has(v.url)) return false;
+    seenVer.add(v.url);
+    return true;
+  });
   const pages = b.coloringPages ?? [];
   const colored = pages.filter((p) => p.coloredUrl).length;
   const samples = (b.summaryPages ?? []).slice(0, 3);
@@ -349,12 +366,18 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
             <>
               <Card title="Cover & hình màu">
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
-                  <Thumb src={cover} caption="Bìa trước" badge="MÀU" onClick={openCoverPreview} />
+                  {coverVersions.map((v) => {
+                    const src = resolveImg(v.url);
+                    // The composed cover keeps its rich preview (Cover editor + download);
+                    // the colored versions open a plain image preview.
+                    const onClick = v.badge === "BÌA" ? openCoverPreview : () => { setPreviewPage(null); setPreview({ title: v.caption, imageSrc: src }); };
+                    return <Thumb key={v.url} src={src} caption={v.caption} badge={v.badge} onClick={onClick} />;
+                  })}
                   {samples.map((s, i) => {
                     const src = resolveImg(s.url);
                     return <Thumb key={s.id || i} src={src} caption={`Trang mẫu ${String(i + 1).padStart(2, "0")}`} badge="MÀU" onClick={() => { setPreviewPage(null); setPreview({ title: `Trang mẫu ${String(i + 1).padStart(2, "0")}`, imageSrc: src }); }} />;
                   })}
-                  {samples.length === 0 && !cover && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Chưa có ảnh màu.</div>}
+                  {coverVersions.length === 0 && samples.length === 0 && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Chưa có ảnh màu.</div>}
                 </div>
               </Card>
               {b.description && (
