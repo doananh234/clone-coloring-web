@@ -32,6 +32,8 @@ const OK_BOOK = {
   data: {},
   bookData: { title: "MyBook", titleCover: "My Cover", subtitle: "My Sub" },
   coloringPages: [
+    // NOTE: `url` here are the FINAL book page urls (colored/redesigned). The
+    // source-style extraction reads job.pages[0].imageUrl instead (see makeDb).
     { id: "p1", url: "/pages/1.png" },
     { id: "p2", url: "/pages/2.png" }, // middle for 4 pages → floor(4/2)=2, 1-indexed page 2 → coloringPages[1]
     { id: "p3", url: "/pages/3.png" },
@@ -50,6 +52,8 @@ function makeDb() {
           data: { brandId: "b1" },
           bookData: OK_BOOK.bookData,
           resultBookId: "book1",
+          // Source page: extract-source-style analyzes pages[0].imageUrl.
+          pages: [{ imageUrl: "/source/cover.png" }],
         }),
       },
       brand: {
@@ -57,8 +61,14 @@ function makeDb() {
         findFirst: vi.fn().mockResolvedValue(OK_BRAND),
       },
       coloringStyle: {
+        // Source-style extraction CREATES a new coloring style row.
+        create: vi.fn().mockResolvedValue({
+          id: "src-style",
+          colorizationDirective: "source cover style",
+          referenceImages: [],
+        }),
         findUnique: vi.fn().mockResolvedValue(OK_STYLE),
-        // Random-style pick: return one usable style so Math.random picks it.
+        // Only hit as a last-resort fallback when extraction produces nothing.
         findMany: vi.fn().mockResolvedValue([OK_STYLE]),
       },
       book: {
@@ -73,6 +83,11 @@ function makeDb() {
 
 function makeDeps() {
   return {
+    // Source-style extraction returns parsed style JSON with a directive.
+    extractColoringStyle: vi.fn().mockResolvedValue({
+      name: "Source Cover Style",
+      colorizationDirective: "source cover style",
+    }),
     colorizeImage: vi.fn().mockResolvedValue({
       base64: Buffer.from("colorized").toString("base64"),
       dataUrl: "data:image/png;base64,Y29sb3JpemVk",
@@ -98,12 +113,19 @@ describe("stepGenerateCover — happy path", () => {
 
     await stepGenerateCover(ctx, db, deps);
 
-    // Middle page: 4 pages → floor(4/2)=2, 1-indexed page 2 → coloringPages[1]
+    // Style comes from the SOURCE page, not a random DB pick.
+    expect(deps.extractColoringStyle).toHaveBeenCalledWith("https://r2/source/cover.png");
+    // Middle page: 4 pages → floor(4/2)=2, 1-indexed page 2 → coloringPages[1].
+    // Directive is the extracted source-cover directive, not the random style.
     expect(deps.colorizeImage).toHaveBeenCalledWith(
       "https://r2/pages/2.png",
-      "watercolor style",
+      "source cover style",
       { referenceImageUrls: [] },
     );
+    // findMany (the old random-pick path) must NOT be used on the happy path.
+    expect(
+      (db as { coloringStyle: { findMany: ReturnType<typeof vi.fn> } }).coloringStyle.findMany,
+    ).not.toHaveBeenCalled();
     // Shared module owns the AI blend + upload of the final cover.
     expect(deps.generateAiCover).toHaveBeenCalledTimes(1);
     const aiCall = deps.generateAiCover.mock.calls[0][0] as {
@@ -131,7 +153,8 @@ describe("stepGenerateCover — happy path", () => {
     expect(meta.titleCover).toBe("My Cover");
     expect(meta.subtitle).toBe("My Sub");
     expect(meta.brandId).toBe("b1");
-    expect(meta.coloringStyleId).toBe("cs1");
+    // Style row created from the source cover, not the brand default "cs1".
+    expect(meta.coloringStyleId).toBe("src-style");
     expect(meta.middlePageIndex).toBe(2);
     expect(meta.sourceThumbnailUrl).toBe("https://r2/cover/thumbnail.png");
     expect(ctx.markStepComplete).toHaveBeenCalledWith("generate-cover");
@@ -139,18 +162,22 @@ describe("stepGenerateCover — happy path", () => {
 });
 
 describe("stepGenerateCover — failure paths", () => {
-  it("throws + marks coverMeta.status=failed when NO ColoringStyle rows have a directive", async () => {
-    // New behavior: cover generation now picks a random style from all rows
-    // with a non-empty colorizationDirective — brand's coloringStyleId is no
-    // longer required. We only fail when the DB has zero usable styles.
+  it("throws + marks coverMeta.status=failed when source extraction fails and NO fallback style exists", async () => {
+    // New behavior: style comes from the source page. We only fail when source
+    // extraction produces no directive AND there is no usable fallback style
+    // (brand default missing/unusable + no other style with a directive).
     const { db, bookUpdates } = makeDb();
+    (db as { coloringStyle: { findUnique: ReturnType<typeof vi.fn> } }).coloringStyle.findUnique
+      .mockResolvedValueOnce(null); // brand default not usable
     (db as { coloringStyle: { findMany: ReturnType<typeof vi.fn> } }).coloringStyle.findMany
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce([]); // no other usable styles
     const ctx = fakeCtx("j1", "book1");
     const deps = makeDeps();
+    // Extraction fails → falls through to the (empty) fallback chain.
+    deps.extractColoringStyle.mockRejectedValueOnce(new Error("vision 500"));
 
     await expect(stepGenerateCover(ctx, db, deps)).rejects.toThrow(
-      /No ColoringStyle rows/,
+      /No usable ColoringStyle/,
     );
     const failedUpdate = bookUpdates.find(
       (u) => ((u.data as { coverMeta?: { status?: string } })?.coverMeta?.status) === "failed",
@@ -160,6 +187,28 @@ describe("stepGenerateCover — failure paths", () => {
       ((failedUpdate!.data as { coverMeta: { error: string } }).coverMeta.error),
     ).toMatch(/ColoringStyle/);
     expect(ctx.markStepComplete).not.toHaveBeenCalled();
+  });
+
+  it("falls back to brand-default style (NOT random) when source extraction yields no directive", async () => {
+    const { db, bookUpdates } = makeDb();
+    const ctx = fakeCtx("j1", "book1");
+    const deps = makeDeps();
+    // Extraction returns JSON with no usable directive → brand-default fallback.
+    deps.extractColoringStyle.mockResolvedValueOnce({ name: "x", colorizationDirective: "  " });
+
+    await stepGenerateCover(ctx, db, deps);
+
+    // Brand default (OK_STYLE cs1) is used via findUnique; no create, no random.
+    expect(
+      (db as { coloringStyle: { create: ReturnType<typeof vi.fn> } }).coloringStyle.create,
+    ).not.toHaveBeenCalled();
+    expect(deps.colorizeImage).toHaveBeenCalledWith(
+      "https://r2/pages/2.png",
+      "watercolor style",
+      { referenceImageUrls: [] },
+    );
+    const meta = (bookUpdates[0].data as { coverMeta: { coloringStyleId: string } }).coverMeta;
+    expect(meta.coloringStyleId).toBe("cs1");
   });
 
   it("throws when Book has 0 coloring pages", async () => {

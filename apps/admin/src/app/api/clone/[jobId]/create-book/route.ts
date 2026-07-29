@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { moveCloneJobImageToBook } from "@/lib/move-clone-page-to-book";
+import { extractSourceStyleFromCover } from "./extract-source-style";
+
+// AI style extraction (coloring + cover-design) runs inline, so allow a long budget.
+export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
@@ -89,6 +93,30 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const m = metadata || {};
     const bd = (row.bookData as Partial<NonNullable<CloneJob["bookData"]>>) || {};
 
+    // Auto-extract the source cover's coloring + text style from the job's first
+    // colored image (usually the cover) so the cloned book keeps the original look.
+    // Best-effort — never blocks book creation. Editable later in the cover editor.
+    const coverSourceUrl = pages[0]?.imageUrl || null;
+    let sourceStyle: Awaited<ReturnType<typeof extractSourceStyleFromCover>> = {
+      coloringStyleId: null,
+      coverStylePack: null,
+    };
+    if (coverSourceUrl) {
+      try {
+        sourceStyle = await extractSourceStyleFromCover({
+          coverImageUrl: coverSourceUrl,
+          context: {
+            title: m.title || bd.title || row.name || "Untitled",
+            subtitle: m.subtitle || bd.subtitle || undefined,
+            brandName: (row.data as { brand?: string } | null)?.brand || undefined,
+            category: m.category || bd.category || undefined,
+          },
+        });
+      } catch (error) {
+        console.error("[clone/create-book] source style extraction failed:", error);
+      }
+    }
+
     const createdBook = await prisma.book.create({
       data: {
         id: bookId,
@@ -112,6 +140,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           isRedesigned: false,
           isEditionConverted: false,
           cloneJobId: jobId,
+          // Source-cover style, auto-extracted (editable in the cover editor).
+          coloringStyleId: sourceStyle.coloringStyleId,
+          // Cast: CoverDesignPack has no index signature, which Prisma's JSON input
+          // type requires (same `as any` pattern as coloringPages above).
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          coverStylePack: (sourceStyle.coverStylePack ?? null) as any,
+          // The cover editor reads its base image from
+          // `coverMeta.sourceThumbnailUrl` first (see cover-editor-screen.tsx).
+          // Seed it with the source cover / first-page image so the editor
+          // opens WITH a background instead of blank. Worker-created books get
+          // this from stepGenerateCover; manual creation sets it here.
+          coverMeta: coverSourceUrl ? { sourceThumbnailUrl: coverSourceUrl } : undefined,
         },
       },
     });

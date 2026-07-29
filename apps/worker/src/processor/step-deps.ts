@@ -10,6 +10,7 @@ import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
 import { visionAnalyzeJSON, cloneOneShot, recheckOneShotSession } from "@vx/server-core/ai/llm-provider";
 import {
   CLONE_EXTRACTION_PROMPT,
+  COLORING_STYLE_EXTRACTION_PROMPT,
   buildReproductionPrompt,
   buildRedesignPrompt,
 } from "@vx/server-core/ai/prompts";
@@ -161,6 +162,15 @@ export const generateCoverDeps = {
   colorizeImage: (imageUrl: string, directive: string, opts?: { referenceImageUrls?: string[] }) =>
     colorizeImage(imageUrl, directive, opts),
   generateAiCover,
+  // Extract the source page's coloring style (palette + directive) so the
+  // cover keeps the original book's look — same prompt the admin's
+  // create-book route uses. Returns raw parsed JSON.
+  extractColoringStyle: (sourceImageUrl: string) =>
+    visionAnalyzeJSON<Record<string, unknown>>(
+      sourceImageUrl,
+      COLORING_STYLE_EXTRACTION_PROMPT,
+      { maxTokens: 20000, temperature: 0.3 },
+    ),
   uploadToR2,
   resolveR2Url,
 };

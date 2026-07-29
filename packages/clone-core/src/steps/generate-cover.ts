@@ -31,6 +31,16 @@ export interface GenerateCoverDeps {
     r2Key: string;
     trace?: { caller?: string; entityType?: string; entityId?: string };
   }) => Promise<{ url: string; base64: string }>;
+  /**
+   * Extracts the coloring style (palette + colorization directive) FROM the
+   * source page image so the cover keeps the original book's look — parity
+   * with the admin's create-book route (extract-source-style.ts). Injected so
+   * `clone-core` stays free of `@vx/server-core` and tests can stub the LLM.
+   * Returns the raw parsed JSON of the style-extraction prompt.
+   */
+  extractColoringStyle: (
+    sourceImageUrl: string,
+  ) => Promise<Record<string, unknown>>;
   uploadToR2: (args: {
     key: string;
     body: Buffer;
@@ -126,42 +136,113 @@ export async function stepGenerateCover(
       );
     }
 
-    // Pick a coloring style RANDOMLY from all usable styles rather than
-    // always using the brand's default — gives covers across a whole batch
-    // more visual variety per the operator's request. Falls back to the
-    // brand default only if no other usable style exists in the DB. A
-    // "usable" style must have a non-empty colorizationDirective (else
-    // colorizeImage would throw further down).
-    const usableStyles = await db.coloringStyle.findMany({
-      where: {
-        colorizationDirective: { not: null },
-      },
-      select: { id: true, colorizationDirective: true, referenceImages: true },
-    });
-    const stylesWithDirective = usableStyles.filter(
-      (s) => typeof s.colorizationDirective === "string" && s.colorizationDirective.trim().length > 0,
-    );
-    if (stylesWithDirective.length === 0) {
+    // Coloring style — extracted FROM the source page so the cover keeps the
+    // original book's look, matching the admin create-book route. This replaces
+    // the old random-pick behavior (which ignored the source entirely). A brand
+    // has a default style used only as a fallback when source extraction can't
+    // run (missing source image or LLM failure) — never a random style.
+    //
+    // The source image is job.pages[0].imageUrl: the original page (usually the
+    // cover) that the PDF render seeded, the same input extract-source-style.ts
+    // analyzes in the admin route.
+    const jobPages =
+      (job.pages as { imageUrl?: string }[] | null | undefined) ?? [];
+    const sourceImageUrl = jobPages[0]?.imageUrl?.trim() || "";
+
+    let coloringStyleId = "";
+    let style: {
+      id: string;
+      colorizationDirective: string | null;
+      referenceImages: unknown;
+    } | null = null;
+
+    if (sourceImageUrl) {
+      try {
+        const parsed = await deps.extractColoringStyle(deps.resolveR2Url(sourceImageUrl));
+        const directive =
+          typeof parsed.colorizationDirective === "string"
+            ? parsed.colorizationDirective.trim()
+            : "";
+        if (directive) {
+          const bookData = (job.bookData as Record<string, unknown> | null | undefined) ?? {};
+          const bookTitle =
+            (typeof bookData.title === "string" && bookData.title) || book.title || "Untitled";
+          const name =
+            (typeof parsed.name === "string" && parsed.name.trim()) ||
+            `${bookTitle} — style bìa gốc`;
+          const created = await db.coloringStyle.create({
+            data: {
+              name,
+              description: (parsed.description as string) || "",
+              referenceImages: [{ url: sourceImageUrl, label: "source-cover" }],
+              thumbnailUrl: sourceImageUrl,
+              medium: (parsed.medium as object) || {},
+              colorPalette: (parsed.colorPalette as object) || {},
+              shadingAndLighting: (parsed.shadingAndLighting as object) || {},
+              fillBehavior: (parsed.fillBehavior as object) || {},
+              overallFeel: (parsed.overallFeel as object) || {},
+              colorizationDirective: directive,
+              tags: Array.isArray(parsed.tags) ? (parsed.tags as string[]) : [],
+            },
+            select: { id: true, colorizationDirective: true, referenceImages: true },
+          });
+          coloringStyleId = created.id;
+          style = created;
+          console.log(
+            `[stepGenerateCover] extracted source coloring style ${created.id} for job ${ctx.jobId}`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          `[stepGenerateCover] source style extraction failed for job ${ctx.jobId} — falling back to brand default:`,
+          error,
+        );
+      }
+    }
+
+    // Fallback: brand's default coloring style (never random) when source
+    // extraction couldn't produce a usable directive.
+    if (!style) {
+      const brandDefaultId =
+        typeof brand.data.coloringStyleId === "string" ? brand.data.coloringStyleId.trim() : "";
+      if (brandDefaultId) {
+        const row = await db.coloringStyle.findUnique({
+          where: { id: brandDefaultId },
+          select: { id: true, colorizationDirective: true, referenceImages: true },
+        });
+        if (row && typeof row.colorizationDirective === "string" && row.colorizationDirective.trim()) {
+          coloringStyleId = row.id;
+          style = row;
+        }
+      }
+      if (!style) {
+        // Last resort: any style in the DB with a non-empty directive so the
+        // job doesn't dead-end (operator can regenerate the cover later).
+        const usable = await db.coloringStyle.findMany({
+          where: { colorizationDirective: { not: null } },
+          select: { id: true, colorizationDirective: true, referenceImages: true },
+        });
+        const first = usable.find(
+          (s) => typeof s.colorizationDirective === "string" && s.colorizationDirective.trim().length > 0,
+        );
+        if (first) {
+          coloringStyleId = first.id;
+          style = first;
+        }
+      }
+      if (style) {
+        console.warn(
+          `[stepGenerateCover] using fallback coloring style ${coloringStyleId} for job ${ctx.jobId} (source extraction unavailable)`,
+        );
+      }
+    }
+
+    if (!style) {
       throw new Error(
-        "No ColoringStyle rows have a non-empty colorizationDirective — cannot colorize cover.",
+        "No usable ColoringStyle available (source extraction failed and no fallback style with a non-empty colorizationDirective).",
       );
     }
-    const brandDefaultId =
-      typeof brand.data.coloringStyleId === "string" ? brand.data.coloringStyleId : "";
-    // Prefer a randomly-picked style that ISN'T the brand default when
-    // possible — actively steer away from repeating the same look every
-    // job. When only the brand default is available, fall back to it.
-    const nonDefault = brandDefaultId
-      ? stylesWithDirective.filter((s) => s.id !== brandDefaultId)
-      : stylesWithDirective;
-    const pool = nonDefault.length > 0 ? nonDefault : stylesWithDirective;
-    const picked = pool[Math.floor(Math.random() * pool.length)];
-    const coloringStyleId = picked.id;
-    const style = picked;
-    console.log(
-      `[stepGenerateCover] picked coloring style ${picked.id} from ${pool.length} candidate(s)` +
-        (brandDefaultId ? ` (brand default was ${brandDefaultId})` : ""),
-    );
+
     const referenceImageUrls = (
       (style.referenceImages as { url?: string }[] | null | undefined) ?? []
     )
