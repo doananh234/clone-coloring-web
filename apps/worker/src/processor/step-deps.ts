@@ -10,7 +10,6 @@ import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
 import { visionAnalyzeJSON, cloneOneShot, recheckOneShotSession } from "@vx/server-core/ai/llm-provider";
 import {
   CLONE_EXTRACTION_PROMPT,
-  COLORING_STYLE_EXTRACTION_PROMPT,
   buildReproductionPrompt,
   buildRedesignPrompt,
 } from "@vx/server-core/ai/prompts";
@@ -18,9 +17,10 @@ import {
   generateCharacterReference,
   generateLocationReference,
   editImage,
-  colorizeImage,
 } from "@vx/server-core/ai";
-import { generateAiCover } from "@vx/server-core/cover-generation";
+// generateCoverDeps is SHARED — the single copy lives in @vx/server-core so the
+// worker and the admin's /api/clone/regenerate-covers route use the same wiring.
+import { generateCoverDeps } from "@vx/server-core/cover-generation/clone-cover-deps";
 
 const r2Config = getR2Config();
 const r2Client = createR2Client(r2Config);
@@ -158,19 +158,6 @@ export const oneShotDeps = {
   resolveR2Url,
 };
 
-export const generateCoverDeps = {
-  colorizeImage: (imageUrl: string, directive: string, opts?: { referenceImageUrls?: string[] }) =>
-    colorizeImage(imageUrl, directive, opts),
-  generateAiCover,
-  // Extract the source page's coloring style (palette + directive) so the
-  // cover keeps the original book's look — same prompt the admin's
-  // create-book route uses. Returns raw parsed JSON.
-  extractColoringStyle: (sourceImageUrl: string) =>
-    visionAnalyzeJSON<Record<string, unknown>>(
-      sourceImageUrl,
-      COLORING_STYLE_EXTRACTION_PROMPT,
-      { maxTokens: 20000, temperature: 0.3 },
-    ),
-  uploadToR2,
-  resolveR2Url,
-};
+// Re-exported from the shared @vx/server-core module (see import above) so
+// existing worker imports of `generateCoverDeps` keep working unchanged.
+export { generateCoverDeps };

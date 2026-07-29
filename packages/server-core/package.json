@@ -11,6 +11,7 @@
     "./ai/prompts/book-meta-prompt": "./src/ai/prompts/book-meta-prompt.ts",
     "./ai/prompts/cover-design-prompt": "./src/ai/prompts/cover-design-prompt.ts",
     "./cover-generation": "./src/cover-generation/index.ts",
+    "./cover-generation/clone-cover-deps": "./src/cover-generation/clone-cover-deps.ts",
     "./ai/clone-types": "./src/ai/clone-types.ts",
     "./ai/image-provider-types": "./src/ai/image-provider-types.ts",
     "./ai/image-provider-diaflow": "./src/ai/image-provider-diaflow.ts",
