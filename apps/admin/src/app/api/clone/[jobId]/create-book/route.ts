@@ -148,10 +148,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           coverStylePack: (sourceStyle.coverStylePack ?? null) as any,
           // The cover editor reads its base image from
           // `coverMeta.sourceThumbnailUrl` first (see cover-editor-screen.tsx).
-          // Seed it with the source cover / first-page image so the editor
-          // opens WITH a background instead of blank. Worker-created books get
-          // this from stepGenerateCover; manual creation sets it here.
-          coverMeta: coverSourceUrl ? { sourceThumbnailUrl: coverSourceUrl } : undefined,
+          // Seed it with the MOVED, persistent first-page URL
+          // (assets/{bookId}/pages/...), NOT the raw `pages[0].imageUrl`
+          // (assets/clone-jobs/{jobId}/...): the job asset is transient and
+          // gets purged over time, which would leave the editor opening blank.
+          // Worker-created books get this from stepGenerateCover; manual
+          // creation sets it here.
+          coverMeta: coloringPages[0]?.url ? { sourceThumbnailUrl: coloringPages[0].url } : undefined,
         },
       },
     });
