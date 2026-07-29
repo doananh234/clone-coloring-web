@@ -15,3 +15,4 @@ export {
   stepGenerateCover,
   type GenerateCoverDeps,
 } from "./generate-cover";
+export { buildColoringStyleRowInput } from "./build-coloring-style-row-input";

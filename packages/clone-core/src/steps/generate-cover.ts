@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 import type { CoverMeta } from "@vx/server-core/text-overlay";
+import { buildColoringStyleRowInput } from "./build-coloring-style-row-input";
 
 /**
  * Post-create hook — colorizes the middle B&W page, then delegates cover
@@ -167,23 +168,11 @@ export async function stepGenerateCover(
           const bookData = (job.bookData as Record<string, unknown> | null | undefined) ?? {};
           const bookTitle =
             (typeof bookData.title === "string" && bookData.title) || book.title || "Untitled";
-          const name =
-            (typeof parsed.name === "string" && parsed.name.trim()) ||
-            `${bookTitle} — style bìa gốc`;
           const created = await db.coloringStyle.create({
-            data: {
-              name,
-              description: (parsed.description as string) || "",
-              referenceImages: [{ url: sourceImageUrl, label: "source-cover" }],
-              thumbnailUrl: sourceImageUrl,
-              medium: (parsed.medium as object) || {},
-              colorPalette: (parsed.colorPalette as object) || {},
-              shadingAndLighting: (parsed.shadingAndLighting as object) || {},
-              fillBehavior: (parsed.fillBehavior as object) || {},
-              overallFeel: (parsed.overallFeel as object) || {},
-              colorizationDirective: directive,
-              tags: Array.isArray(parsed.tags) ? (parsed.tags as string[]) : [],
-            },
+            data: buildColoringStyleRowInput(parsed, {
+              referenceUrl: sourceImageUrl,
+              fallbackName: `${bookTitle} — style bìa gốc`,
+            }),
             select: { id: true, colorizationDirective: true, referenceImages: true },
           });
           coloringStyleId = created.id;
