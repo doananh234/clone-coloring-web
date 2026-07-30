@@ -41,6 +41,7 @@ export const NAV: NavSection[] = [
         icon: "settings",
       },
       { id: "fonts", label: "Quản lý font", href: `${COLORING_BASE}/fonts`, icon: "type" },
+      { id: "cover-overlays", label: "Bố cục chữ bìa", href: `${COLORING_BASE}/cover-overlays`, icon: "layers" },
     ],
   },
 ];

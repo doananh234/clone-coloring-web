@@ -34,6 +34,8 @@ export function resolvePageTitle(slug: string[]): string {
       return "Etsy listings";
     case "fonts":
       return "Quản lý font";
+    case "cover-overlays":
+      return "Quản lý bố cục chữ bìa";
     case "entity": {
       const map: Record<string, string> = {
         characters: "Nhân vật",
