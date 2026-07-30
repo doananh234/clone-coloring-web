@@ -89,7 +89,7 @@ REQUIRED CAMERA CHANGE:
     : "- Character pose, posture, and viewing angle";
 
   return `This is a black-and-white coloring book page for young children. Generate
-a refreshed variation (~${pct}% change) of this image.${cameraBlock}
+a refreshed variation (~${pct}% change) of this image.${cameraBlock}. Output must be 1 single frame, not a split panel or grid layout.
 
 KEEP unchanged:
 - Line-art style and line weight (identical drawing technique)
