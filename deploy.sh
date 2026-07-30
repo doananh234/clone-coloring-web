@@ -84,6 +84,19 @@ ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && \
         -e DIRECT_URL=postgresql://postgres:postgres@postgres:5432/coloring \
         admin sh -c 'cd /app/packages/db && npx prisma db push --accept-data-loss --skip-generate'"
 
+# 3b. Seed the bootstrap admin operator (idempotent upsert; no-op if the env
+#     vars are unset or the admin already exists). Custom DB auth requires at
+#     least one admin to log in — see docs/superpowers/specs/2026-07-30-admin-operator-auth-design.md.
+#     Required env in apps/admin/.env.prod: AUTH_JWT_SECRET (JWT signing key),
+#     SEED_ADMIN_USERNAME, SEED_ADMIN_PASSWORD.
+echo "[3b] Seeding bootstrap admin operator..."
+ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && \
+    docker compose ${COMPOSE_FILES} run --rm --no-deps \
+        -e DATABASE_URL=postgresql://postgres:postgres@postgres:5432/coloring \
+        -e DIRECT_URL=postgresql://postgres:postgres@postgres:5432/coloring \
+        --env-file apps/admin/.env.prod \
+        admin sh -c 'cd /app/packages/db && npx prisma db seed'"
+
 # 4. Start app containers.
 echo "[4/5] Starting admin + worker..."
 ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && docker compose ${COMPOSE_FILES} up -d"
