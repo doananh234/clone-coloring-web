@@ -262,3 +262,19 @@ model CoverTextOverlay {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
+
+// Admin/operator accounts for the custom DB-backed admin auth. Separate from
+// the customer-facing `User` model — do not conflate the two.
+model Operator {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  passwordHash String
+  name         String
+  role         String    @default("operator") // "admin" | "operator"
+  disabled     Boolean   @default(false)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("operators")
+}
