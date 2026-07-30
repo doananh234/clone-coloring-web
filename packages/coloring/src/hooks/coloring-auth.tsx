@@ -6,6 +6,8 @@ export interface ColoringUser {
   name: string;
   email: string;
   avatar?: string;
+  username?: string;
+  role?: string;
 }
 
 interface ColoringAuthValue {
