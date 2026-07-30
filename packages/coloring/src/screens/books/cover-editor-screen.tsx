@@ -17,7 +17,7 @@ import { useCoverDesign, type CoverStylePack } from "../../data/use-cover-design
 import { resolveImg } from "../../data/img";
 import { CoverFabricEditor, type CoverEditorHandle } from "./cover-fabric-editor";
 import { CoverElementPanel } from "./cover-element-panel";
-import { defaultCoverDoc, normalizeCoverDoc, type CoverDoc, type CoverElement, type CoverElementKey } from "../../lib/cover-doc";
+import { defaultCoverDoc, normalizeCoverDoc, applyExtractedStyles, type CoverDoc, type CoverElement, type CoverElementKey } from "../../lib/cover-doc";
 
 export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const router = useRouter();
@@ -52,12 +52,18 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
     if (!book || docLoaded) return;
     const badge = book.specifications?.pages ? `${book.specifications.pages} trang tô màu` : "";
     const pack = (book.data?.coverStylePack ?? null) as CoverStylePack | null;
+    // Brand content comes from the book, not from extraction (no book.brand field
+    // on the type → read the loosely-typed data blob; empty when absent).
+    const brand = typeof book.data?.brand === "string" ? book.data.brand : "";
     const seed = {
       title: book.title || "",
       subtitle: book.subtitle || "",
+      brand,
       badge,
       titleFont: pack?.fontPairs?.[0]?.display,
       titleColor: pack?.palettes?.[0]?.primary,
+      // Style + LAYOUT for all 4 roles, extracted from the source cover.
+      elements: pack?.elements,
     };
     const stored = book.data?.coverLayout;
     setDoc(stored ? normalizeCoverDoc(stored, seed) : defaultCoverDoc(seed));
@@ -99,17 +105,24 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
     ...(book.coloringPages ?? []).map((p) => p.coloredUrl || p.url),
   ].filter((u): u is string => Boolean(u)))];
 
-  // Apply the extracted pack onto the doc's title element (font + color only).
+  // Apply the extracted pack: per-element STYLE + POSITION for all 4 roles from
+  // pack.elements (keeps each element's text). Falls back to title font/color
+  // from fontPairs/palettes when the model didn't return per-element extraction.
   const applyPackToDoc = (p: CoverStylePack) => {
-    const f = p.fontPairs?.[0]?.display;
-    const primary = p.palettes?.[0]?.primary;
-    patchEl("title", {
-      ...(f ? { fontFamily: f } : {}),
-      ...(primary && /^#[0-9a-fA-F]{6}$/.test(primary) ? { color: primary } : {}),
+    setDoc((d) => {
+      if (!d) return d;
+      if (p.elements) return applyExtractedStyles(d, p.elements);
+      const f = p.fontPairs?.[0]?.display;
+      const primary = p.palettes?.[0]?.primary;
+      const titlePatch: Partial<CoverElement> = {
+        ...(f ? { fontFamily: f } : {}),
+        ...(primary && /^#[0-9a-fA-F]{6}$/.test(primary) ? { color: primary } : {}),
+      };
+      return { ...d, elements: { ...d.elements, title: { ...d.elements.title, ...titlePatch } } };
     });
   };
 
-  // Re-run cover-design on the source cover and re-apply font + color.
+  // Re-run cover-design on the source cover and re-apply style+position to all 4 roles.
   const doReextract = async () => {
     if (!cleanBase) { setMsg({ err: "Chưa có ảnh nền để trích style." }); return; }
     setReBusy(true); setMsg(null);
