@@ -89,12 +89,15 @@ ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && \
 #     least one admin to log in — see docs/superpowers/specs/2026-07-30-admin-operator-auth-design.md.
 #     Required env in apps/admin/.env.prod: AUTH_JWT_SECRET (JWT signing key),
 #     SEED_ADMIN_USERNAME, SEED_ADMIN_PASSWORD.
+#     SEED_ADMIN_* come from the admin service's env_file (.env.prod) that
+#     docker compose run applies automatically — no --env-file flag needed
+#     (older compose builds reject it). DATABASE_URL is overridden to the
+#     in-cluster Postgres.
 echo "[3b] Seeding bootstrap admin operator..."
 ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && \
     docker compose ${COMPOSE_FILES} run --rm --no-deps \
         -e DATABASE_URL=postgresql://postgres:postgres@postgres:5432/coloring \
         -e DIRECT_URL=postgresql://postgres:postgres@postgres:5432/coloring \
-        --env-file apps/admin/.env.prod \
         admin sh -c 'cd /app/packages/db && npx prisma db seed'"
 
 # 4. Start app containers.
