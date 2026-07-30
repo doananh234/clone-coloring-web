@@ -11,6 +11,8 @@ import { ImageComparison } from "../../components/ui/image-comparison";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { usePipelineActions, type CandidateKind } from "../../data/use-pipeline-actions";
 import { useStyleFromImage } from "../../data/use-more-actions";
+import { useCoverDesign, type CoverStylePack } from "../../data/use-cover-design";
+import { useCoverTextOverlays } from "../../data/use-cover-text-overlays";
 import { resolveImg } from "../../data/img";
 import { useBook } from "../../data/use-book";
 import type { CloneJobPage } from "../../data/types";
@@ -20,6 +22,44 @@ const capLabel = { fontSize: 11, fontWeight: 600 as const, color: "var(--muted-f
 
 function reproduced(p: CloneJobPage): string | undefined {
   return p.reproducedUrl || p.redesignedUrl;
+}
+
+const OVERLAY_ROLE_LABELS: Record<string, string> = {
+  title: "Tiêu đề",
+  subtitle: "Phụ đề",
+  brand: "Thương hiệu",
+  badge: "Badge",
+};
+
+/** Compact read-only preview of an extracted CoverStylePack.elements, one row per role. */
+function OverlayPreview({ elements }: { elements: NonNullable<CoverStylePack["elements"]> }) {
+  const roles: (keyof NonNullable<CoverStylePack["elements"]>)[] = ["title", "subtitle", "brand", "badge"];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
+      {roles.map((role) => {
+        const el = elements[role];
+        const present = Boolean(el?.present);
+        return (
+          <div key={role} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+            <span style={{ ...capLabel, width: 78, flexShrink: 0 }}>{OVERLAY_ROLE_LABELS[role]}</span>
+            <span style={{ width: 14, flexShrink: 0, color: present ? "var(--success)" : "var(--muted-foreground)" }}>
+              {present ? <Icon name="check" size={13} stroke={3} /> : "—"}
+            </span>
+            {present && el ? (
+              <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: "var(--muted-foreground)" }}>
+                {el.color && <span style={{ width: 12, height: 12, borderRadius: 99, border: "1px solid var(--border)", background: el.color, flexShrink: 0 }} />}
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {[el.fontFamily, el.fontWeight, el.color].filter(Boolean).join(" · ")}
+                  {(el.xNorm != null || el.yNorm != null) && ` · pos (${Math.round((el.xNorm ?? 0) * 100)}%, ${Math.round((el.yNorm ?? 0) * 100)}%)`}
+                  {el.fontSizeNorm != null && ` · size ${Math.round(el.fontSizeNorm * 100)}%`}
+                </span>
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function Candidate({ label, src, hint, selected, empty, onChoose, disabled, busy, regen, footer }: { label: string; src?: string; hint?: string; selected?: boolean; empty?: boolean; onChoose?: () => void; disabled?: boolean; busy?: boolean; regen?: { label: string; onClick: () => void; busy?: boolean }; footer?: ReactNode }) {
@@ -66,10 +106,16 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
   const { book } = useBook(bookId || "");
   const coverUrl = resolveImg(book?.coverUrl ?? undefined);
   const styleSvc = useStyleFromImage("coloring-styles");
+  const coverDesign = useCoverDesign();
+  const overlays = useCoverTextOverlays();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [styleMsg, setStyleMsg] = useState<{ err?: string; okId?: string } | null>(null);
   const [changePct, setChangePct] = useState(30);
+  // Extracted cover text overlay preview (style+layout per element), for the "Trích bố cục
+  // chữ bìa" job-level control on the cover page (idx === 0). Mirrors saveColoringStyle below.
+  const [ov, setOv] = useState<CoverStylePack["elements"] | null>(null);
+  const [ovMsg, setOvMsg] = useState<{ err?: string; ok?: string } | null>(null);
 
   const run = (key: string, fn: () => Promise<void>, confirmMsg?: string) => async () => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
@@ -124,6 +170,44 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
       setStyleMsg({ okId: id ?? "" });
     } catch (e) {
       setStyleMsg({ err: e instanceof Error ? e.message : "Lưu coloring style thất bại" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Extract per-element STYLE + LAYOUT (title/subtitle/brand/badge) from the job's ORIGINAL
+  // cover image (page 0, WITH text) — same source as saveColoringStyle above, different
+  // target: a reusable CoverTextOverlay record instead of a ColoringStyle.
+  const extractOverlay = async () => {
+    const src = page.imageUrl;
+    if (!src) return;
+    setBusy("ovextract");
+    setOvMsg(null);
+    try {
+      const p = await coverDesign.run(resolveImg(src) ?? src, {
+        title: book?.title || `Coloring Book — Job ${jobId}`,
+        category: book?.category || undefined,
+      });
+      setOv(p.elements ?? null);
+      if (!p.elements) setOvMsg({ err: "Không trích được bố cục chữ từ hình gốc." });
+    } catch (e) {
+      setOvMsg({ err: e instanceof Error ? e.message : "Trích bố cục chữ bìa thất bại" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveOverlay = async () => {
+    if (!ov) return;
+    const name = window.prompt("Tên bố cục chữ bìa:", `${book?.title || "Job " + jobId} — bố cục`);
+    if (!name) return;
+    setBusy("ovsave");
+    setOvMsg(null);
+    try {
+      await overlays.create(name, ov, page.imageUrl ?? null);
+      setOvMsg({ ok: `Đã lưu bố cục "${name}".` });
+    } catch (e) {
+      setOvMsg({ err: e instanceof Error ? e.message : "Lưu bố cục chữ bìa thất bại" });
     } finally {
       setBusy(null);
     }
@@ -216,6 +300,35 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Job-level: extract per-element STYLE + LAYOUT from the job's ORIGINAL cover
+              (page 0, WITH text) → reusable CoverTextOverlay record. Parallel to
+              "Lưu coloring style" above, but for text style+position instead of color. */}
+          {idx === 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 14px", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={capLabel}>Bố cục chữ bìa (từ hình gốc)</span>
+                <Button variant="outline" size="sm" disabled={!coverDesign.enabled || !page.imageUrl || busy !== null}
+                  title={coverDesign.enabled ? "Trích style + vị trí chữ (title/subtitle/brand/badge) từ hình bìa gốc" : "Cần bật ghi thật (staging)"}
+                  onClick={extractOverlay}>
+                  <Icon name="type" size={14} /> {busy === "ovextract" ? "Đang trích…" : "Trích bố cục chữ bìa"}
+                </Button>
+                {ov && (
+                  <Button size="sm" disabled={!overlays.enabled || busy !== null}
+                    title={overlays.enabled ? "Lưu bố cục chữ đã trích thành record tái sử dụng" : "Cần bật ghi thật (staging)"}
+                    onClick={saveOverlay}>
+                    <Icon name="sparkles" size={14} /> {busy === "ovsave" ? "Đang lưu…" : "Lưu bố cục này"}
+                  </Button>
+                )}
+              </div>
+
+              {ov && <OverlayPreview elements={ov} />}
+
+              {ovMsg?.err && <div style={{ padding: "8px 10px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12.5 }}>{ovMsg.err}</div>}
+              {ovMsg?.ok && <div style={{ padding: "8px 10px", background: "var(--success-bg)", color: "var(--success)", borderRadius: "var(--radius-sm)", fontSize: 12.5 }}>{ovMsg.ok}</div>}
+              {!coverDesign.enabled && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Trích bố cục chữ chỉ chạy khi bật ghi thật (staging).</div>}
             </div>
           )}
 
