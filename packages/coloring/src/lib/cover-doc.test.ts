@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultCoverDoc, normalizeCoverDoc, applyExtractedStyles, ELEMENT_ORDER, COVER_CANVAS_SIDE } from "./cover-doc";
+import { defaultCoverDoc, normalizeCoverDoc, applyExtractedStyles, docToOverlayElements, ELEMENT_ORDER, COVER_CANVAS_SIDE } from "./cover-doc";
 
 describe("cover-doc", () => {
   it("defaultCoverDoc seeds title/subtitle/badge text and all 4 elements", () => {
@@ -114,5 +114,41 @@ describe("cover-doc", () => {
   it("applyExtractedStyles is a no-op when elements is undefined", () => {
     const doc = defaultCoverDoc({ title: "T" });
     expect(applyExtractedStyles(doc, undefined)).toBe(doc);
+  });
+
+  it("docToOverlayElements round-trips left/top/fontSize/font/color/align via applyExtractedStyles", () => {
+    // All 4 roles seeded + visible so applyExtractedStyles patches each (it only
+    // touches present:true elements, and docToOverlayElements sets present=visible).
+    const doc = defaultCoverDoc({
+      title: "Dino", subtitle: "for kids", brand: "Acme", badge: "24 trang",
+      elements: {
+        title: { present: true, xNorm: 0.25, yNorm: 0.5, fontSizeNorm: 0.1, fontFamily: "Chewy", fontWeight: 600, color: "#123456", textAlign: "left" },
+        subtitle: { present: true, xNorm: 0.5, yNorm: 0.62, fontSizeNorm: 0.04, fontFamily: "Fredoka", fontWeight: 500, color: "#2b251d", textAlign: "center" },
+        brand: { present: true, xNorm: 0.5, yNorm: 0.1, fontSizeNorm: 0.033, fontFamily: "Poppins", fontWeight: 600, color: "#000000", textAlign: "right" },
+        badge: { present: true, xNorm: 0.5, yNorm: 0.88, fontSizeNorm: 0.033, fontFamily: "Inter", fontWeight: 700, color: "#1a1712", textAlign: "center" },
+      },
+    });
+    const base = defaultCoverDoc({ title: "Dino", subtitle: "for kids", brand: "Acme", badge: "24 trang" });
+    const round = applyExtractedStyles(base, docToOverlayElements(doc));
+    for (const key of ELEMENT_ORDER) {
+      const a = round.elements[key];
+      const b = doc.elements[key];
+      // integers in the doc → norm→px clamp(round(...)) lands back on same integer
+      expect(a.left).toBe(b.left);
+      expect(a.top).toBe(b.top);
+      expect(a.fontSize).toBe(b.fontSize);
+      expect(a.fontFamily).toBe(b.fontFamily);
+      expect(a.fontWeight).toBe(b.fontWeight);
+      expect(a.color).toBe(b.color);
+      expect(a.textAlign).toBe(b.textAlign);
+    }
+  });
+
+  it("docToOverlayElements sets present from element visibility", () => {
+    const doc = defaultCoverDoc({ title: "T" }); // subtitle/brand/badge hidden
+    const els = docToOverlayElements(doc);
+    expect(els.title.present).toBe(true);
+    expect(els.subtitle.present).toBe(false);
+    expect(els.title.fontSizeNorm).toBeCloseTo(doc.elements.title.fontSize / COVER_CANVAS_SIDE);
   });
 });

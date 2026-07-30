@@ -153,6 +153,29 @@ export function applyExtractedStyles(doc: CoverDoc, elements: CoverElementStyleS
   return { version: 1, elements: next };
 }
 
+/**
+ * Serialize a doc's per-element STYLE + LAYOUT into normalized overlay elements
+ * (the inverse of `applyExtractedStyles`/the norm→px mapping). Used to save the
+ * CURRENT doc as a reusable CoverTextOverlay template. Text is NOT included.
+ */
+export function docToOverlayElements(doc: CoverDoc): Record<CoverElementKey, CoverElementStyleSeed> {
+  const out = {} as Record<CoverElementKey, CoverElementStyleSeed>;
+  for (const key of ELEMENT_ORDER) {
+    const el = doc.elements[key];
+    out[key] = {
+      present: el.visible,
+      fontFamily: el.fontFamily,
+      fontWeight: el.fontWeight,
+      color: el.color,
+      textAlign: el.textAlign,
+      fontSizeNorm: el.fontSize / S,
+      xNorm: el.left / S,
+      yNorm: el.top / S,
+    };
+  }
+  return out;
+}
+
 function coerceElement(key: CoverElementKey, raw: unknown): CoverElement {
   const def = base(key);
   if (!raw || typeof raw !== "object") return def;

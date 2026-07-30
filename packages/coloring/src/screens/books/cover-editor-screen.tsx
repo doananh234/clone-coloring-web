@@ -14,10 +14,11 @@ import { useBook } from "../../data/use-book";
 import { useEntityList } from "../../data/use-entity-list";
 import { useSaveCover, useGenerateCover, type GeneratedCover } from "../../data/use-cover-actions";
 import { useCoverDesign, type CoverStylePack } from "../../data/use-cover-design";
+import { useCoverTextOverlays } from "../../data/use-cover-text-overlays";
 import { resolveImg } from "../../data/img";
 import { CoverFabricEditor, type CoverEditorHandle } from "./cover-fabric-editor";
 import { CoverElementPanel } from "./cover-element-panel";
-import { defaultCoverDoc, normalizeCoverDoc, applyExtractedStyles, type CoverDoc, type CoverElement, type CoverElementKey } from "../../lib/cover-doc";
+import { defaultCoverDoc, normalizeCoverDoc, applyExtractedStyles, docToOverlayElements, type CoverDoc, type CoverElement, type CoverElementKey, type CoverElementStyleSeeds } from "../../lib/cover-doc";
 
 export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const router = useRouter();
@@ -26,6 +27,7 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const saveCover = useSaveCover(bookId);
   const genCover = useGenerateCover();
   const coverDesign = useCoverDesign();
+  const overlays = useCoverTextOverlays();
   const [tab, setTab] = useState<"text" | "ai">("text");
   const editorRef = useRef<CoverEditorHandle>(null);
   const [doc, setDoc] = useState<CoverDoc | null>(null);
@@ -137,6 +139,27 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
       setMsg({ ok: "Đã trích lại style từ bìa gốc." });
     } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Trích style thất bại." }); }
     finally { setReBusy(false); }
+  };
+
+  // Apply a saved overlay (per-element STYLE + POSITION) onto the current doc.
+  // Content stays; only style + position change.
+  const applyOverlay = (elements: Record<string, unknown>) => {
+    setDoc((d) => (d ? applyExtractedStyles(d, elements as CoverElementStyleSeeds) : d));
+    setMsg({ ok: "Đã áp bố cục chữ đã lưu." });
+  };
+
+  // Save the CURRENT doc's per-element style + position as a reusable overlay.
+  const saveOverlay = async () => {
+    if (!doc) return;
+    const name = window.prompt("Tên bố cục chữ (overlay):");
+    if (!name || !name.trim()) return;
+    setMsg(null);
+    try {
+      await overlays.create(name.trim(), docToOverlayElements(doc));
+      setMsg({ ok: `Đã lưu bố cục "${name.trim()}".` });
+    } catch (e) {
+      setMsg({ err: e instanceof Error ? e.message : "Lưu bố cục thất bại." });
+    }
   };
 
   const doExport = async () => {
@@ -284,6 +307,21 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
             <div style={{ marginTop: 12 }}>
               <Button variant="outline" size="sm" onClick={doReextract} disabled={reBusy || !coverDesign.enabled || !cleanBase}>
                 <Icon name="sparkles" size={15} /> {reBusy ? "Đang trích…" : "Trích lại style từ bìa"}
+              </Button>
+            </div>
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>Bố cục chữ (overlay)</div>
+              <Select
+                value=""
+                placeholder={overlays.overlays.length ? "Chọn bố cục đã lưu…" : "Chưa có bố cục nào"}
+                options={overlays.overlays.map((o) => ({ label: o.name, value: o.id }))}
+                onChange={(id) => {
+                  const o = overlays.overlays.find((x) => x.id === id);
+                  if (o && doc) applyOverlay(o.elements);
+                }}
+              />
+              <Button variant="outline" size="sm" onClick={saveOverlay} disabled={!doc || !overlays.enabled} title={overlays.enabled ? undefined : "Cần bật ghi thật (staging)"}>
+                <Icon name="download" size={15} /> Lưu bố cục hiện tại
               </Button>
             </div>
           </div>
