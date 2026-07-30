@@ -138,9 +138,12 @@ async function reproduceSinglePage(
     return NextResponse.json({ error: "Page not found" }, { status: 404 });
   }
 
-  // Always anchor on the original redesign (never on a previous regen) so
-  // repeated regens don't compound. Strip ?v= — R2 keys don't include it.
-  const sourceImageUrl = (jobPage.redesignedUrl || jobPage.imageUrl || "").split("?")[0];
+  // Anchor on the ORIGINAL source page (job.pages[i].imageUrl) so each regen
+  // is a fresh variation of the SOURCE — not a variation-of-a-variation of the
+  // already-redesigned image — and repeated regens never compound. Falls back
+  // to the redesigned image only if the original is missing. Strip ?v= — R2
+  // keys don't include it.
+  const sourceImageUrl = (jobPage.imageUrl || jobPage.redesignedUrl || "").split("?")[0];
   if (!sourceImageUrl) {
     return NextResponse.json({ error: "No source image for this page" }, { status: 400 });
   }
