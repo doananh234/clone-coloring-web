@@ -148,8 +148,11 @@ export const CoverFabricEditor = forwardRef<CoverEditorHandle, CoverFabricEditor
           existing.set({ left: el.left, top: el.top });
         } else {
           // Wrap width = the safe frame width (90% of S, matching the dashed
-          // safe-zone). Long text wraps and never spills outside the image.
-          const tb = new fabric.Textbox(el.text, { originX: "center", originY: "center", left: el.left, top: el.top, width: S * 0.9, editable: false });
+          // safe-zone). splitByGrapheme wraps by CHARACTER when a single token
+          // exceeds the width (e.g. underscore-joined titles like
+          // "Bobbie_Goods_Summer_Break" have no spaces to break on) so text
+          // never spills horizontally outside the image.
+          const tb = new fabric.Textbox(el.text, { originX: "center", originY: "center", left: el.left, top: el.top, width: S * 0.9, splitByGrapheme: true, editable: false });
           tb.set({ data: { key } });
           applyStyle(tb, el);
           canvas.add(tb);
