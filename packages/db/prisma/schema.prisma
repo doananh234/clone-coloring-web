@@ -247,3 +247,18 @@ model Font {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// Reusable per-element cover text STYLE+LAYOUT extracted from a source cover
+// (title/subtitle/brand/badge → font/weight/color/size/align/position). The
+// `elements` payload shape is defined by CoverElementExtract in
+// packages/coloring/src/lib/cover-doc.ts and stored here opaquely as JSON.
+model CoverTextOverlay {
+  id                String   @id @default(cuid())
+  name              String
+  elements          Json     @default("{}")
+  referenceImageUrl String?
+  isPublic          Boolean  @default(true)
+  data              Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
