@@ -36,6 +36,8 @@ export function resolvePageTitle(slug: string[]): string {
       return "Quản lý font";
     case "cover-overlays":
       return "Quản lý bố cục chữ bìa";
+    case "accounts":
+      return "Tài khoản";
     case "entity": {
       const map: Record<string, string> = {
         characters: "Nhân vật",

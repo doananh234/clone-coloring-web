@@ -101,7 +101,7 @@ export function Sidebar({ collapsed, onToggleCollapse, onNavigate }: SidebarProp
             {!collapsed && <div className="mo-nav__section">{sec.section}</div>}
             {collapsed && <div style={{ height: 12 }} />}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {sec.items.map((it) => {
+              {sec.items.filter((it) => !it.adminOnly || user?.role === "admin").map((it) => {
                 const active = isNavActive(it.href, pathname);
                 return (
                   <Link
