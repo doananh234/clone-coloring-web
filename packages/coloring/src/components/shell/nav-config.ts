@@ -6,6 +6,8 @@ export interface NavItem {
   href: string;
   icon: IconName;
   badge?: number;
+  /** Only shown to operators with role "admin" (filtered in the sidebar). */
+  adminOnly?: boolean;
 }
 
 export interface NavSection {
@@ -42,6 +44,7 @@ export const NAV: NavSection[] = [
       },
       { id: "fonts", label: "Quản lý font", href: `${COLORING_BASE}/fonts`, icon: "type" },
       { id: "cover-overlays", label: "Bố cục chữ bìa", href: `${COLORING_BASE}/cover-overlays`, icon: "layers" },
+      { id: "accounts", label: "Tài khoản", href: `${COLORING_BASE}/accounts`, icon: "shield", adminOnly: true },
     ],
   },
 ];
