@@ -18,6 +18,7 @@ import { getBookPatch } from "../../data/local-books";
 import { useGeneratePdf, useGenerateSubtitle, useReclone } from "../../data/use-book-actions";
 import { useBookAi } from "../../data/use-more-actions";
 import { PageActionsRow } from "./page-actions-row";
+import { PageBatchSelect } from "./page-batch-select";
 import { resolveImg } from "../../data/img";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { parsePageScene, hasSceneDetail, type ParsedScene } from "../../data/page-scene";
@@ -127,7 +128,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const reclone = useReclone(bookId);
   const bookAi = useBookAi(bookId);
   const { jobId: relatedJobId } = useBookJob(bookId);
-  const [tab, setTab] = useState<"info" | "pages">("info");
+  const [tab, setTab] = useState<"info" | "pages" | "select">("info");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
   const [preview, setPreview] = useState<Omit<PreviewModalProps, "open" | "onClose"> | null>(null);
@@ -180,6 +181,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
     return true;
   });
   const pages = b.coloringPages ?? [];
+  const cloneJobId = typeof b.data?.cloneJobId === "string" ? b.data.cloneJobId : undefined;
   const colored = pages.filter((p) => p.coloredUrl).length;
   const samples = (b.summaryPages ?? []).slice(0, 3);
   const specs = b.specifications;
@@ -361,7 +363,15 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
 
         {/* right */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: "3 1 420px", minWidth: 0 }}>
-          <Tabs<"info" | "pages"> items={[{ key: "info", label: "Tổng quan" }, { key: "pages", label: `Trang sách · ${pages.length}` }]} value={tab} onChange={setTab} />
+          <Tabs<"info" | "pages" | "select">
+            items={[
+              { key: "info", label: "Tổng quan" },
+              { key: "pages", label: `Trang sách · ${pages.length}` },
+              { key: "select", label: "Chọn hình" },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
           {tab === "info" ? (
             <>
               <Card title="Cover & hình màu">
@@ -384,7 +394,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                 <Card title="Mô tả"><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{b.description}</div></Card>
               )}
             </>
-          ) : (
+          ) : tab === "pages" ? (
             <Card title={`Trang sách · ${pages.length}`}>
               {pages.length === 0 ? (
                 <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />
@@ -395,6 +405,10 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                   ))}
                 </div>
               )}
+            </Card>
+          ) : (
+            <Card title="Chọn hình · Regen hàng loạt">
+              <PageBatchSelect bookId={bookId} pages={pages} cloneJobId={cloneJobId} />
             </Card>
           )}
         </div>
