@@ -1,5 +1,5 @@
 import { prisma } from "@vx/db";
-import { buildColoringStyleRowInput } from "@vx/clone-core/steps";
+import { upsertColoringStyleWithVariant } from "@vx/clone-core/steps";
 import { visionAnalyzeJSON } from "@vx/server-core/ai/llm-provider";
 import { COLORING_STYLE_EXTRACTION_PROMPT } from "@vx/server-core/ai/prompts";
 import { resolveR2Url } from "@vx/server-core/r2";
@@ -11,8 +11,10 @@ import {
 } from "@vx/server-core/ai/prompts/cover-design-prompt";
 
 export interface SourceStyleResult {
-  /** Coloring style row created from the source cover's palette + directive. */
+  /** Coloring style the source palette was upserted into (deduped by name). */
   coloringStyleId: string | null;
+  /** The specific color variant within that style for this book's palette. */
+  coloringVariantId: string | null;
   /** Cover text-style pack (fonts/palettes/layout for title/subtitle/brand). */
   coverStylePack: CoverDesignPack | null;
 }
@@ -29,23 +31,24 @@ export async function extractSourceStyleFromCover(opts: {
 }): Promise<SourceStyleResult> {
   const { coverImageUrl, context } = opts;
   const src = resolveR2Url((coverImageUrl || "").split("?")[0]);
-  const out: SourceStyleResult = { coloringStyleId: null, coverStylePack: null };
+  const out: SourceStyleResult = { coloringStyleId: null, coloringVariantId: null, coverStylePack: null };
   if (!src) return out;
 
   // 1. Coloring style (palette + colorization directive) from the colored cover.
+  //    Deduped by name: same-named styles share one row; distinct palettes are
+  //    appended as color variants instead of spawning duplicate style rows.
   try {
     const parsed = await visionAnalyzeJSON<Record<string, unknown>>(
       src,
       COLORING_STYLE_EXTRACTION_PROMPT,
       { maxTokens: 20000, temperature: 0.3 },
     );
-    const created = await prisma.coloringStyle.create({
-      data: buildColoringStyleRowInput(parsed, {
-        referenceUrl: coverImageUrl,
-        fallbackName: `${context.title} — style bìa gốc`,
-      }),
+    const upserted = await upsertColoringStyleWithVariant(prisma, parsed, {
+      referenceUrl: coverImageUrl,
+      fallbackName: `${context.title} — style bìa gốc`,
     });
-    out.coloringStyleId = created.id;
+    out.coloringStyleId = upserted.styleId;
+    out.coloringVariantId = upserted.variantId;
   } catch (error) {
     console.error("[extract-source-style] coloring style failed:", error);
   }

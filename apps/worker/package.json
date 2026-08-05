@@ -10,6 +10,9 @@
     "dev": "node --env-file=.env --import tsx --watch src/index.ts",
     "cleanup": "node --env-file=.env --import tsx src/scripts/cleanup-failed.ts",
     "backfill:scene": "node --env-file=.env --import tsx src/scripts/backfill-book-scene-data.ts",
+    "backfill:cover": "node --env-file=.env --import tsx src/scripts/backfill-cover-from-thumbnail.ts",
+    "backfill:niche": "node --env-file=.env --import tsx src/scripts/backfill-book-niche.ts",
+    "dedupe:styles": "node --env-file=.env --import tsx src/scripts/dedupe-coloring-styles.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -96,12 +96,15 @@ export function Sidebar({ collapsed, onToggleCollapse, onNavigate }: SidebarProp
 
       {/* nav */}
       <nav style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 12px" }}>
-        {NAV.map((sec) => (
+        {NAV.map((sec) => {
+          const visibleItems = sec.items.filter((it) => !it.adminOnly || user?.role === "admin");
+          if (visibleItems.length === 0) return null;
+          return (
           <div key={sec.section}>
             {!collapsed && <div className="mo-nav__section">{sec.section}</div>}
             {collapsed && <div style={{ height: 12 }} />}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {sec.items.filter((it) => !it.adminOnly || user?.role === "admin").map((it) => {
+              {visibleItems.map((it) => {
                 const active = isNavActive(it.href, pathname);
                 return (
                   <Link
@@ -122,7 +125,8 @@ export function Sidebar({ collapsed, onToggleCollapse, onNavigate }: SidebarProp
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* footer — signed-in account + logout (real user from Firebase auth) */}

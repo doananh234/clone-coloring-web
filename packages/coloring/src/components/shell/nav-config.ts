@@ -26,21 +26,23 @@ export const NAV: NavSection[] = [
     section: "Vận hành",
     items: [
       { id: "overview", label: "Tổng quan", href: COLORING_HOME, icon: "layout-dashboard" },
-      { id: "jobs", label: "Clone jobs", href: `${COLORING_BASE}/jobs`, icon: "copy" },
+      { id: "jobs", label: "Clone jobs", href: `${COLORING_BASE}/jobs`, icon: "copy", adminOnly: true },
       { id: "books", label: "Sách", href: `${COLORING_BASE}/books`, icon: "book-open" },
+      { id: "queue", label: "Hàng đợi của tôi", href: `${COLORING_BASE}/queue`, icon: "layout-grid" },
     ],
   },
   {
     section: "Nhóm quản lý",
     items: [
-      { id: "storyhub", label: "Story", href: `${COLORING_BASE}/story`, icon: "pen-line" },
-      { id: "libhub", label: "Thư viện", href: `${COLORING_BASE}/library`, icon: "folder" },
+      { id: "storyhub", label: "Story", href: `${COLORING_BASE}/story`, icon: "pen-line", adminOnly: true },
+      { id: "libhub", label: "Thư viện", href: `${COLORING_BASE}/library`, icon: "folder", adminOnly: true },
       { id: "stylehub", label: "Phong cách", href: `${COLORING_BASE}/styles`, icon: "palette" },
       {
         id: "syshub",
         label: "Kênh bán & hệ thống",
         href: `${COLORING_BASE}/system`,
         icon: "settings",
+        adminOnly: true,
       },
       { id: "fonts", label: "Quản lý font", href: `${COLORING_BASE}/fonts`, icon: "type" },
       { id: "cover-overlays", label: "Bố cục chữ bìa", href: `${COLORING_BASE}/cover-overlays`, icon: "layers" },

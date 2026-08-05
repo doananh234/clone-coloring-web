@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 import type { CoverMeta } from "@vx/server-core/text-overlay";
-import { buildColoringStyleRowInput } from "./build-coloring-style-row-input";
+import { upsertColoringStyleWithVariant } from "./upsert-coloring-style-with-variant";
 
 /**
  * Post-create hook — colorizes the middle B&W page, then delegates cover
@@ -151,6 +151,7 @@ export async function stepGenerateCover(
     const sourceImageUrl = jobPages[0]?.imageUrl?.trim() || "";
 
     let coloringStyleId = "";
+    let coloringVariantId = "";
     let style: {
       id: string;
       colorizationDirective: string | null;
@@ -168,17 +169,24 @@ export async function stepGenerateCover(
           const bookData = (job.bookData as Record<string, unknown> | null | undefined) ?? {};
           const bookTitle =
             (typeof bookData.title === "string" && bookData.title) || book.title || "Untitled";
-          const created = await db.coloringStyle.create({
-            data: buildColoringStyleRowInput(parsed, {
-              referenceUrl: sourceImageUrl,
-              fallbackName: `${bookTitle} — style bìa gốc`,
-            }),
-            select: { id: true, colorizationDirective: true, referenceImages: true },
+          // Dedupe by name: fold this palette into an existing same-named style
+          // as a color variant instead of creating a duplicate style row.
+          const upserted = await upsertColoringStyleWithVariant(db, parsed, {
+            referenceUrl: sourceImageUrl,
+            fallbackName: `${bookTitle} — style bìa gốc`,
+            sourceBookId: ctx.sourceBookId ?? null,
           });
-          coloringStyleId = created.id;
-          style = created;
+          coloringStyleId = upserted.styleId;
+          coloringVariantId = upserted.variantId;
+          const rawRef = (sourceImageUrl || "").split("?")[0];
+          style = {
+            id: upserted.styleId,
+            colorizationDirective: directive,
+            referenceImages: [{ url: rawRef, label: "source-cover" }],
+          };
           console.log(
-            `[stepGenerateCover] extracted source coloring style ${created.id} for job ${ctx.jobId}`,
+            `[stepGenerateCover] source coloring style ${upserted.styleId} variant ${upserted.variantId} ` +
+              `(created=${upserted.created} deduped=${upserted.deduped}) for job ${ctx.jobId}`,
           );
         }
       } catch (error) {
@@ -286,22 +294,12 @@ export async function stepGenerateCover(
     //    Brand text = brand.data.displayName if the admin set one,
     //    otherwise the brand row's `name` slug. That gets rendered verbatim
     //    by the model at the bottom of the cover.
-    const brandDisplay =
-      (typeof brand.data.displayName === "string" && brand.data.displayName.trim()) ||
-      brand.name;
-    const coverKey = `assets/clone-jobs/${ctx.jobId}/cover/cover-ai.png`;
-    const { url: coverUrl } = await deps.generateAiCover({
-      cleanImageUrl: sourceThumbnailUrl,
-      brandName: brandDisplay,
-      titleHint: titleCover,
-      subtitleHint: subtitle || undefined,
-      r2Key: coverKey,
-      trace: {
-        caller: "worker/stepGenerateCover",
-        entityType: "cloneJob",
-        entityId: ctx.jobId,
-      },
-    });
+    // CLEAN cover by default: use the text-free colorized illustration as the
+    // cover — do NOT bake title/subtitle/brand onto it. Typography is added
+    // on-demand later in the Cover editor (which still calls generateAiCover via
+    // the cover-export route). titleCover/subtitle are kept in coverMeta below as
+    // hints for that editor flow.
+    const coverUrl = sourceThumbnailUrl;
 
     // 6. Update Book — coverUrl points at the AI-generated cover; thumbnail
     //    + squareThumbnail stay pointed at the clean colorized illustration
@@ -321,6 +319,7 @@ export async function stepGenerateCover(
             subtitle,
             brandId: brand.id,
             coloringStyleId,
+            coloringVariantId,
             sourceThumbnailUrl,
             middlePageIndex: middleIdx,
             presetId: "ai-typography",

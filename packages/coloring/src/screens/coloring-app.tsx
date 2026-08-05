@@ -4,6 +4,7 @@ import { JobsScreen } from "./jobs/jobs-screen";
 import { JobDetailScreen } from "./jobs/job-detail-screen";
 import { NewJobScreen } from "./jobs/new-job-screen";
 import { BooksScreen } from "./books/books-screen";
+import { MyQueueScreen } from "./queue/my-queue-screen";
 import { BookDetailScreen } from "./books/book-detail-screen";
 import { BookEditScreen } from "./books/book-edit-screen";
 import { BookCreateScreen } from "./books/book-create-screen";
@@ -39,6 +40,7 @@ function screenFor(slug: string[], title: string) {
   if (top === "jobs" && sub === "new") return <NewJobScreen />;
   if (top === "jobs" && sub) return <JobDetailScreen jobId={sub} />;
   if (top === "books" && sub === "new") return <BookCreateScreen />;
+  if (top === "queue") return <MyQueueScreen />;
   if (top === "books" && !sub) return <BooksScreen />;
   if (top === "books" && sub && slug[2] === "edit") return <BookEditScreen bookId={sub} />;
   if (top === "books" && sub && slug[2] === "colorize") return <ColorizeScreen bookId={sub} />;

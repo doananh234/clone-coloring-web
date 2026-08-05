@@ -99,6 +99,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const coverSourceUrl = pages[0]?.imageUrl || null;
     let sourceStyle: Awaited<ReturnType<typeof extractSourceStyleFromCover>> = {
       coloringStyleId: null,
+      coloringVariantId: null,
       coverStylePack: null,
     };
     if (coverSourceUrl) {
@@ -142,6 +143,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           cloneJobId: jobId,
           // Source-cover style, auto-extracted (editable in the cover editor).
           coloringStyleId: sourceStyle.coloringStyleId,
+          coloringVariantId: sourceStyle.coloringVariantId,
           // Cast: CoverDesignPack has no index signature, which Prisma's JSON input
           // type requires (same `as any` pattern as coloringPages above).
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

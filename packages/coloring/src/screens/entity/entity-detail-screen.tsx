@@ -15,6 +15,7 @@ import { useStyleTest, useCategoryIcon } from "../../data/use-more-actions";
 import { ColorizeTestModal } from "../../components/ui/colorize-test-modal";
 import { humanize, displayFields } from "./entity-fields";
 import { StyleResultView } from "./style-result-view";
+import { ColorVariantsSection } from "./color-variants-section";
 import { resolveImg } from "../../data/img";
 
 export interface EntityKindConfig {
@@ -193,6 +194,8 @@ export function EntityDetailScreen({ kind, id }: { kind: string; id: string }) {
           </Card>
         )
       )}
+
+      {kind === "coloring-styles" && <ColorVariantsSection variants={entity.variants} />}
 
       {kind === "coloring-styles" && (() => {
         const refUrls = Array.isArray(entity.referenceImages) ? (entity.referenceImages as { url?: string }[]).map((r) => r.url).filter(Boolean) as string[] : [];

@@ -35,11 +35,15 @@ model Book {
   summaryPages       Json     @default("[]")
   coloringPages      Json     @default("[]")
   isPublic           Boolean  @default(false)
+  // Operator (Operator.id) this book is assigned to. Null = unassigned (visible
+  // to all operators). Once assigned, only the assignee + admins see it.
+  assignedToId       String?
   data               Json     @default("{}")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@index([categoryId])
+  @@index([assignedToId])
 }
 
 model Category {
@@ -138,6 +142,10 @@ model ColoringStyle {
   overallFeel           Json     @default("{}")
   colorizationDirective String?
   tags                  String[] @default([])
+  // Color variants: one style groups many palettes. Each item =
+  // { id, colorPalette, thumbnailUrl, colorizationDirective, sourceBookId, createdAt }.
+  // The style's own top-level colorPalette/thumbnailUrl mirror variant #1.
+  variants              Json     @default("[]")
   sourceBookId          String?
   data                  Json     @default("{}")
   createdAt             DateTime @default(now())

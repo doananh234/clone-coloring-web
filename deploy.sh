@@ -112,16 +112,17 @@ echo "Verifying..."
 ssh ${SSH_OPTS} ${SERVER} "curl -sf -o /dev/null http://localhost:3000/ && echo 'Admin OK (port 3000)' || echo 'Admin FAIL (port 3000)'"
 ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && docker compose ${COMPOSE_FILES} ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
 
-# 6. Reclaim Docker build cache. Each build adds several GB of cache layers;
-#    left unchecked this filled the 256GB host to 100% and ENOSPC'd the yarn
-#    install mid-build. Pruning here (after a successful build + up) keeps the
-#    disk from creeping toward full across deploys. Build cache only — images
-#    used by the running containers and named volumes (Postgres data) are NOT
-#    touched. Trade-off: the next build can't reuse cached layers (slightly
-#    slower). To keep some cache for speed while still capping growth, swap the
-#    line below for: docker builder prune -f --keep-storage 15GB
-echo "[6/6] Pruning Docker build cache..."
-ssh ${SSH_OPTS} ${SERVER} "docker builder prune -af >/dev/null 2>&1 && echo '  -> build cache pruned' || echo '  -> prune skipped'; echo -n '  -> disk: '; df -h / | awk 'NR==2 {print \$3\" used, \"\$4\" free (\"\$5\")\"}'"
+# 6. Reclaim Docker disk. TWO sources of creep across deploys:
+#    (a) dangling images — each build re-tags vx-admin/vx-worker, orphaning the
+#        previous image (~1.5GB each, untagged). `docker image prune -f` removes
+#        ONLY these untagged images; tagged images in use by running containers
+#        and named volumes (Postgres data) are NOT touched.
+#    (b) build cache layers (several GB per build).
+#    Left unchecked, (a)+(b) filled the host to 100% and ENOSPC'd yarn install
+#    mid-build. Pruning here (after a successful build + up) caps the growth.
+#    Trade-off: the next build can't reuse cached layers (slightly slower).
+echo "[6/6] Pruning Docker (dangling images + build cache)..."
+ssh ${SSH_OPTS} ${SERVER} "docker image prune -f >/dev/null 2>&1 && echo '  -> dangling images pruned' || true; docker builder prune -af >/dev/null 2>&1 && echo '  -> build cache pruned' || echo '  -> prune skipped'; echo -n '  -> disk: '; df -h / | awk 'NR==2 {print \$3\" used, \"\$4\" free (\"\$5\")\"}'"
 
 echo ""
 echo "=== Deploy complete ==="

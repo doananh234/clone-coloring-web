@@ -82,6 +82,18 @@ export async function stepCreateBook(
   const pages = (job.pages as JobPage[] | null | undefined) ?? [];
   const bookId = deps.randomUUID();
 
+  // Denormalize the source book's niche onto the book so the list view can show
+  // + search a niche tag without re-walking the CloneJob → SourceBook lineage.
+  const jobData = (job.data as { sourceBookId?: string } | null | undefined) ?? {};
+  let niche: string | null = null;
+  if (jobData.sourceBookId) {
+    const sourceBook = await db.sourceBook.findUnique({
+      where: { id: jobData.sourceBookId },
+      select: { niche: true },
+    });
+    niche = sourceBook?.niche?.trim() || null;
+  }
+
   // Skip pages stepOneShot marked as failed — those have no redesignedUrl
   // and shipping them would surface the raw B&W original as a "coloring
   // page". Filter must otherwise match the URL fallback below: a page is
@@ -152,6 +164,7 @@ export async function stepCreateBook(
         isEditionConverted: false,
         cloneJobId: ctx.jobId,
         sourceBookId: ctx.sourceBookId ?? null,
+        ...(niche ? { niche, nicheLower: niche.toLowerCase() } : {}),
       },
     },
   });

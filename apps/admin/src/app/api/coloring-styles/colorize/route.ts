@@ -7,9 +7,12 @@ import { flushLangfuse } from "@vx/server-core/langfuse";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageUrl, coloringStyleId, bookId, pageId, useReference = true } = body as {
+    const { imageUrl, coloringStyleId, coloringVariantId, bookId, pageId, useReference = true } = body as {
       imageUrl: string;
       coloringStyleId: string;
+      /** Optional color variant within the style — its palette/directive/reference
+       *  override the style-level defaults so the exact chosen colors are used. */
+      coloringVariantId?: string;
       bookId?: string;
       pageId?: string;
       /** When true (default), the style's colored reference images are sent as a
@@ -31,19 +34,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Coloring style not found" }, { status: 404 });
     }
 
-    if (!style.colorizationDirective) {
+    // Resolve the chosen variant (if any) — its directive + reference thumbnail
+    // override the style-level defaults so the exact selected colors are applied.
+    type Variant = { id?: string; colorizationDirective?: string; thumbnailUrl?: string };
+    const variant = coloringVariantId
+      ? ((style.variants as Variant[] | null) || []).find((v) => v?.id === coloringVariantId)
+      : undefined;
+
+    const directive = (variant?.colorizationDirective || style.colorizationDirective || "").trim();
+    if (!directive) {
       return NextResponse.json(
-        { error: "Coloring style has no colorizationDirective" },
+        { error: "Coloring style/variant has no colorizationDirective" },
         { status: 400 },
       );
     }
 
-    // Colorize the image with style reference images as visual anchor.
+    // Colorize with reference image(s) as visual anchor: the variant's own source
+    // thumbnail when a variant is chosen, else the style's reference images.
     // Prompt-only mode (useReference=false) relies on the directive text alone.
+    const styleRefs = ((style.referenceImages as { url: string }[]) || []).map((r) => resolveR2Url(r.url));
     const referenceImageUrls = useReference
-      ? ((style.referenceImages as { url: string }[]) || []).map((r) => resolveR2Url(r.url))
+      ? variant?.thumbnailUrl
+        ? [resolveR2Url(variant.thumbnailUrl)]
+        : styleRefs
       : [];
-    const img = await colorizeImage(resolveR2Url(imageUrl), style.colorizationDirective, {
+    const img = await colorizeImage(resolveR2Url(imageUrl), directive, {
       referenceImageUrls,
       trace: { caller: "coloring-styles/colorize" },
     });
@@ -114,6 +129,7 @@ export async function POST(req: NextRequest) {
         if (existingIdx >= 0) {
           coloringPages[existingIdx].coloredUrl = coloredUrlWithBust;
           coloringPages[existingIdx].coloringStyleId = coloringStyleId;
+          coloringPages[existingIdx].coloringVariantId = coloringVariantId ?? null;
         } else {
           console.warn(`[colorize] Page ${pageId} not found in book ${bookId} coloringPages`);
         }

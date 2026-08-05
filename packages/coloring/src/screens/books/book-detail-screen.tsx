@@ -16,10 +16,10 @@ import { useBook } from "../../data/use-book";
 import { useBookJob } from "../../data/use-book-job";
 import { getBookPatch } from "../../data/local-books";
 import { useGeneratePdf, useGenerateSubtitle, useReclone } from "../../data/use-book-actions";
-import { useBookAi } from "../../data/use-more-actions";
 import { PageActionsRow } from "./page-actions-row";
+import { BookInformationTab } from "./book-info-tab";
 import { resolveImg } from "../../data/img";
-import { COLORING_WRITE_ENABLED } from "../../data/config";
+import { COLORING_WRITE_ENABLED, COLORING_API_BASE } from "../../data/config";
 import { parsePageScene, hasSceneDetail, type ParsedScene } from "../../data/page-scene";
 import type { BookDetail, BookColoringPage } from "../../data/types";
 
@@ -125,9 +125,8 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const genPdf = useGeneratePdf(bookId);
   const genSubtitle = useGenerateSubtitle(bookId);
   const reclone = useReclone(bookId);
-  const bookAi = useBookAi(bookId);
   const { jobId: relatedJobId } = useBookJob(bookId);
-  const [tab, setTab] = useState<"info" | "pages">("info");
+  const [tab, setTab] = useState<"info" | "meta" | "pages">("info");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
   const [preview, setPreview] = useState<Omit<PreviewModalProps, "open" | "onClose"> | null>(null);
@@ -264,20 +263,18 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/edit`)}><Icon name="pen-line" size={16} /> Sửa thông tin</Button>
-          <Button variant="outline" size="sm" onClick={nav(`${B}/story`)}><Icon name="layout-grid" size={16} /> Storyboard</Button>
           <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/cover`)}><Icon name="image" size={16} /> Cover editor</Button>
-          <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/colorize`)}><Icon name="palette" size={16} /> Tô màu AI</Button>
           <Button variant="outline" size="sm" onClick={makePdf} disabled={busy}><Icon name="file-text" size={16} /> {busy ? "Đang tạo…" : b.pdfUrl ? "Tạo lại PDF" : "Tạo PDF"}</Button>
           {resolveImg(b.pdfUrl) && (
             <Button variant="outline" size="sm" onClick={() => window.open(resolveImg(b.pdfUrl)!, "_blank", "noopener")}><Icon name="download" size={16} /> Tải PDF</Button>
           )}
+          <Button variant="outline" size="sm" title="Xuất ảnh sách (Main + Clone, cover + interior) ra file ZIP các PNG lẻ"
+            onClick={() => window.open(`${COLORING_API_BASE}/books/${bookId}/export-zip`, "_blank")}>
+            <Icon name="download" size={16} /> Export ZIP
+          </Button>
           <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED || busy} title={COLORING_WRITE_ENABLED ? undefined : "Cần bật ghi thật (staging)"}
             onClick={async () => { setBusy(true); setMsg(null); try { await genSubtitle(); setMsg({ ok: "Đã sinh phụ đề" }); } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); } finally { setBusy(false); } }}>
             <Icon name="sparkles" size={16} /> Sinh phụ đề AI
-          </Button>
-          <Button variant="outline" size="sm" disabled={!bookAi.enabled || busy} title={bookAi.enabled ? undefined : "Cần bật ghi thật (staging)"}
-            onClick={async () => { setBusy(true); setMsg(null); try { await bookAi.syncCategories(); setMsg({ ok: "Đã sync danh mục" }); } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); } finally { setBusy(false); } }}>
-            <Icon name="folder" size={16} /> Sync danh mục
           </Button>
           <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED || busy} title={COLORING_WRITE_ENABLED ? undefined : "Cần bật ghi thật (staging)"}
             onClick={async () => {
@@ -288,7 +285,6 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
             }}>
             <Icon name="copy" size={16} /> {busy ? "Đang xử lý…" : "Re-clone"}
           </Button>
-          <Button variant="outline" size="sm" disabled title="Chưa có endpoint Etsy"><Icon name="store" size={16} /> Sync Etsy</Button>
         </div>
       </div>
 
@@ -361,8 +357,8 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
 
         {/* right */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: "3 1 420px", minWidth: 0 }}>
-          <Tabs<"info" | "pages"> items={[{ key: "info", label: "Tổng quan" }, { key: "pages", label: `Trang sách · ${pages.length}` }]} value={tab} onChange={setTab} />
-          {tab === "info" ? (
+          <Tabs<"info" | "meta" | "pages"> items={[{ key: "info", label: "Tổng quan" }, { key: "meta", label: "Thông tin" }, { key: "pages", label: `Trang sách · ${pages.length}` }]} value={tab} onChange={setTab} />
+          {tab === "info" && (
             <>
               <Card title="Cover & hình màu">
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
@@ -384,7 +380,9 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                 <Card title="Mô tả"><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{b.description}</div></Card>
               )}
             </>
-          ) : (
+          )}
+          {tab === "meta" && <BookInformationTab b={b} pages={pages} />}
+          {tab === "pages" && (
             <Card title={`Trang sách · ${pages.length}`}>
               {pages.length === 0 ? (
                 <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />

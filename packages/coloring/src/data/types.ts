@@ -90,6 +90,12 @@ export interface BookRow {
   thumbnailUrl?: string | null;
   squareThumbnailUrl?: string | null;
   category?: string | null;
+  /** Denormalized source niche (from CloneJob → SourceBook), shown as a tag. */
+  niche?: string | null;
+  /** Operator id this book is assigned to (null = unassigned). */
+  assignedToId?: string | null;
+  /** Kanban queue status: "todo" | "in_progress" | "review" | "done". */
+  queueStatus?: string | null;
   price?: string | null;
   isPublic?: boolean;
   isPremium?: boolean;
@@ -113,6 +119,8 @@ export interface EntityListItem {
   referenceImages?: string[] | null;
   isPublic?: boolean;
   tags?: string[];
+  /** Coloring-style color variants (opaque here; shape in @vx/clone-core). */
+  variants?: unknown;
 }
 
 export interface EntityListResponse<T = EntityListItem> {
@@ -148,6 +156,7 @@ export interface BookDetail extends BookRow {
   description?: string | null;
   pdfUrl?: string | null;
   originalPrice?: string | null;
+  discount?: string | null;
   badge?: string | null;
   updatedAt?: string;
   tags?: string[];

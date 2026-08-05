@@ -7,7 +7,6 @@ import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/states";
-import { ImageComparison } from "../../components/ui/image-comparison";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { usePipelineActions, type CandidateKind } from "../../data/use-pipeline-actions";
 import { useStyleFromImage } from "../../data/use-more-actions";
@@ -258,51 +257,6 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
             </div>
           )}
 
-          {/* Big view: two EQUAL columns, each with its own header so titles and
-              images line up. Left = original↔gen comparison; right (page 01 only)
-              = the book's current cover (derived from the source page). */}
-          {(idx === 0 || (redo && page.imageUrl)) && (
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-              {/* left: comparison / original */}
-              <div style={{ flex: "1 1 340px", maxWidth: 420, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minHeight: 26 }}>
-                  <span style={capLabel}>{redo && page.imageUrl ? "So sánh gốc ↔ đã gen" : "Hình gốc"}</span>
-                  {redo && page.imageUrl && <Badge tone="carbon">Kéo để so sánh</Badge>}
-                </div>
-                {redo && page.imageUrl ? (
-                  <ImageComparison beforeSrc={resolveImg(page.imageUrl) ?? ""} afterSrc={resolveImg(redo) ?? ""} beforeLabel="Gốc" afterLabel="Đã gen" />
-                ) : page.imageUrl ? (
-                  <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={resolveImg(page.imageUrl)} alt="Hình gốc" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                  </div>
-                ) : null}
-              </div>
-              {/* right: current cover (page 01 only) */}
-              {idx === 0 && (
-                <div style={{ flex: "1 1 340px", maxWidth: 420, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minHeight: 26 }}>
-                    <span style={capLabel}>Cover đang dùng</span>
-                    {coverUrl && <Badge tone="carbon">Bìa job</Badge>}
-                  </div>
-                  <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
-                    {coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={coverUrl} alt="Cover đang dùng" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                    ) : (
-                      <span style={{ fontSize: 12 }}>Chưa có bìa</span>
-                    )}
-                  </div>
-                  {bookId && (
-                    <Button variant="outline" size="sm" style={{ width: "100%" }} onClick={() => router.push(`${B}/books/${bookId}/cover`)}>
-                      <Icon name="image" size={14} /> Sửa bìa
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Job-level: extract per-element STYLE + LAYOUT from the job's ORIGINAL cover
               (page 0, WITH text) → reusable CoverTextOverlay record. Parallel to
               "Lưu coloring style" above, but for text style+position instead of color. */}
@@ -348,7 +302,17 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
                 <Icon name="palette" size={14} /> {busy === "savestyle" ? "Đang lưu…" : "Lưu coloring style"}
               </Button>
             } />
-            <Candidate label="Bản đã gen" src={resolveImg(redo)} hint={redo ? "Đang dùng" : undefined} empty />
+            <Candidate
+              label="Bản đã gen"
+              src={idx === 0 ? (coverUrl ?? resolveImg(redo)) : resolveImg(redo)}
+              hint={idx === 0 ? (coverUrl ? "Cover đang dùng" : undefined) : (redo ? "Đang dùng" : undefined)}
+              empty
+              footer={idx === 0 && bookId ? (
+                <Button variant="outline" size="sm" style={{ width: "100%" }} onClick={() => router.push(`${B}/books/${bookId}/cover`)}>
+                  <Icon name="image" size={14} /> Sửa bìa
+                </Button>
+              ) : undefined}
+            />
             <Candidate label="Regen" src={resolveImg(regenCand)} selected={!!regenCand && page.reproducedUrl === regenCand} empty
               disabled={!pa.enabled} busy={busy === "applyregen"}
               onChoose={run("applyregen", () => pa.applyCandidate(idx, "regen"))}

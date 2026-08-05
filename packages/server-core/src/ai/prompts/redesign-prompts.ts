@@ -104,7 +104,7 @@ ${poseLine}
 - Position of props within the scene (rearrange layout)
 - Individual props can be swapped for similar items
   (e.g. teapot → kettle, tulip → daisy, book → notepad)
-
+- No border, no frame, full-bleed composition, edge-to-edge content
 DO NOT:
 - Add any color, shading, or gradients
 - Add interior texture, stippling, dots, crosshatching, hatching lines,

@@ -16,3 +16,11 @@ export {
   type GenerateCoverDeps,
 } from "./generate-cover";
 export { buildColoringStyleRowInput } from "./build-coloring-style-row-input";
+export { upsertColoringStyleWithVariant, type UpsertColoringStyleResult } from "./upsert-coloring-style-with-variant";
+export {
+  buildColoringStyleVariant,
+  paletteFingerprint,
+  readVariants,
+  type ColorPalette,
+  type ColoringStyleVariant,
+} from "./coloring-style-variant";

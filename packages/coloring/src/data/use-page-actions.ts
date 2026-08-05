@@ -69,10 +69,16 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
     /** Remove one page from the book. */
     removePage: (pages: BookColoringPage[], pageId: string) =>
       put({ coloringPages: pages.filter((p) => p.id !== pageId) }),
-    /** Colorize one page with a coloring style (POST /coloring-styles/colorize). */
-    colorize: async (pageId: string, pageUrl: string, styleId: string) => {
+    /** Colorize one page with a coloring style + optional color variant. */
+    colorize: async (pageId: string, pageUrl: string, styleId: string, variantId?: string | null) => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
-      await httpPost(`${COLORING_API_BASE}/coloring-styles/colorize`, { imageUrl: pageUrl, coloringStyleId: styleId, bookId, pageId });
+      await httpPost(`${COLORING_API_BASE}/coloring-styles/colorize`, {
+        imageUrl: pageUrl,
+        coloringStyleId: styleId,
+        coloringVariantId: variantId ?? undefined,
+        bookId,
+        pageId,
+      });
       inval();
     },
   };

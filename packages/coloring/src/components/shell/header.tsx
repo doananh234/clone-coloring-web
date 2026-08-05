@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Avatar } from "../ui/avatar";
@@ -25,6 +26,11 @@ export interface HeaderProps {
 
 export function Header({ pageTitle, crumbs, theme, onToggleTheme, onOpenNav }: HeaderProps) {
   const router = useRouter();
+  const [search, setSearch] = useState("");
+  const submitSearch = () => {
+    const q = search.trim();
+    if (q) router.push(`${COLORING_BASE}/books?q=${encodeURIComponent(q)}`);
+  };
   const { user, logout } = useColoringAuth();
   const running = runningJobCount(useJobCounts());
   const hasCrumbs = !!crumbs && crumbs.length > 1;
@@ -115,7 +121,13 @@ export function Header({ pageTitle, crumbs, theme, onToggleTheme, onOpenNav }: H
       <div style={{ flex: 1 }} />
 
       <div className="mo-desktop-only" style={{ width: 280, maxWidth: "28vw" }}>
-        <Input icon="search" placeholder="Tìm sách, job, brand…" />
+        <Input
+          icon="search"
+          placeholder="Tìm sách… (Enter)"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submitSearch(); }}
+        />
       </div>
 
       {running > 0 && (

@@ -6,6 +6,7 @@ import { Button } from "./button";
 import { Badge } from "./badge";
 import { useStyleTest } from "../../data/use-more-actions";
 import { uploadImageFile } from "../../data/use-upload-image";
+import { useIsMobile } from "../../hooks/use-is-mobile";
 
 export interface ColorizeTestModalProps {
   open: boolean;
@@ -34,6 +35,7 @@ export function ColorizeTestModal({ open, onClose, styleName, referenceImages, c
   const [busy, setBusy] = useState<"colorizing" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const isMobile = useIsMobile();
 
   // Reset everything when the modal closes; revoke the object URL to avoid leaks.
   useEffect(() => {
@@ -78,7 +80,7 @@ export function ColorizeTestModal({ open, onClose, styleName, referenceImages, c
   const capLabel = { fontSize: 11, fontWeight: 600 as const, color: "var(--muted-foreground)", textTransform: "uppercase" as const, letterSpacing: "var(--tracking-caps)" };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(11,13,12,.5)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(11,13,12,.5)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: isMobile ? 8 : 24 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", width: "min(960px, 100%)", maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column", animation: "mo-dd-in var(--dur-med) var(--ease-out)" }}>
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
@@ -90,9 +92,9 @@ export function ColorizeTestModal({ open, onClose, styleName, referenceImages, c
         </div>
 
         {/* body: LEFT reference · RIGHT workspace */}
-        <div style={{ flex: 1, minHeight: 0, overflow: "hidden", padding: 18, display: "grid", gridTemplateColumns: "220px minmax(0,1fr)", gap: 20 }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: isMobile ? "auto" : "hidden", padding: isMobile ? 12 : 18, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "220px minmax(0,1fr)", gap: isMobile ? 12 : 20 }}>
           {/* LEFT: style reference images */}
-          <div style={{ minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ minWidth: 0, minHeight: 0, overflowY: isMobile ? "visible" : "auto", paddingRight: 4, display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={capLabel}>Ảnh tham chiếu style</div>
             {referenceImages.length > 0 ? (
               referenceImages.map((src, i) => (
@@ -107,7 +109,7 @@ export function ColorizeTestModal({ open, onClose, styleName, referenceImages, c
           </div>
 
           {/* RIGHT: workspace */}
-          <div style={{ minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ minWidth: 0, minHeight: 0, overflowY: isMobile ? "visible" : "auto", paddingRight: 4, display: "flex", flexDirection: "column", gap: 14 }}>
             {!colored ? (
               <>
                 <div

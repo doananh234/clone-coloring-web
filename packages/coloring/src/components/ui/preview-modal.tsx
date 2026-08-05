@@ -49,11 +49,11 @@ export function PreviewModal({ open, onClose, title, imageSrc, imageNode, badges
   return (
     <div
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(11,13,12,.5)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(11,13,12,.5)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: "clamp(8px, 3vw, 24px)" }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", width: "min(880px, 100%)", maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column", animation: "mo-dd-in var(--dur-med) var(--ease-out)" }}
+        style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", width: "min(880px, 100%)", height: "min(90vh, 860px)", overflow: "hidden", display: "flex", flexDirection: "column", animation: "mo-dd-in var(--dur-med) var(--ease-out)" }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -72,10 +72,11 @@ export function PreviewModal({ open, onClose, title, imageSrc, imageNode, badges
           </div>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, overflow: "hidden", padding: 18, display: "grid", gridTemplateColumns: hasLeft ? "300px minmax(0,1fr)" : "1fr", gap: 20, alignItems: "stretch" }}>
-          {/* LEFT: scrollable info; image stays put; actions move to the full-width footer */}
+        {/* Flex-wrap: info + image sit side-by-side when wide, stack (wrap) when
+            narrow — always readable, never scaled tiny. Whole body scrolls. */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "clamp(12px, 2.5vw, 18px)", display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
           {hasLeft && (
-            <div style={{ minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ flex: "1 1 260px", minWidth: "min(100%, 240px)", display: "flex", flexDirection: "column", gap: 12 }}>
               {badges && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{badges}</div>}
               {desc && <div style={{ fontSize: 13.5, lineHeight: 1.55 }}>{desc}</div>}
               {info && info.length > 0 && (
@@ -93,9 +94,9 @@ export function PreviewModal({ open, onClose, title, imageSrc, imageNode, badges
 
           {/* RIGHT: large image view / custom node (coloring images are square 1:1) — fixed, top-aligned */}
           {imageNode ? (
-            <div style={{ alignSelf: "start", minHeight: 0, maxHeight: "100%" }}>{imageNode}</div>
+            <div style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)" }}>{imageNode}</div>
           ) : (
-            <div style={{ alignSelf: "start", aspectRatio: "1 / 1", maxHeight: "100%", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+            <div style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)", aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
               {imageSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={imageSrc} alt={typeof title === "string" ? title : "preview"} onClick={() => setZoom(true)} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff", cursor: "zoom-in" }} />

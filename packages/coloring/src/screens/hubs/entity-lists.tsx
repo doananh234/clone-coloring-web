@@ -86,6 +86,35 @@ const styleCard = (r: EntityListItem): EntityCard => ({
   badges: tagBadges(r),
 });
 
+/** Distinct primary colors across a coloring style's variants (capped). */
+function variantSwatches(r: EntityListItem): string[] {
+  const vs = (r as unknown as { variants?: unknown }).variants;
+  if (!Array.isArray(vs)) return [];
+  const colors: string[] = [];
+  for (const v of vs) {
+    const primary = (v as { colorPalette?: { primaryColors?: string[] } })?.colorPalette?.primaryColors ?? [];
+    for (const c of primary) {
+      if (typeof c === "string" && c && !colors.includes(c)) colors.push(c);
+      if (colors.length >= 8) return colors;
+    }
+  }
+  return colors;
+}
+
+/** Coloring-style card: adds palette swatches + a "N màu" variant-count badge. */
+const colorStyleCard = (r: EntityListItem): EntityCard => {
+  const vs = (r as unknown as { variants?: unknown[] }).variants;
+  const count = Array.isArray(vs) ? vs.length : 0;
+  return {
+    ...styleCard(r),
+    swatches: variantSwatches(r),
+    badges: [
+      ...tagBadges(r),
+      ...(count > 1 ? [{ tone: "info" as const, text: `${count} màu` }] : []),
+    ],
+  };
+};
+
 export const CharactersScreen = () => (
   <EntityListScreen title="Nhân vật" subtitle="extract từ clone job" path="characters" kind="characters" toCard={characterCard} emptyText="Chưa có nhân vật nào." action={<RegenMissingButton type="character" />} />
 );
@@ -106,5 +135,5 @@ export const BwStylesScreen = () => (
   <EntityListScreen title="B&W style" subtitle="style nét line-art" path="art-styles" kind="art-styles" toCard={styleCard} emptyText="Chưa có B&W style nào." action={<ExtractLink href="/styles/extractbw" label="Tạo từ ảnh" />} />
 );
 export const ColorStylesScreen = () => (
-  <EntityListScreen title="Coloring style" subtitle="bảng màu & chất liệu" path="coloring-styles" kind="coloring-styles" toCard={styleCard} emptyText="Chưa có coloring style nào." action={<ExtractLink href="/styles/extractcolor" label="Tạo từ ảnh" />} />
+  <EntityListScreen title="Coloring style" subtitle="bảng màu & chất liệu" path="coloring-styles" kind="coloring-styles" toCard={colorStyleCard} largeImage emptyText="Chưa có coloring style nào." action={<ExtractLink href="/styles/extractcolor" label="Tạo từ ảnh" />} />
 );

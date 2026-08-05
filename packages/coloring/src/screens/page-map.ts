@@ -4,6 +4,8 @@ export function resolvePageTitle(slug: string[]): string {
   switch (top) {
     case undefined:
       return "Tổng quan";
+    case "queue":
+      return "Hàng đợi của tôi";
     case "jobs":
       if (sub === "new") return "Tạo clone job";
       return sub ? "Chi tiết job" : "Clone jobs";

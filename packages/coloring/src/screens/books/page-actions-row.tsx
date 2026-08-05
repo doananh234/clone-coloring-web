@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
-import { Select } from "../../components/ui/form-controls";
-import { useEntityList } from "../../data/use-entity-list";
+import { ColoringStylePickerModal, type StyleSelection } from "../../components/ui/coloring-style-picker-modal";
 import { usePageActions } from "../../data/use-page-actions";
 import { resolveImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
@@ -36,16 +35,16 @@ export function PageActionsRow({
   // Cover / thumbnail / square are set from the COLORED version (like the old
   // "Set Colored as …" lightbox actions) → only offered once the page is colorized.
   const colored = page.coloredUrl;
-  const { items: styles } = useEntityList("coloring-styles");
-  const [styleId, setStyleId] = useState("");
+  // Coloring style + color variant chosen via the picker modal (replaces the
+  // old flat dropdown — lets the user browse styles then pick a palette variant).
+  const [sel, setSel] = useState<StyleSelection | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Regen/Đổi góc generate a candidate WITHOUT applying → user previews + chooses.
   const [cand, setCand] = useState<Candidate | null>(null);
   const [zoom, setZoom] = useState(false);
 
-  const styleOptions = styles.map((s) => ({ label: s.name, value: s.id }));
-  const chosen = styleId || styleOptions[0]?.value || "";
   const disabled = !actions.enabled;
 
   const run = (kind: string, fn: () => Promise<void>, after?: () => void) => async () => {
@@ -93,10 +92,30 @@ export function PageActionsRow({
     <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
       {/* single horizontal action bar: colorize + manage buttons */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%", flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 220px", minWidth: 160 }}>
-          <Select value={chosen} onChange={setStyleId} options={styleOptions} placeholder="Tô màu với coloring style…" />
-        </div>
-        <Button size="sm" disabled={disabled || !chosen || busy !== null} onClick={run("colorize", () => actions.colorize(page.id, page.url, chosen))}>
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          style={{ flex: "1 1 240px", minWidth: 180, display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--neutral-100)", cursor: "pointer", textAlign: "left" }}
+        >
+          {sel?.thumb ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={sel.thumb} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover", border: "1px solid var(--border)", flexShrink: 0 }} />
+          ) : (
+            <span style={{ width: 32, height: 32, borderRadius: 6, background: "var(--neutral-200, #eee)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", flexShrink: 0 }}><Icon name="palette" size={16} /></span>
+          )}
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 13, fontWeight: sel ? 600 : 400, color: sel ? "var(--foreground)" : "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {sel ? sel.styleName : "Chọn coloring style…"}
+            </span>
+            {sel?.swatches && sel.swatches.length > 0 && (
+              <span style={{ display: "flex", gap: 3, marginTop: 3 }}>
+                {sel.swatches.map((c, i) => <span key={i} style={{ width: 12, height: 12, borderRadius: 3, background: c, border: "1px solid var(--border)" }} />)}
+              </span>
+            )}
+          </span>
+          <Icon name="chevron-down" size={16} />
+        </button>
+        <Button size="sm" disabled={disabled || !sel || busy !== null} onClick={run("colorize", () => actions.colorize(page.id, page.url, sel!.styleId, sel!.variantId))}>
           <Icon name="palette" size={15} /> {busy === "colorize" ? "Đang tô…" : "Tô màu"}
         </Button>
         {actions.canRegen && (
@@ -165,6 +184,8 @@ export function PageActionsRow({
           Các thao tác chỉ chạy khi bật ghi thật (<span style={{ fontFamily: "var(--font-mono)" }}>NEXT_PUBLIC_COLORING_WRITE=1</span> · staging).
         </div>
       )}
+
+      <ColoringStylePickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={setSel} referenceThumb={resolveImg(page.coloredUrl || page.url)} />
     </div>
   );
 }
