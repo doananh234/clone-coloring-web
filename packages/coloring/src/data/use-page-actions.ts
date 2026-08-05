@@ -56,6 +56,21 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
       await httpPost(`${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/apply-candidate`, { pageIndex, kind });
       inval();
     },
+    /**
+     * Regen one page (same camera, from the original source) AND write it straight
+     * onto the book page in a single call — the reproduce endpoint does regen +
+     * apply when `apply:true`, so there is no preview/confirm step. Used by batch
+     * regen. Does NOT invalidate per call (the batch invalidates once at the end).
+     */
+    regenApply: async (pageIndex: number) => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+      if (!cloneJobId) throw new Error("Sách này không có clone job nguồn.");
+      const res = await httpPost<{ succeeded?: number; results?: { error?: string }[] }>(
+        `${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`,
+        { pageIndex, newAngle: false, apply: true },
+      );
+      if (!res?.succeeded) throw new Error(res?.results?.[0]?.error || "Regen thất bại.");
+    },
     // The 3 old lightbox actions ("Set Colored as …"), each on its own column:
     /** Set the book COVER image (coverUrl). */
     setCover: (pageUrl: string) => put({ coverUrl: pageUrl }),
