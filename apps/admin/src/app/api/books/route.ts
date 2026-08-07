@@ -39,6 +39,9 @@ export async function GET(req: NextRequest) {
   const assign = (searchParams.get("assign") || "").trim();
   if (assign === "mine" && operator) and.push({ assignedToId: operator.sub });
   else if (assign === "unassigned") and.push({ assignedToId: null });
+  // "assigned" = any book that has an assignee (used by the admin queue board,
+  // which must only show work that's actually in someone's queue).
+  else if (assign === "assigned") and.push({ assignedToId: { not: null } });
 
   const where: Prisma.BookWhereInput = and.length ? { AND: and } : {};
 

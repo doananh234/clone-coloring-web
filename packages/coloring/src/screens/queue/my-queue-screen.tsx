@@ -20,8 +20,8 @@ export function MyQueueScreen() {
   const isAdmin = user?.role === "admin";
   const operators = useOperators(isAdmin);
   const [assignee, setAssignee] = useState(""); // admin person filter (operator id); "" = all
-  // Members: only books assigned to them. Admins: all, filtered client-side by person.
-  const { books, isLoading, isError } = useBooks(1, 200, { assign: isAdmin ? "all" : "mine" });
+  // Members: only books assigned to them. Admins: all assigned books, filtered client-side by person.
+  const { books, isLoading, isError } = useBooks(1, 200, { assign: isAdmin ? "assigned" : "mine" });
   const setStatus = useSetQueueStatus();
   const [override, setOverride] = useState<Record<string, QueueStatus>>({});
   const [err, setErr] = useState<string | null>(null);

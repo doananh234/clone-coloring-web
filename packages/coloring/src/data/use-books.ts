@@ -27,7 +27,7 @@ export interface BooksFilter {
   cat?: string;
   /** "all" | "pub" | "draft". */
   status?: string;
-  /** Assignment filter: "mine" (assigned to me) | "unassigned". */
+  /** Assignment filter: "mine" (assigned to me) | "assigned" (has any assignee) | "unassigned". */
   assign?: string;
 }
 
