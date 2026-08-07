@@ -45,27 +45,32 @@ ssh ${SSH_OPTS} ${SERVER} "
 echo "[1/4] Syncing code to ${REMOTE_DIR}..."
 ssh ${SSH_OPTS} ${SERVER} "sudo mkdir -p ${REMOTE_DIR} && sudo chown -R ec2-user:ec2-user ${REMOTE_DIR}"
 
-rsync -az --delete \
-    --exclude='.git' \
-    --exclude='node_modules' \
-    --exclude='.turbo' \
-    --exclude='.next' \
-    --exclude='dist' \
-    --exclude='*.tsbuildinfo' \
-    --exclude='.superpowers' \
-    --exclude='.claude' \
-    --exclude='backups' \
-    --exclude='011-detail' \
-    --exclude='012-detail-scroll' \
-    --exclude='026-detail-scrolled' \
-    --exclude='detail-scroll' \
-    --exclude='*.png' \
-    --exclude='apps/admin/.env.local' \
-    --exclude='apps/admin/.env' \
-    --exclude='apps/worker/.env.local' \
-    --exclude='apps/worker/.env' \
-    -e "ssh ${SSH_OPTS}" \
-    ./ ${SERVER}:${REMOTE_DIR}/
+# Shared exclude list — kept identical between the rsync and tar paths so a sync
+# from a Windows/Git-Bash box (no rsync) lands the same file set. Bare names
+# (node_modules, *.png) match at any depth; path-specific ones drop only the
+# dev env files while keeping .env.prod (needed by docker-compose.prod.yml).
+SYNC_EXCLUDES=(
+    '.git' 'node_modules' '.turbo' '.next' 'dist' '*.tsbuildinfo'
+    '.superpowers' '.claude' 'backups'
+    '011-detail' '012-detail-scroll' '026-detail-scrolled' 'detail-scroll' '*.png'
+    'apps/admin/.env.local' 'apps/admin/.env'
+    'apps/worker/.env.local' 'apps/worker/.env'
+)
+
+if command -v rsync >/dev/null 2>&1; then
+    rsync_excludes=()
+    for e in "${SYNC_EXCLUDES[@]}"; do rsync_excludes+=(--exclude="$e"); done
+    rsync -az --delete "${rsync_excludes[@]}" -e "ssh ${SSH_OPTS}" ./ ${SERVER}:${REMOTE_DIR}/
+else
+    # Fallback for hosts without rsync (e.g. Git Bash on Windows). tar-over-ssh
+    # overlays the source; unlike rsync --delete it won't prune files removed
+    # since the last deploy — fine for edit/add-only deploys.
+    echo "  -> rsync not found; using tar-over-ssh fallback (no --delete)."
+    tar_excludes=()
+    for e in "${SYNC_EXCLUDES[@]}"; do tar_excludes+=(--exclude="$e"); done
+    tar czf - "${tar_excludes[@]}" -C . . \
+        | ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && tar xzf -"
+fi
 
 # 2. Build images.
 #    Serial build (NOT --parallel): the host is a 7.8GB box, and building the
