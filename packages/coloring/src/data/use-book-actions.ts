@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { httpPost } from "@vx/core-uikit/api";
+import { httpPost, httpDel } from "@vx/core-uikit/api";
 import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
 
 const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (bật NEXT_PUBLIC_COLORING_WRITE=1, upstream staging).";
@@ -46,5 +46,18 @@ export function useReclone(bookId: string): () => Promise<string> {
     if (!res?.jobId) throw new Error("Re-clone không trả về jobId.");
     qc.invalidateQueries({ queryKey: ["coloring", "clone-jobs"] });
     return res.jobId;
+  };
+}
+
+/** DELETE /books/[id] → permanently removes the book, then refreshes the library list. */
+export function useDeleteBook(bookId: string): () => Promise<void> {
+  const qc = useQueryClient();
+  return async () => {
+    if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+    const res = await httpDel<{ success?: boolean; error?: string }>(
+      `${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}`,
+    );
+    if (res?.error) throw new Error(res.error);
+    qc.invalidateQueries({ queryKey: ["coloring", "books"] });
   };
 }

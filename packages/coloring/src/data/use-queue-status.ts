@@ -14,7 +14,7 @@ export interface QueueColumn {
 /** Kanban columns for the "My queue" board (order = left→right flow). */
 export const QUEUE_COLUMNS: QueueColumn[] = [
   { key: "todo", label: "Chờ làm" },
-  { key: "in_progress", label: "Đang tô" },
+  { key: "in_progress", label: "Đang xử lý" },
   { key: "review", label: "Chờ duyệt" },
   { key: "done", label: "Hoàn tất" },
 ];

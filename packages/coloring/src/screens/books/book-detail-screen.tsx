@@ -15,9 +15,10 @@ import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useBook } from "../../data/use-book";
 import { useBookJob } from "../../data/use-book-job";
 import { getBookPatch } from "../../data/local-books";
-import { useGeneratePdf, useGenerateSubtitle, useReclone } from "../../data/use-book-actions";
+import { useGeneratePdf, useGenerateSubtitle, useReclone, useDeleteBook } from "../../data/use-book-actions";
 import { PageActionsRow } from "./page-actions-row";
 import { BookInformationTab } from "./book-info-tab";
+import { BookOriginalSection } from "./book-original-section";
 import { PageBatchSelect } from "./page-batch-select";
 import { resolveImg } from "../../data/img";
 import { COLORING_WRITE_ENABLED, COLORING_API_BASE } from "../../data/config";
@@ -126,6 +127,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const genPdf = useGeneratePdf(bookId);
   const genSubtitle = useGenerateSubtitle(bookId);
   const reclone = useReclone(bookId);
+  const deleteBook = useDeleteBook(bookId);
   const { jobId: relatedJobId } = useBookJob(bookId);
   const [tab, setTab] = useState<"info" | "meta" | "pages" | "select">("info");
   const [busy, setBusy] = useState(false);
@@ -287,6 +289,17 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
             }}>
             <Icon name="copy" size={16} /> {busy ? "Đang xử lý…" : "Re-clone"}
           </Button>
+          <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED || busy}
+            title={COLORING_WRITE_ENABLED ? "Xoá vĩnh viễn sách này" : "Cần bật ghi thật (staging)"}
+            style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+            onClick={async () => {
+              if (!window.confirm(`Xoá vĩnh viễn sách "${b.title}"? Hành động này không thể hoàn tác.`)) return;
+              setBusy(true); setMsg(null);
+              try { await deleteBook(); router.push(`${B}/books`); }
+              catch (e) { setMsg({ err: e instanceof Error ? e.message : "Xoá thất bại" }); setBusy(false); }
+            }}>
+            <Icon name="trash-2" size={16} /> Xoá sách
+          </Button>
         </div>
       </div>
 
@@ -390,6 +403,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
               {b.description && (
                 <Card title="Mô tả"><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{b.description}</div></Card>
               )}
+              <BookOriginalSection jobId={relatedJobId ?? cloneJobId ?? null} sourceCoverFallback={coverMetaObj.sourceThumbnailUrl} />
             </>
           ) : tab === "meta" ? (
             <BookInformationTab b={b} pages={pages} />

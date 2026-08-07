@@ -224,7 +224,7 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
               <div key={p.pageNumber} onClick={() => setSel(i)} style={{ position: "relative", flexShrink: 0, width: "100%", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: "var(--neutral-100)", border: `${active ? 2 : 1}px solid ${active ? "var(--volt-600)" : "var(--border)"}`, boxShadow: active ? "var(--shadow-glow)" : undefined, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", cursor: "pointer", overflow: "hidden" }}>
                 {p.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.imageUrl} alt={`Trang ${p.pageNumber}`} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src={resolveImg(p.imageUrl)} alt={`Trang ${p.pageNumber}`} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   <Icon name="image" size={16} />
                 )}

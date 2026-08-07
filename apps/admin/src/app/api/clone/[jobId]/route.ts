@@ -30,7 +30,10 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       name: row.name,
       status: row.status as CloneJob["status"],
       sourceFileName: row.sourceFileName || "",
-      sourcePdfUrl: row.sourcePdfUrl || "",
+      // Resolve the source PDF ("book gốc") to its CDN URL — it is stored as a
+      // relative R2 key ("/assets/…"), so returning it raw makes the client link
+      // resolve against the admin origin instead of the asset CDN.
+      sourcePdfUrl: row.sourcePdfUrl ? resolveR2Url(row.sourcePdfUrl) : "",
       totalPages: row.totalPages,
       analyzedPages: row.analyzedPages,
       pages,

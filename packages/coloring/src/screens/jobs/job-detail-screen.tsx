@@ -16,6 +16,7 @@ import { JobPipelineTab } from "./job-pipeline-tab";
 import { JobCompareTab } from "./job-compare-tab";
 import { metaFor } from "../../data/status";
 import { useQueueActions, rowActionFor } from "../../data/use-queue-actions";
+import { resolveImg } from "../../data/img";
 import type { CloneJobDetail, CloneJobPage } from "../../data/types";
 
 const capLabel = {
@@ -90,7 +91,7 @@ function InfoTab({ job }: { job: CloneJobDetail }) {
             </div>
           </div>
           {job.sourcePdfUrl && (
-            <a href={job.sourcePdfUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--border)", paddingTop: 12, textDecoration: "none", color: "var(--foreground)" }}>
+            <a href={resolveImg(job.sourcePdfUrl)} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--border)", paddingTop: 12, textDecoration: "none", color: "var(--foreground)" }}>
               <Icon name="file-text" size={18} />
               <span style={{ flex: 1, ...mono, fontSize: 13 }}>{job.sourceFileName || "PDF nguồn"}</span>
               <Icon name="download" size={16} />

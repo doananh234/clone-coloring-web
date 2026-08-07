@@ -7,12 +7,13 @@ import { resolveR2Url } from "@vx/server-core/r2";
  * Export a book's images as a ZIP of individual PNG/JPG files (NOT a merged PDF —
  * kept separate so each page can be processed on its own). Structure:
  *
- *   Main book/  Book cover/ cover.png
- *               Book interior/ page-001.png ...   (colored final, else B&W)
- *   Clone book/ Book cover/ cover.png             (source cover)
+ *   Main book/  Book cover/ cover.png             (original PDF cover = first source page)
  *               Book interior/ page-001.png ...   (original source pages)
+ *   Clone book/ Book cover/ cover.png             (composed cover with text)
+ *               Book interior/ page-001.png ...   (AI colored final, else B&W)
  *
- * "Main book" = this Book record; "Clone book" = the source CloneJob it came from.
+ * "Main book" = the ORIGINAL source it was cloned from (the source CloneJob);
+ * "Clone book" = this Book record (the AI-generated clone/reproduction).
  */
 
 type ImageEntry = { url: string; name: string };
@@ -63,32 +64,35 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ boo
 
   const zip = new JSZip();
 
-  // --- Main book (this Book record) ---
-  const bookPages = (book.coloringPages as Page[] | null) ?? [];
-  const mainCover: ImageEntry[] = book.coverUrl ? [{ url: book.coverUrl, name: "cover" }] : [];
-  // Interior = final page: colored when available, else the B&W line-art.
-  const mainInterior: ImageEntry[] = bookPages
-    .map((p, i) => ({ url: p.coloredUrl || p.url || "", name: pad(i) }))
-    .filter((e) => e.url);
-  await addFolder(zip, "Main book/Book cover", mainCover);
-  await addFolder(zip, "Main book/Book interior", mainInterior);
-
-  // --- Clone book (source CloneJob) ---
+  // --- Main book = the ORIGINAL source it was cloned from (the source CloneJob) ---
   const cloneJobId = typeof data.cloneJobId === "string" ? data.cloneJobId : undefined;
   const job = cloneJobId ? await prisma.cloneJob.findUnique({ where: { id: cloneJobId } }) : null;
   if (job) {
     const jobPages = (job.pages as Page[] | null) ?? [];
+    // Original cover = the actual first page of the source PDF (the real original
+    // cover, with its text). Fall back to the clean source thumbnail only if the
+    // first page is missing.
     const srcCoverUrl =
-      (typeof coverMeta.sourceThumbnailUrl === "string" && coverMeta.sourceThumbnailUrl) ||
       jobPages[0]?.imageUrl ||
+      (typeof coverMeta.sourceThumbnailUrl === "string" && coverMeta.sourceThumbnailUrl) ||
       "";
-    const cloneCover: ImageEntry[] = srcCoverUrl ? [{ url: srcCoverUrl, name: "cover" }] : [];
-    const cloneInterior: ImageEntry[] = jobPages
+    const mainCover: ImageEntry[] = srcCoverUrl ? [{ url: srcCoverUrl, name: "cover" }] : [];
+    const mainInterior: ImageEntry[] = jobPages
       .map((p, i) => ({ url: p.imageUrl || "", name: pad(i) }))
       .filter((e) => e.url);
-    await addFolder(zip, "Clone book/Book cover", cloneCover);
-    await addFolder(zip, "Clone book/Book interior", cloneInterior);
+    await addFolder(zip, "Main book/Book cover", mainCover);
+    await addFolder(zip, "Main book/Book interior", mainInterior);
   }
+
+  // --- Clone book = this Book record (the AI-generated clone/reproduction) ---
+  const bookPages = (book.coloringPages as Page[] | null) ?? [];
+  const cloneCover: ImageEntry[] = book.coverUrl ? [{ url: book.coverUrl, name: "cover" }] : [];
+  // Interior = final page: colored when available, else the B&W line-art.
+  const cloneInterior: ImageEntry[] = bookPages
+    .map((p, i) => ({ url: p.coloredUrl || p.url || "", name: pad(i) }))
+    .filter((e) => e.url);
+  await addFolder(zip, "Clone book/Book cover", cloneCover);
+  await addFolder(zip, "Clone book/Book interior", cloneInterior);
 
   const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
   const filename = `${slug(book.title)}-export.zip`;
