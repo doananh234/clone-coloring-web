@@ -195,7 +195,7 @@ export function EntityDetailScreen({ kind, id }: { kind: string; id: string }) {
         )
       )}
 
-      {kind === "coloring-styles" && <ColorVariantsSection variants={entity.variants} />}
+      {kind === "coloring-styles" && <ColorVariantsSection variants={entity.variants} styleId={id} />}
 
       {kind === "coloring-styles" && (() => {
         const refUrls = Array.isArray(entity.referenceImages) ? (entity.referenceImages as { url?: string }[]).map((r) => r.url).filter(Boolean) as string[] : [];
