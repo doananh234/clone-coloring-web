@@ -26,7 +26,7 @@ export { useEntityBulkDelete } from "./use-entity-bulk-delete";
 export { useStyleFromImage, useStyleTest, useCategoryIcon, useBookAi, useRegenerateMissing } from "./use-more-actions";
 export { useCreateEntity } from "./use-create-entity";
 export type { CandidateKind } from "./use-pipeline-actions";
-export { useGeneratePdf, useGenerateSubtitle } from "./use-book-actions";
+export { useGeneratePdf, useGenerateSubtitle, useReclone, useDeleteBook, useApproveBook } from "./use-book-actions";
 export { useColorizeBook } from "./use-colorize";
 export type { ColorizePage } from "./use-colorize";
 export { toBookPayload, toEntityPayload, droppedKeys } from "./api-payload";
