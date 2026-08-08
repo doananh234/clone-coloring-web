@@ -43,8 +43,8 @@ type FilterKey =
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "public", label: "Public" },
-  { key: "private", label: "Private" },
+  { key: "public", label: "Đã duyệt" },
+  { key: "private", label: "Nháp" },
   { key: "premium", label: "Premium" },
   { key: "free", label: "Free" },
   { key: "converted", label: "Converted" },
@@ -243,7 +243,7 @@ function BookCard({
         <div className="absolute top-2 right-2 flex flex-col gap-1">
           {book.isPublic && (
             <span className="rounded bg-green-500 px-1.5 py-0.5 text-[10px] font-medium text-white">
-              Public
+              Đã duyệt
             </span>
           )}
           {book.isPremium && (
