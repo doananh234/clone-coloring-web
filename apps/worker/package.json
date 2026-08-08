@@ -12,6 +12,7 @@
     "backfill:scene": "node --env-file=.env --import tsx src/scripts/backfill-book-scene-data.ts",
     "backfill:cover": "node --env-file=.env --import tsx src/scripts/backfill-cover-from-thumbnail.ts",
     "backfill:niche": "node --env-file=.env --import tsx src/scripts/backfill-book-niche.ts",
+    "backfill:book-approved": "node --env-file=.env --import tsx src/scripts/backfill-book-approved.ts",
     "dedupe:styles": "node --env-file=.env --import tsx src/scripts/dedupe-coloring-styles.ts",
     "test": "vitest run",
     "test:watch": "vitest"
