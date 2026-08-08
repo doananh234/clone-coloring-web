@@ -61,3 +61,18 @@ export function useDeleteBook(bookId: string): () => Promise<void> {
     qc.invalidateQueries({ queryKey: ["coloring", "books"] });
   };
 }
+
+/** POST /books/[id]/approve → marks the book approved (isPublic=true). Server enforces who may approve. */
+export function useApproveBook(bookId: string): () => Promise<void> {
+  const qc = useQueryClient();
+  return async () => {
+    if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+    const res = await httpPost<{ success?: boolean; error?: string }>(
+      `${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}/approve`,
+      {},
+    );
+    if (res?.error) throw new Error(res.error);
+    qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
+    qc.invalidateQueries({ queryKey: ["coloring", "books"] });
+  };
+}

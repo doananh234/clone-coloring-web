@@ -54,7 +54,7 @@ export function BookInformationTab({ b, pages }: { b: BookDetail; pages: BookCol
         <Row label="Badge">{val(b.badge)}</Row>
         <Row label="Trạng thái" last>
           <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {b.isPublic ? <Badge tone="success" dot>Đang bán</Badge> : <Badge tone="neutral">Nháp</Badge>}
+            {b.isPublic ? <Badge tone="success" dot>Đã duyệt</Badge> : <Badge tone="neutral">Nháp</Badge>}
             {b.isPremium && <Badge tone="carbon">Premium</Badge>}
           </span>
         </Row>

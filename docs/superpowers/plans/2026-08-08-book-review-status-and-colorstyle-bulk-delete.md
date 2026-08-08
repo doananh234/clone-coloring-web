@@ -575,9 +575,9 @@ git commit -m "feat(coloring): useApproveBook hook"
 - Modify: `packages/coloring/src/screens/books/book-info-tab.tsx:57`
 
 **Interfaces:**
-- Consumes: `useApproveBook` from `../../data/use-book-actions` (Task 5); `useColoringAuth` from `../../hooks/coloring-auth`.
+- Consumes: `useApproveBook` from `../../data/use-book-actions` (Task 5).
 
-Presentational + wiring; verified manually.
+Presentational + wiring; verified manually. The approve button is shown to any signed-in operator whenever the book is draft; the server is the sole authority and returns 403 to unauthorized callers (surfaced via `setMsg`). The client does NOT check assignee (no operator id available on `ColoringUser`), so do NOT import `useColoringAuth` here.
 
 - [ ] **Step 1: Relabel the detail header badge**
 
@@ -615,19 +615,12 @@ In `book-detail-screen.tsx`, add `useApproveBook` to the existing import from `.
 import { useGeneratePdf, useGenerateSubtitle, useReclone, useDeleteBook, useApproveBook } from "../../data/use-book-actions";
 ```
 
-and add (new import line):
-
-```tsx
-import { useColoringAuth } from "../../hooks/coloring-auth";
-```
-
 - [ ] **Step 4: Wire the hook inside the component**
 
 In `book-detail-screen.tsx`, next to the other action-hook calls (e.g. after `const deleteBook = useDeleteBook(bookId);`), add:
 
 ```tsx
   const approveBook = useApproveBook(bookId);
-  const { user } = useColoringAuth();
 ```
 
 - [ ] **Step 5: Render the approve button**
@@ -650,7 +643,7 @@ In `book-detail-screen.tsx`, inside the header action `<div style={{ display: "f
           )}
 ```
 
-> `user` is imported for parity with the auth model but the button is shown to any operator when the book is draft; the server returns 403 if the caller may not approve, and the error surfaces via `setMsg`. (If `check` is not a valid icon name in `../../lib/icon`, use `"circle-check"` — grep `packages/coloring/src/lib/icon` for the available set first.)
+> The button is shown to any operator when the book is draft; the server returns 403 if the caller may not approve, and the error surfaces via `setMsg`. (If `check` is not a valid icon name in `../../lib/icon`, use `"circle-check"` — grep `packages/coloring/src/lib/icon` for the available set first, per Step 6.)
 
 - [ ] **Step 6: Confirm the icon name exists**
 

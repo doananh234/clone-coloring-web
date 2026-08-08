@@ -15,7 +15,7 @@ import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useBook } from "../../data/use-book";
 import { useBookJob } from "../../data/use-book-job";
 import { getBookPatch } from "../../data/local-books";
-import { useGeneratePdf, useGenerateSubtitle, useReclone, useDeleteBook } from "../../data/use-book-actions";
+import { useGeneratePdf, useGenerateSubtitle, useReclone, useDeleteBook, useApproveBook } from "../../data/use-book-actions";
 import { PageActionsRow } from "./page-actions-row";
 import { BookInformationTab } from "./book-info-tab";
 import { BookOriginalSection } from "./book-original-section";
@@ -128,6 +128,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const genSubtitle = useGenerateSubtitle(bookId);
   const reclone = useReclone(bookId);
   const deleteBook = useDeleteBook(bookId);
+  const approveBook = useApproveBook(bookId);
   const { jobId: relatedJobId } = useBookJob(bookId);
   const [tab, setTab] = useState<"info" | "meta" | "pages" | "select">("info");
   const [busy, setBusy] = useState(false);
@@ -256,11 +257,24 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 24, letterSpacing: "-0.02em" }}>{b.title}</h1>
-          {b.isPublic ? <Badge tone="success" dot>Đang bán</Badge> : <Badge tone="neutral">Nháp</Badge>}
+          {b.isPublic ? <Badge tone="success" dot>Đã duyệt</Badge> : <Badge tone="neutral">Nháp</Badge>}
           {b.isPremium && <Badge tone="carbon">Premium</Badge>}
           {edited && <Badge tone="warning">Đã sửa · local</Badge>}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {!b.isPublic && (
+            <Button size="sm" disabled={!COLORING_WRITE_ENABLED || busy}
+              title={COLORING_WRITE_ENABLED ? "Duyệt sách này (chuyển sang Đã duyệt)" : "Cần bật ghi thật (staging)"}
+              onClick={async () => {
+                if (!window.confirm("Duyệt sách này? Sách sẽ chuyển sang trạng thái Đã duyệt.")) return;
+                setBusy(true); setMsg(null);
+                try { await approveBook(); setMsg({ ok: "Đã duyệt sách" }); }
+                catch (e) { setMsg({ err: e instanceof Error ? e.message : "Duyệt thất bại" }); }
+                finally { setBusy(false); }
+              }}>
+              <Icon name="check" size={16} /> Duyệt sách
+            </Button>
+          )}
           {relatedJobId && (
             <Button variant="outline" size="sm" onClick={nav(`${B}/jobs/${relatedJobId}`)} title="Mở clone job đã tạo sách này để so sánh trang">
               <Icon name="copy" size={16} /> Job liên quan

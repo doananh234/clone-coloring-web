@@ -135,5 +135,5 @@ export const BwStylesScreen = () => (
   <EntityListScreen title="B&W style" subtitle="style nét line-art" path="art-styles" kind="art-styles" toCard={styleCard} emptyText="Chưa có B&W style nào." action={<ExtractLink href="/styles/extractbw" label="Tạo từ ảnh" />} />
 );
 export const ColorStylesScreen = () => (
-  <EntityListScreen title="Coloring style" subtitle="bảng màu & chất liệu" path="coloring-styles" kind="coloring-styles" toCard={colorStyleCard} largeImage emptyText="Chưa có coloring style nào." action={<ExtractLink href="/styles/extractcolor" label="Tạo từ ảnh" />} />
+  <EntityListScreen title="Coloring style" subtitle="bảng màu & chất liệu" path="coloring-styles" kind="coloring-styles" toCard={colorStyleCard} largeImage selectable emptyText="Chưa có coloring style nào." action={<ExtractLink href="/styles/extractcolor" label="Tạo từ ảnh" />} />
 );
