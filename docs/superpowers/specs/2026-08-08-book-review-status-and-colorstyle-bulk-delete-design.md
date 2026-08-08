@@ -182,9 +182,12 @@ New route `apps/admin/src/app/api/books/[bookId]/approve/route.ts`:
   untouched** (`assignedToId` unchanged) — confirmed by the user.
 - Returns the updated book (or `{ success: true }`).
 
-Client UI mirrors the rule to decide button visibility: show the approve button when
-`user.role === "admin" || user.id === book.assignedToId`. (`useColoringAuth()` already exposes the
-current user; `book.assignedToId` is on `BookRow`/`BookDetail`.)
+Client UI: `ColoringUser` (from `useColoringAuth()`) exposes only `name/email/username/role` — **no
+operator id** — so the client cannot check assignee match locally. The approve button is therefore
+shown to any signed-in operator whenever the book is "Nháp" (`!b.isPublic`) and `COLORING_WRITE_ENABLED`
+is on; **the server is the sole authority**. If a non-authorized operator clicks, the route returns
+`403` and the UI shows "Bạn không có quyền duyệt sách này (chỉ admin hoặc người được giao)." This
+matches the existing security model (the assign route likewise trusts `operator.sub` server-side).
 
 ### Out of scope
 
