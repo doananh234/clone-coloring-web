@@ -105,6 +105,27 @@ ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && \
         -e DIRECT_URL=postgresql://postgres:postgres@postgres:5432/coloring \
         admin sh -c 'cd /app/packages/db && npx prisma db seed'"
 
+# 3c. ONE-TIME backfill: mark existing books as approved (isPublic=true).
+#     Gated behind RUN_BOOK_APPROVED_BACKFILL because it is NOT safe to run on
+#     every deploy: isPublic is the editorial review flag ("Đã duyệt"=true /
+#     "Nháp"=false), so after the initial migration the isPublic=false rows are
+#     exactly the NEW books still awaiting review — an unconditional run would
+#     silently auto-approve them. Run once with:
+#       RUN_BOOK_APPROVED_BACKFILL=1 ./deploy.sh
+#     (the script itself is idempotent for already-approved books, but must not
+#     run automatically thereafter). See
+#     docs/superpowers/specs/2026-08-08-book-review-status-and-colorstyle-bulk-delete-design.md
+if [ "${RUN_BOOK_APPROVED_BACKFILL:-0}" = "1" ]; then
+    echo "[3c] One-time backfill: marking existing books approved (isPublic=true)..."
+    ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && \
+        docker compose ${COMPOSE_FILES} run --rm --no-deps \
+            -e DATABASE_URL=postgresql://postgres:postgres@postgres:5432/coloring \
+            -e DIRECT_URL=postgresql://postgres:postgres@postgres:5432/coloring \
+            worker sh -c 'cd /app/apps/worker && node --import tsx src/scripts/backfill-book-approved.ts'"
+else
+    echo "[3c] Skipping book-approved backfill (set RUN_BOOK_APPROVED_BACKFILL=1 to run once)."
+fi
+
 # 4. Start app containers.
 echo "[4/5] Starting admin + worker..."
 ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && docker compose ${COMPOSE_FILES} up -d"
