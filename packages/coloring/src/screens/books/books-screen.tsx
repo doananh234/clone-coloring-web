@@ -45,7 +45,7 @@ function BookCard({ book, onOpen, checked, onToggle, assigneeName }: { book: Boo
         <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta || "—"}</div>
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {book.isPublic ? <Badge tone="success" dot>Đang bán</Badge> : <Badge tone="neutral">Nháp</Badge>}
+        {book.isPublic ? <Badge tone="success" dot>Đã duyệt</Badge> : <Badge tone="neutral">Nháp</Badge>}
         {book.niche && <Badge tone="info">{book.niche}</Badge>}
         {book.category && <Badge tone="neutral">{book.category}</Badge>}
         {assigneeName && <Badge tone="carbon">◍ {assigneeName}</Badge>}
@@ -60,13 +60,13 @@ export function BooksScreen() {
   const [page, setPage] = useQueryNumber("page", 1);
   const [q] = useQueryParam("q", "");
   const [cat] = useQueryParam("cat", "");
-  const [status] = useQueryParam("status", "all");
+  const [status] = useQueryParam("status", "pub");
   const [assignFilter] = useQueryParam("assign", "all");
   const setParams = useSetQueryParams();
   // Changing any filter resets to page 1 (else you land on an out-of-range/empty page).
   const setQ = (v: string) => setParams({ q: v || null, page: null });
   const setCat = (v: string) => setParams({ cat: v || null, page: null });
-  const setStatus = (v: string) => setParams({ status: v === "all" ? null : v, page: null });
+  const setStatus = (v: string) => setParams({ status: v, page: null });
   const setAssignFilter = (v: string) => setParams({ assign: v === "all" ? null : v, page: null });
 
   // Debounced search: the input updates instantly for a responsive feel, but the
@@ -129,7 +129,7 @@ export function BooksScreen() {
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ width: 220 }}><Input icon="search" placeholder="Tìm tên, niche…" value={searchText} onChange={(e) => setSearchText(e.target.value)} /></div>
           <div style={{ width: 170 }}><Select value={cat} onChange={setCat} options={catOptions} /></div>
-          <div style={{ width: 150 }}><Select value={status} onChange={setStatus} options={[{ label: "Tất cả", value: "all" }, { label: "Đang bán", value: "pub" }, { label: "Nháp", value: "draft" }]} /></div>
+          <div style={{ width: 150 }}><Select value={status} onChange={setStatus} options={[{ label: "Tất cả", value: "all" }, { label: "Đã duyệt", value: "pub" }, { label: "Nháp", value: "draft" }]} /></div>
           <div style={{ width: 150 }}><Select value={assignFilter} onChange={setAssignFilter} options={[{ label: "Tất cả", value: "all" }, { label: "Của tôi", value: "mine" }, { label: "Chưa giao", value: "unassigned" }]} /></div>
           <Button size="sm" onClick={() => router.push(`${B}/books/new`)}><Icon name="plus" size={16} /> Tạo sách</Button>
         </div>
