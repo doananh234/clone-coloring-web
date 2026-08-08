@@ -24,3 +24,8 @@ export {
   type ColorPalette,
   type ColoringStyleVariant,
 } from "./coloring-style-variant";
+export {
+  removeVariant,
+  type RemoveVariantResult,
+  type VariantMirror,
+} from "./remove-coloring-style-variant";

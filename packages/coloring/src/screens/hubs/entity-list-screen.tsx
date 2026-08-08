@@ -40,12 +40,17 @@ export interface EntityListScreenProps {
   selectable?: boolean;
   /** API kind used for DELETE when selectable (defaults to `kind`). */
   deleteKind?: string;
+  /** Optional segmented filter tabs (e.g. Manual vs Clone coloring styles). When
+   *  set, a control renders above the grid and cards are filtered by the active
+   *  tab's `match` (in addition to search). The first tab is selected initially. */
+  tabs?: { key: string; label: string; match: (it: EntityListItem) => boolean }[];
 }
 
-export function EntityListScreen({ title, subtitle, path, kind, toCard, action, emptyText, largeImage, selectable, deleteKind }: EntityListScreenProps) {
+export function EntityListScreen({ title, subtitle, path, kind, toCard, action, emptyText, largeImage, selectable, deleteKind, tabs }: EntityListScreenProps) {
   const router = useRouter();
   const { items, total, isLoading, isError } = useEntityList(path);
   const [q, setQ] = useState("");
+  const [tab, setTab] = useState(tabs?.[0]?.key ?? "");
   const bulk = useEntityBulkDelete(deleteKind ?? kind);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -69,7 +74,10 @@ export function EntityListScreen({ title, subtitle, path, kind, toCard, action, 
     it.name.toLowerCase().includes(ql) ||
     (it.description ?? "").toLowerCase().includes(ql) ||
     (it.tags ?? []).some((t) => t.toLowerCase().includes(ql));
-  const cards = items.filter((it) => !ql || matches(it)).map(toCard);
+  const searched = items.filter((it) => !ql || matches(it));
+  const activeMatch = tabs?.find((t) => t.key === tab)?.match ?? (() => true);
+  const cards = searched.filter(activeMatch).map(toCard);
+  const tabCounts = tabs?.map((t) => searched.filter(t.match).length) ?? [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -83,6 +91,21 @@ export function EntityListScreen({ title, subtitle, path, kind, toCard, action, 
           <div style={{ width: 240 }}><Input icon="search" placeholder={`Tìm ${title.toLowerCase()}…`} value={q} onChange={(e) => setQ(e.target.value)} /></div>
         </div>
       </div>
+
+      {tabs && tabs.length > 0 && (
+        <div style={{ display: "flex", gap: 4, background: "var(--neutral-100)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 4, alignSelf: "flex-start", flexWrap: "wrap" }}>
+          {tabs.map((t, i) => {
+            const on = t.key === tab;
+            return (
+              <button key={t.key} type="button" onClick={() => setTab(t.key)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: "var(--radius-sm)", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: on ? "var(--background)" : "transparent", color: on ? "var(--foreground)" : "var(--muted-foreground)", boxShadow: on ? "0 1px 2px rgba(0,0,0,.06)" : "none" }}>
+                {t.label}
+                <Badge tone={on ? "info" : "neutral"}>{tabCounts[i] ?? 0}</Badge>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {selectable && selected.size > 0 && (
         <Card>

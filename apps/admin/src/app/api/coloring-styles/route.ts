@@ -34,7 +34,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    // Create Postgres row with empty images initially
+    // Create Postgres row with empty images initially.
+    // Styles created through this HTTP route are operator-made "manual" styles
+    // (the /styles/extractcolor screen) — the clone pipeline never posts here, it
+    // writes via upsertColoringStyleWithVariant. `data.source` drives the
+    // Manual/Clone tabs on /styles/colorstyles.
     const created = await prisma.coloringStyle.create({
       data: {
         name,
@@ -49,6 +53,7 @@ export async function POST(req: NextRequest) {
         colorizationDirective: colorizationDirective || "",
         tags: tags || [],
         sourceBookId: sourceBookId || null,
+        data: { source: "manual" },
       },
     });
 

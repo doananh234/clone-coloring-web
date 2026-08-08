@@ -121,6 +121,9 @@ export interface EntityListItem {
   tags?: string[];
   /** Coloring-style color variants (opaque here; shape in @vx/clone-core). */
   variants?: unknown;
+  /** Raw JSON blob (list API returns all columns). `data.source` = "manual" |
+   *  "clone" marks how a coloring style was created (used by the list tabs). */
+  data?: Record<string, unknown> | null;
 }
 
 export interface EntityListResponse<T = EntityListItem> {

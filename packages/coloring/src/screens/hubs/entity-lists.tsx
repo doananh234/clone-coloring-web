@@ -134,6 +134,16 @@ export const CategoriesListScreen = () => (
 export const BwStylesScreen = () => (
   <EntityListScreen title="B&W style" subtitle="style nét line-art" path="art-styles" kind="art-styles" toCard={styleCard} emptyText="Chưa có B&W style nào." action={<ExtractLink href="/styles/extractbw" label="Tạo từ ảnh" />} />
 );
+// A coloring style is "manual" when its `data.source` marks it as hand-added
+// (upload + name + hashtag); everything else — including every clone/extract row
+// that predates the marker — is treated as "clone".
+const isManualStyle = (it: EntityListItem): boolean =>
+  ((it.data?.source as string | undefined) ?? "") === "manual";
+const colorStyleTabs = [
+  { key: "all", label: "Tất cả", match: () => true },
+  { key: "manual", label: "Manual add style", match: isManualStyle },
+  { key: "clone", label: "Clone add style", match: (it: EntityListItem) => !isManualStyle(it) },
+];
 export const ColorStylesScreen = () => (
-  <EntityListScreen title="Coloring style" subtitle="bảng màu & chất liệu" path="coloring-styles" kind="coloring-styles" toCard={colorStyleCard} largeImage selectable emptyText="Chưa có coloring style nào." action={<ExtractLink href="/styles/extractcolor" label="Tạo từ ảnh" />} />
+  <EntityListScreen title="Coloring style" subtitle="bảng màu & chất liệu" path="coloring-styles" kind="coloring-styles" toCard={colorStyleCard} largeImage selectable tabs={colorStyleTabs} emptyText="Chưa có coloring style nào." action={<ExtractLink href="/styles/extractcolor" label="Tạo từ ảnh" />} />
 );
