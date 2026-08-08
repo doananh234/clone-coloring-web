@@ -80,10 +80,28 @@ bulk bar (small `var(--danger)` text, like the assign error in `books-screen.tsx
 deletes still applied; the list invalidation reflects the true remaining set. Selection is cleared on
 success.
 
+### Data safety — deleting a style used by colored books
+
+Deleting a coloring style is **safe for already-colored books**. Verified:
+
+- `ColoringStyle` (schema.prisma) has **no Prisma relation / FK** to `Book`. Books reference a style
+  only as a loose ID in JSON (`coloringPages[].coloringStyleId`, `data.coloringStyleId`,
+  `coverMeta.coloringStyleId`). So `prisma.coloringStyle.delete()` does not cascade and does not error.
+- Colored page images are standalone PNGs uploaded to R2 (`coloredUrl` on each page). Display and
+  export-zip read `coloredUrl` directly and never re-read the `ColoringStyle` row. `DELETE
+  /api/coloring-styles/[id]` removes only the Postgres row — it does not touch R2 assets.
+- Only consequence: an orphaned `coloringStyleId` reference on those books — shown as plain text in
+  the book "Thông tin" tab (harmless), and re-colorizing with that exact deleted style would return a
+  graceful 404 (`findUnique` → "not found"). No screen crashes; the user just picks another style.
+
+Given no data damage, **no usage-count safeguard** is added — a plain `window.confirm` is sufficient
+(user-confirmed).
+
 ### Out of scope
 
 - No bulk-delete API endpoint (client fan-out is sufficient).
 - No selection for other entity kinds.
+- No "N books use this style" usage warning before delete.
 
 ---
 
