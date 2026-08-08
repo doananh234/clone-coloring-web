@@ -22,6 +22,7 @@ export { useCreateBook, useExtractEntities } from "./use-job-actions";
 export { useQueueActions, rowActionFor } from "./use-queue-actions";
 export { usePipelineActions } from "./use-pipeline-actions";
 export { useEntityActions } from "./use-entity-actions";
+export { useEntityBulkDelete } from "./use-entity-bulk-delete";
 export { useStyleFromImage, useStyleTest, useCategoryIcon, useBookAi, useRegenerateMissing } from "./use-more-actions";
 export { useCreateEntity } from "./use-create-entity";
 export type { CandidateKind } from "./use-pipeline-actions";
