@@ -43,6 +43,8 @@ interface JobPage {
   rawData?: PageRawData;
   status?: string;
   error?: string;
+  pageType?: "cover" | "interiorIntro" | "interior";
+  excluded?: boolean;
 }
 
 interface BookData {
@@ -94,34 +96,57 @@ export async function stepCreateBook(
     niche = sourceBook?.niche?.trim() || null;
   }
 
-  // Skip pages stepOneShot marked as failed — those have no redesignedUrl
-  // and shipping them would surface the raw B&W original as a "coloring
-  // page". Filter must otherwise match the URL fallback below: a page is
-  // usable if EITHER redesignedUrl or imageUrl is set. Strict `p.imageUrl`
-  // filter dropped every page when stepOneShot left imageUrl empty (older
-  // bug: Diaflow's loop_N_output was missing) — producing a book with 0
-  // coloringPages.
-  const usablePages = pages.filter((p) => p.status !== "error" && (p.redesignedUrl || p.imageUrl));
+  // A page is usable if it isn't an error page and has an image. Excluded
+  // pages (operator-toggled back covers / blanks / junk) are dropped entirely.
+  const usablePages = pages.filter(
+    (p) => p.status !== "error" && !p.excluded && (p.redesignedUrl || p.imageUrl),
+  );
+
+  // Partition by D2 pageType. Legacy pages (no pageType) count as interior so
+  // pre-D2 jobs behave exactly as before.
+  const coverPage = usablePages.find((p) => p.pageType === "cover");
+  const introPages = usablePages.filter((p) => p.pageType === "interiorIntro");
+  const interiorPages = usablePages.filter(
+    (p) => p.pageType !== "cover" && p.pageType !== "interiorIntro",
+  );
+
+  const buildPage = async (p: JobPage, destKey: string) => {
+    const sourceUrl = p.redesignedUrl ?? p.imageUrl;
+    const url = await deps.copyImage({ sourceUrl, destKey });
+    return {
+      id: deps.randomUUID(),
+      url,
+      isPublic: false,
+      prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
+      sceneData: normalizeRawData(p.rawData),
+    };
+  };
 
   const coloringPages = await Promise.all(
-    usablePages.map(async (p, i) => {
-      const sourceUrl = p.redesignedUrl ?? p.imageUrl;
-      const ext = sourceUrl.split(".").pop()?.split("?")[0] || "png";
-      const destKey = `assets/${bookId}/pages/page-${String(i + 1).padStart(3, "0")}.${ext}`;
-      const url = await deps.copyImage({ sourceUrl, destKey });
-      return {
-        id: deps.randomUUID(),
-        url,
-        isPublic: false,
-        prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
-        // Persist full per-page LLM output — enables future indexing/search.
-        // normalizeRawData keeps every field but guards non-object rawData: the
-        // old `{ ...p.rawData }` spread a JSON string into numeric keys ("0".."N"),
-        // which is the malformed sceneData seen on existing books.
-        sceneData: normalizeRawData(p.rawData),
-      };
+    interiorPages.map((p, i) => {
+      const src = p.redesignedUrl ?? p.imageUrl;
+      const ext = src.split(".").pop()?.split("?")[0] || "png";
+      return buildPage(p, `assets/${bookId}/pages/page-${String(i + 1).padStart(3, "0")}.${ext}`);
     }),
   );
+
+  const summaryPages = await Promise.all(
+    introPages.map((p, i) => {
+      const src = p.redesignedUrl ?? p.imageUrl;
+      const ext = src.split(".").pop()?.split("?")[0] || "png";
+      return buildPage(p, `assets/${bookId}/summary/summary-${String(i + 1).padStart(3, "0")}.${ext}`);
+    }),
+  );
+
+  // Cover: move the classified cover page if present; otherwise mirror the
+  // first interior page so coverUrl always points at a real, moved image.
+  let coverUrl = coloringPages[0]?.url ?? "";
+  if (coverPage) {
+    const src = coverPage.redesignedUrl ?? coverPage.imageUrl;
+    const ext = src.split(".").pop()?.split("?")[0] || "png";
+    coverUrl = await deps.copyImage({ sourceUrl: src, destKey: `assets/${bookId}/cover.${ext}` });
+  }
+  const firstImage = coverUrl;
 
   const storyOutline = pages
     .filter((p) => p.rawData)
@@ -133,7 +158,6 @@ export async function stepCreateBook(
       mood: p.rawData?.environment?.mood ?? "",
     }));
 
-  const firstImage = coloringPages[0]?.url ?? "";
   const title =
     bookData.title || job.name || job.sourceFileName?.replace(/\.pdf$/i, "") || "Untitled";
 
@@ -150,7 +174,8 @@ export async function stepCreateBook(
       squareThumbnailUrl: firstImage,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       coloringPages: coloringPages as any,
-      summaryPages: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      summaryPages: summaryPages as any,
       isPublic: false,
       data: {
         ageRange: bookData.ageRange ?? null,

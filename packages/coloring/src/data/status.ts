@@ -22,6 +22,7 @@ export const STATUS_META: Record<string, StatusMeta> = {
   analyzed: { bucket: "confirm", label: "Chờ xác nhận", tone: "warning" },
   confirmed: { bucket: "confirm", label: "Chờ xác nhận", tone: "warning" },
   entities_ready: { bucket: "confirm", label: "Chờ xác nhận", tone: "warning" },
+  "awaiting-classify": { bucket: "running", label: "Chờ phân loại", tone: "warning", dot: true },
   reproduced: { bucket: "done", label: "Hoàn thành", tone: "neutral" },
   error: { bucket: "error", label: "Lỗi", tone: "danger" },
 };
@@ -48,6 +49,7 @@ export const STATUS_TABS: StatusTab[] = [
   { key: "all", label: "Tất cả", filter: "", countKeys: ["all"], barColor: "var(--neutral-400)" },
   { key: "pending", label: "Queue", filter: "pending", countKeys: ["pending", "queued", "uploading", "extracted"], barColor: "var(--info)" },
   { key: "running", label: "Đang chạy", filter: "running", countKeys: ["running", "analyzing"], barColor: "var(--volt-500)" },
+  { key: "gate", label: "Chờ duyệt", filter: "awaiting-classify", countKeys: ["awaiting-classify"], barColor: "var(--warning)" },
   { key: "analyzed", label: "Chờ xác nhận", filter: "analyzed", countKeys: ["analyzed", "confirmed", "entities_ready"], barColor: "var(--warning)" },
   { key: "reproduced", label: "Hoàn thành", filter: "reproduced", countKeys: ["reproduced"], barColor: "var(--success)" },
   { key: "stashed", label: "Tạm hoãn", filter: "stashed", countKeys: ["stashed"], barColor: "var(--carbon-700)" },

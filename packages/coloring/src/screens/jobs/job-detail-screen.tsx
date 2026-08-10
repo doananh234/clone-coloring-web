@@ -14,6 +14,7 @@ import { useCloneJob } from "../../data/use-clone-job";
 import { getLocalJob } from "../../data/local-store";
 import { JobPipelineTab } from "./job-pipeline-tab";
 import { JobCompareTab } from "./job-compare-tab";
+import { JobClassifyTab } from "./job-classify-tab";
 import { metaFor } from "../../data/status";
 import { useQueueActions, rowActionFor } from "../../data/use-queue-actions";
 import { resolveImg } from "../../data/img";
@@ -107,7 +108,7 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
   const router = useRouter();
   const localJob = getLocalJob(jobId);
   const { job: fetched, isLoading, isError } = useCloneJob(localJob ? "" : jobId);
-  const [tab, setTab] = useState<"pipeline" | "pages" | "info">("pages");
+  const [tab, setTab] = useState<"classify" | "pipeline" | "pages" | "info">("pages");
   const qa = useQueueActions();
   const [pending, setPending] = useState(false);
   const [actErr, setActErr] = useState<string | null>(null);
@@ -220,8 +221,11 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
         </div>
       </Card>
 
-      <Tabs<"pipeline" | "pages" | "info">
+      <Tabs<"classify" | "pipeline" | "pages" | "info">
         items={[
+          ...(job.status === "awaiting-classify"
+            ? [{ key: "classify" as const, label: "Phân loại trang · chờ duyệt" }]
+            : []),
           { key: "pages", label: `So sánh & chọn trang · ${job.pages.length}` },
           { key: "pipeline", label: "Pipeline & xác nhận" },
           { key: "info", label: "Thông tin & logs" },
@@ -230,7 +234,9 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
         onChange={setTab}
       />
 
-      {tab === "pipeline" ? (
+      {tab === "classify" ? (
+        <JobClassifyTab job={job} />
+      ) : tab === "pipeline" ? (
         <JobPipelineTab job={job} isLocal={isLocal} onViewPages={() => setTab("pages")} />
       ) : tab === "pages" ? (
         <JobCompareTab jobId={job.id} pages={job.pages} bookId={job.resultBookId ?? job.bookId ?? undefined} />

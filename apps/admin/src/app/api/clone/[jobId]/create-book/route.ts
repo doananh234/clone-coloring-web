@@ -38,45 +38,55 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ success: true, bookId: row.bookId, alreadyExists: true });
     }
 
-    const pages = (row.pages as CloneJobPage[]) || [];
+    const allPages = (row.pages as CloneJobPage[]) || [];
     const bookId = crypto.randomUUID();
 
-    // Build coloringPages — use redesigned URLs if available and requested.
-    // Images are moved out of assets/clone-jobs/{jobId}/... into
-    // assets/{bookId}/... here since clone-job assets are purged over time
-    // (see apps/worker/src/scripts/cleanup-failed.ts) — a published book
-    // must not keep depending on that temporary storage location.
-    const usablePages = pages.filter((p) => p.imageUrl);
-    const coloringPages = await Promise.all(
-      usablePages.map(async (p, i) => {
-        const sourceUrl = useRedesigned ? p.reproducedUrl || p.redesignedUrl || p.imageUrl : p.imageUrl;
-        const url = await moveCloneJobImageToBook({ sourceUrl, bookId, pageIndex: i });
-        return {
-          id: crypto.randomUUID(),
-          url,
-          isPublic: false,
-          prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
-          // Store structured scene data so redesign knows characters/locations/mood
-          sceneData: p.rawData
-            ? {
-                scene: p.rawData.scene,
-                environment: p.rawData.environment,
-                characters: (p.rawData.characters || []).map((c) => ({
-                  name: c.name,
-                  type: c.type,
-                  role: c.role,
-                  characterPrompt: c.characterPrompt,
-                })),
-                locations: (p.rawData.locations || []).map((l) => ({
-                  name: l.name,
-                  description: l.description,
-                  locationPrompt: l.locationPrompt,
-                })),
-              }
-            : undefined,
-        };
-      }),
+    // Partition by D2 pageType — mirrors the worker's stepCreateBook partition
+    // so worker-created and hand-created books are interchangeable downstream.
+    // Excluded pages (operator-toggled back covers / blanks / junk) are dropped.
+    const kept = allPages.filter((p) => !p.excluded && p.imageUrl);
+    const coverPage = kept.find((p) => p.pageType === "cover");
+    const introPages = kept.filter((p) => p.pageType === "interiorIntro");
+    const interiorPages = kept.filter(
+      (p) => p.pageType !== "cover" && p.pageType !== "interiorIntro",
     );
+
+    const buildPage = async (p: CloneJobPage, i: number) => {
+      const sourceUrl = useRedesigned
+        ? p.reproducedUrl || p.redesignedUrl || p.imageUrl
+        : p.imageUrl;
+      const url = await moveCloneJobImageToBook({ sourceUrl, bookId, pageIndex: i });
+      return {
+        id: crypto.randomUUID(),
+        url,
+        isPublic: false,
+        prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
+        sceneData: p.rawData
+          ? {
+              scene: p.rawData.scene,
+              environment: p.rawData.environment,
+              characters: (p.rawData.characters || []).map((c) => ({
+                name: c.name,
+                type: c.type,
+                role: c.role,
+                characterPrompt: c.characterPrompt,
+              })),
+              locations: (p.rawData.locations || []).map((l) => ({
+                name: l.name,
+                description: l.description,
+                locationPrompt: l.locationPrompt,
+              })),
+            }
+          : undefined,
+      };
+    };
+
+    const coloringPages = await Promise.all(interiorPages.map((p, i) => buildPage(p, i)));
+    // Offset summary indices so their moved keys never collide with interior keys.
+    const summaryPages = await Promise.all(
+      introPages.map((p, i) => buildPage(p, 1000 + i)),
+    );
+    const pages = allPages; // storyOutline below still walks every page
 
     // Build a story outline summary from all pages
     const storyOutline = pages
@@ -96,7 +106,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     // Auto-extract the source cover's coloring + text style from the job's first
     // colored image (usually the cover) so the cloned book keeps the original look.
     // Best-effort — never blocks book creation. Editable later in the cover editor.
-    const coverSourceUrl = pages[0]?.imageUrl || null;
+    const coverSourceUrl = (coverPage ?? interiorPages[0])?.imageUrl || null;
     let sourceStyle: Awaited<ReturnType<typeof extractSourceStyleFromCover>> = {
       coloringStyleId: null,
       coloringVariantId: null,
@@ -129,7 +139,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         badge: m.badge || null,
         price: m.price || null,
         coloringPages: coloringPages as any,
-        summaryPages: [],
+        summaryPages: summaryPages as any,
         isPublic: false,
         data: {
           artStyleId: bd.artStyleId || null,

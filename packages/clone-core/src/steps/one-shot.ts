@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
+import { classifyPage, type PageType } from "./classify-page";
 
 /**
  * Single-call clone step — replaces render + analyze + extract-entities +
@@ -59,6 +60,8 @@ interface JobPage {
   redesignedUrl?: string;
   redesignPrompt?: string;
   error?: string;
+  pageType?: PageType;
+  excluded?: boolean;
 }
 
 export async function stepOneShot(
@@ -154,6 +157,13 @@ export async function stepOneShot(
   let urlsRefreshed = false;
   const errors: Array<{ pageNumber: number; error: string }> = [];
 
+  // Pre-scan: if ANY page has isCover: true from the LLM, treat cover as
+  // already assigned so the page-1 fallback in classifyPage doesn't also
+  // claim "cover" before we reach the LLM-flagged page.
+  const llmFlaggedCover = pages.some(
+    (p) => (p.analyzeData as { isCover?: unknown } | null | undefined)?.isCover === true,
+  );
+  let coverAlreadyAssigned = llmFlaggedCover;
   const jobPages: JobPage[] = [];
   for (let i = 0; i < pages.length; i++) {
     const pageNumber = i + 1;
@@ -220,12 +230,24 @@ export async function stepOneShot(
           typeof analyze.reproductionPrompt === "string" ? analyze.reproductionPrompt : "",
       };
 
+      const signals = analyze as { isCover?: unknown; isIntro?: unknown; isInterior?: unknown };
+      const { pageType, excluded } = classifyPage({
+        pageNumber,
+        isCover: signals.isCover === true,
+        isIntro: signals.isIntro === true,
+        isInterior: signals.isInterior === true,
+        coverAlreadyAssigned,
+      });
+      if (pageType === "cover") coverAlreadyAssigned = true;
+
       jobPages.push({
         pageNumber,
         imageUrl: renderedOriginal,
         redesignedUrl: redesignedR2Url,
         status: "reproduced",
         rawData,
+        pageType,
+        excluded,
       });
     } catch (err) {
       // Persistent failure for this page — record it but keep going so the
