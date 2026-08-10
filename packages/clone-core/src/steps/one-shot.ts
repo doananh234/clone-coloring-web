@@ -230,10 +230,12 @@ export async function stepOneShot(
           typeof analyze.reproductionPrompt === "string" ? analyze.reproductionPrompt : "",
       };
 
-      const isCover = (analyze as { isCover?: unknown }).isCover === true;
+      const signals = analyze as { isCover?: unknown; isIntro?: unknown; isInterior?: unknown };
       const { pageType, excluded } = classifyPage({
         pageNumber,
-        isCover,
+        isCover: signals.isCover === true,
+        isIntro: signals.isIntro === true,
+        isInterior: signals.isInterior === true,
         coverAlreadyAssigned,
       });
       if (pageType === "cover") coverAlreadyAssigned = true;

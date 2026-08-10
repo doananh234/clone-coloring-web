@@ -300,4 +300,60 @@ describe("stepOneShot — D2 auto-classify", () => {
     // sanity: helper agrees
     expect(classifyPage({ pageNumber: 2, isCover: true }).pageType).toBe("cover");
   });
+
+  it("maps Diaflow isIntro/isInterior signals to interiorIntro/interior", async () => {
+    const pagesOut: unknown[] = [];
+    const db = {
+      cloneJob: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "j2",
+          sourcePdfUrl: "assets/clone-jobs/j2/src.pdf",
+          data: {},
+          bookData: {},
+          pages: [
+            { pageNumber: 1, imageUrl: "o1", status: "rendered" },
+            { pageNumber: 2, imageUrl: "o2", status: "rendered" },
+            { pageNumber: 3, imageUrl: "o3", status: "rendered" },
+            { pageNumber: 4, imageUrl: "o4", status: "rendered" },
+          ],
+        }),
+        update: vi.fn().mockResolvedValue(undefined),
+        updateMany: vi.fn().mockImplementation(async (arg: { data?: { pages?: unknown[] } }) => {
+          if (arg.data?.pages) pagesOut.splice(0, pagesOut.length, ...arg.data.pages);
+        }),
+      },
+      sourceBook: { findUnique: vi.fn().mockResolvedValue(null), update: vi.fn() },
+      brand: { findFirst: vi.fn().mockResolvedValue(null) },
+    } as never;
+
+    const ctx = {
+      jobId: "j2",
+      sourceBookId: undefined,
+      isDone: () => false,
+      markStepComplete: vi.fn().mockResolvedValue(undefined),
+    } as never;
+
+    const deps = {
+      runOneShot: vi.fn().mockResolvedValue({
+        sessionId: "s2",
+        pages: [
+          { redesignedImageUrl: "r1", analyzeData: { isCover: true } },
+          { redesignedImageUrl: "r2", analyzeData: { isIntro: true } },
+          { redesignedImageUrl: "r3", analyzeData: { isInterior: true } },
+          { redesignedImageUrl: "r4", analyzeData: {} }, // no signal → interior (cover already assigned)
+        ],
+      }),
+      fetchImage: vi.fn().mockResolvedValue({ body: Buffer.from(""), contentType: "image/png" }),
+      uploadToR2: vi.fn().mockResolvedValue({ url: "https://r2/red.png" }),
+      resolveR2Url: (k: string) => `https://r2/${k}`,
+    };
+
+    await stepOneShot(ctx, db, deps);
+
+    const written = pagesOut as Array<{ pageNumber: number; pageType?: string }>;
+    expect(written.find((p) => p.pageNumber === 1)?.pageType).toBe("cover");
+    expect(written.find((p) => p.pageNumber === 2)?.pageType).toBe("interiorIntro");
+    expect(written.find((p) => p.pageNumber === 3)?.pageType).toBe("interior");
+    expect(written.find((p) => p.pageNumber === 4)?.pageType).toBe("interior");
+  });
 });
