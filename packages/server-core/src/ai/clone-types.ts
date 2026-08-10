@@ -65,6 +65,10 @@ export type CloneJobPage = {
   /** Camera view of the angle candidate — persisted to scene only on apply. */
   angleCandidateView?: string;
   error?: string;
+  /** D2 classification — undefined = legacy page, treated as "interior". */
+  pageType?: "cover" | "interiorIntro" | "interior";
+  /** D2 inclusion flag — true drops the page from the built Book. */
+  excluded?: boolean;
 };
 
 export type CloneJobBookData = {
@@ -100,6 +104,7 @@ export type CloneJob = {
     | "confirmed"
     | "entities_ready"
     | "reproduced"
+    | "awaiting-classify"
     | "error"
     | "pending"
     | "queued"
