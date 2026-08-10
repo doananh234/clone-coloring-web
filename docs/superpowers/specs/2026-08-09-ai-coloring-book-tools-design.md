@@ -102,7 +102,10 @@ Không phá cấu trúc cũ (thêm field optional).
 - Back cover / trang trắng → gợi ý `excluded: true` để operator xác nhận.
 
 ### 4.4 Gate review bắt buộc (bước mới trong pipeline)
-Pipeline **dừng sau analyze**, chờ operator xác nhận rồi mới chạy tiếp (reproduce/create-book).
+
+> **Quyết định vị trí gate (2026-08-10):** Chế độ mặc định là **one-shot** (`stepOneShot` gộp analyze+reproduce trong 1 lần gọi Diaflow → khi có analyze data thì trang **đã redesign**). Vì vậy gate đặt **SAU `stepOneShot`, TRƯỚC `create-book`** — không tách one-shot. Đánh đổi: chấp nhận đã tốn generate cho cả trang sẽ bị `excluded`; gate thấy ảnh đã redesign (không phải ảnh gốc). Luồng: `render → stepOneShot(analyze+reproduce) → [GATE classify] → create-book`.
+
+Pipeline **dừng sau `stepOneShot`** (ghi status `gate-pending`), chờ operator xác nhận rồi resume để chạy `create-book`. Khả thi vì pipeline là BullMQ worker async (không phải sync HTTP).
 - UI đặt trong **CloneJob detail** (không tạo màn hình mới — trang chỉ tồn tại sau analyze). Tận dụng `job-pipeline-tab` / `page-batch-select`.
 - Lưới trang, mỗi trang: badge `pageType` + màu nền (mục 3.3), dropdown đổi loại `Cover · Intro · Interior`, toggle `Exclude`.
 - Nhóm theo loại: Cover → Intro → Interior; excluded gom cuối (mờ + gạch ngang).
@@ -127,10 +130,11 @@ Pipeline **dừng sau analyze**, chờ operator xác nhận rồi mới chạy t
 - **Nguồn random = chỉ interior của chính source book này** (giữ concept, an toàn bản quyền).
 
 ### 5.2 Bước mới `stepFillInterior`
-Chèn **sau gate classify (D2)** và **trước `create-book`**:
+Chèn **sau gate classify (D2)** và **trước `create-book`** (khớp vị trí gate one-shot đã chốt ở 4.4):
 ```
-analyze → [GATE classify D2] → stepFillInterior → reproduce → create-book
+render → stepOneShot(analyze+reproduce) → [GATE classify D2] → stepFillInterior → create-book
 ```
+> Lưu ý one-shot: các trang gốc đã reproduce trong `stepOneShot`. `stepFillInterior` tự gọi `generatePage` cho các trang additional mới (không phụ thuộc bước reproduce riêng).
 Logic:
 ```
 while count(interior, !excluded) < target:
@@ -193,6 +197,7 @@ book.coverUrl   // vẫn là con trỏ tới candidate đang chọn (list/thumbn
 - Khác "Regen hàng loạt" (batch, thay thế) đã có — Regen Thêm **luôn Add**.
 - `Regen Thêm ×N` của #18 → thêm N variant `origin:"regen"` vào `variants[]`; #18 + #18-Regen1..N cùng tồn tại để chọn.
 - Nguồn: modal cho chọn **A** (New Source) hoặc **B** (New Source + Original Prompt) — mục tiêu tạo khác biệt đủ lớn, không đẻ hình gần giống.
+- ⚠️ **Cảnh báo impl (2026-08-10):** `generatePage` hiện **bỏ qua tham số `prompt`** (`step-deps.ts`: "kept for signature compat; ignored") — nó tự build prompt qua `buildRedesignPrompt`. Nên option **B (Original Prompt)** sẽ là **no-op** nếu không sửa `generatePage`/`buildRedesignPrompt` để nhận prompt truyền vào. Cần xác minh & quyết ở plan D4.
 
 ### 6.4 Push to Cover (T-015/016/017)
 Sau khi tô 1 interior → nút **Push to Cover**:
@@ -211,6 +216,8 @@ Sau khi tô 1 interior → nút **Push to Cover**:
 ## 7. Sub-project D — D1: Coloring Style — Manual + Hashtag
 
 **Map task:** T-001, T-002.
+
+> **Cập nhật review 2026-08-10 — D1 nhỏ hơn spec gốc:** `POST /api/coloring-styles` (route.ts:56) **đã** stamp `data: { source: "manual" }` (PR #2). Tag search trên list **đã có** (`entity-list-screen.tsx:70`, khớp cả name/description/tags). Flow extract vốn `analyze → create` nên `colorizationDirective` đã auto-derive. → **Việc còn lại của D1:** (a) thêm **ô nhập hashtag/tags** vào `extract-style-screen.tsx` (hiện thiếu); (b) **normalize + autocomplete** hashtag. Không cần build form mới, không cần đụng source/search cơ bản.
 
 ### 7.1 Quyết định
 - **Manual Style:** form tạo `ColoringStyle` tối giản (ảnh + tên + nhiều hashtag), `data.source = "manual"`.
@@ -262,6 +269,9 @@ Sau khi tô 1 interior → nút **Push to Cover**:
 - **Legacy books:** đã có book với `summaryPages: []` và `coverUrl = page1`; cần quyết định có backfill phân loại hay chỉ áp dụng cho job mới (khuyến nghị: chỉ job mới, không backfill).
 - **JSON blob phình to:** variants[] + coverCandidates[] làm `Book`/`CloneJob` row lớn dần — theo dõi; đây là lý do ghi nhận `BookImage` như hướng migrate tương lai.
 - **Auto-classify chất lượng:** heuristic fallback cần đủ tốt để operator không phải sửa quá nhiều tại gate.
+- **`generatePage` bỏ qua `prompt`:** ảnh hưởng D4 option B (xem 6.3) — cần sửa hàm generate nếu muốn dùng original prompt.
+- **`extract-entities` là step chết** (marked complete, không chạy) ở multi-step; D2 không dựa vào nó.
+- **Gate one-shot tốn generate cho trang excluded:** đánh đổi đã chấp nhận (mục 4.4) để tránh refactor one-shot; theo dõi nếu tỉ lệ trang bị loại cao.
 
 ---
 
