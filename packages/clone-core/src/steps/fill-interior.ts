@@ -137,9 +137,14 @@ export async function stepFillInterior(
   // landed on job.pages; we only append, never overwrite).
   const fresh = await db.cloneJob.findUnique({ where: { id: ctx.jobId }, select: { pages: true } });
   const base = (fresh?.pages as Record<string, unknown>[] | null | undefined) ?? [];
+  const merged = [...base, ...created];
+  // Additional pages are fully generated ("reproduced"), so keep stepOneShot's
+  // invariant totalPages == analyzedPages == pages.length — otherwise the
+  // job-detail "analyzedPages/totalPages" stat and the telegram "Pages: N"
+  // summary undercount by the number of pages filled.
   await db.cloneJob.updateMany({
     where: { id: ctx.jobId },
-    data: { pages: [...base, ...created] as never },
+    data: { pages: merged as never, totalPages: merged.length, analyzedPages: merged.length },
   });
 
   await ctx.markStepComplete("fill-interior");

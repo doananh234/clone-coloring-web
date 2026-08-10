@@ -70,10 +70,13 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     const room = Math.max(0, target - baseInterior);
     const toAppend = created.slice(0, room);
     if (toAppend.length > 0) {
+      const merged = [...base, ...toAppend];
+      // Keep totalPages == analyzedPages == pages.length (stepOneShot's invariant)
+      // so the job-detail stat stays accurate after a manual fill.
       await prisma.cloneJob.update({
         where: { id: jobId },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        data: { pages: [...base, ...toAppend] as any },
+        data: { pages: merged as any, totalPages: merged.length, analyzedPages: merged.length },
       });
     }
     await flushLangfuse();
