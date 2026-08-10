@@ -24,6 +24,7 @@ import { resolveImg } from "../../data/img";
 import { COLORING_WRITE_ENABLED, COLORING_API_BASE } from "../../data/config";
 import { parsePageScene, hasSceneDetail, type ParsedScene } from "../../data/page-scene";
 import type { BookDetail, BookColoringPage } from "../../data/types";
+import { deriveBookPageLabel, bookPageTone, type BookPageTone } from "../../data/book-page-label";
 
 const mono = { fontFamily: "var(--font-mono)" as const };
 const cap = { fontSize: 11, fontWeight: 600 as const, color: "var(--muted-foreground)", textTransform: "uppercase" as const, letterSpacing: "var(--tracking-caps)" };
@@ -65,6 +66,13 @@ function Thumb({ src, caption, badge, onClick }: { src?: string; caption: string
 
 const CAP = { fontSize: 11, textTransform: "uppercase" as const, letterSpacing: ".04em", color: "var(--muted-foreground)", marginBottom: 4 };
 
+const TONE_STYLE: Record<BookPageTone, { border: string; bg?: string; label: string }> = {
+  cover:      { border: "var(--info)",    bg: "var(--info-bg)",    label: "Cover" },
+  intro:      { border: "var(--volt-500)", bg: "var(--volt-200)",  label: "Intro" },
+  interior:   { border: "var(--border)",                            label: "Interior" },
+  additional: { border: "var(--warning)", bg: "color-mix(in srgb, var(--warning) 14%, var(--neutral-100))", label: "Additional" },
+};
+
 /** Rich per-page analyze block: scene, characters + prompts, locations + prompts, prompt. */
 function AnalyzePanel({ scene }: { scene: ParsedScene }) {
   return (
@@ -105,18 +113,35 @@ function AnalyzePanel({ scene }: { scene: ParsedScene }) {
   );
 }
 
-function PageThumb({ page, index, onClick }: { page: BookColoringPage; index: number; onClick?: () => void }) {
+function PageThumb({ page, displayNumber, tone, onClick }: { page: BookColoringPage; displayNumber: string; tone: BookPageTone; onClick?: () => void }) {
   const src = resolveImg(page.coloredUrl || page.url);
+  const t = TONE_STYLE[tone];
   return (
-    <div onClick={onClick} className="mo-bookthumb" style={{ cursor: onClick ? "pointer" : "default", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: "var(--neutral-100)", border: "1px solid var(--border)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
+    <div onClick={onClick} className="mo-bookthumb" style={{ cursor: onClick ? "pointer" : "default", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: t.bg ?? "var(--neutral-100)", border: `1px solid ${t.border}`, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={`Trang ${index + 1}`} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <img src={src} alt={displayNumber} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
         <Icon name="image" size={18} />
       )}
-      <span style={{ position: "absolute", left: 6, bottom: 4, ...mono, fontSize: 10, color: "#fff", background: "rgba(11,13,12,.6)", padding: "0 4px", borderRadius: 4 }}>{String(index + 1).padStart(2, "0")}</span>
+      <span style={{ position: "absolute", left: 6, bottom: 4, ...mono, fontSize: 10, color: "#fff", background: "rgba(11,13,12,.6)", padding: "0 4px", borderRadius: 4 }}>{displayNumber}</span>
       {page.coloredUrl && <span style={{ position: "absolute", right: 5, top: 5, background: "var(--volt-500)", color: "var(--carbon-950)", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 99 }}>MÀU</span>}
+    </div>
+  );
+}
+
+function PageSection({ tone, count, children }: { tone: BookPageTone; count: number; children: ReactNode }) {
+  const t = TONE_STYLE[tone];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ width: 10, height: 10, borderRadius: 3, background: t.border }} />
+        <span style={{ ...cap }}>{t.label}</span>
+        <span style={{ ...mono, fontSize: 12, color: "var(--muted-foreground)" }}>{count}</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -423,13 +448,49 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
             <BookInformationTab b={b} pages={pages} />
           ) : tab === "pages" ? (
             <Card title={`Trang sách · ${pages.length}`}>
-              {pages.length === 0 ? (
+              {pages.length === 0 && (b.summaryPages ?? []).length === 0 && !cover ? (
                 <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
-                  {pages.map((p, i) => (
-                    <PageThumb key={p.id || i} page={p} index={i} onClick={() => openPageAt(i)} />
-                  ))}
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  {cover && (
+                    <PageSection tone="cover" count={1}>
+                      <PageThumb
+                        page={{ id: "cover", url: b.coverUrl ?? "" } as BookColoringPage}
+                        displayNumber="Bìa"
+                        tone="cover"
+                        onClick={openCoverPreview}
+                      />
+                    </PageSection>
+                  )}
+                  {(b.summaryPages ?? []).length > 0 && (
+                    <PageSection tone="intro" count={(b.summaryPages ?? []).length}>
+                      {(b.summaryPages ?? []).map((s, i) => (
+                        <PageThumb
+                          key={s.id || i}
+                          page={{ id: s.id, url: s.url, isPublic: s.isPublic } as BookColoringPage}
+                          displayNumber={s.sourcePageNumber != null ? `#${s.sourcePageNumber}` : `#${i + 1}`}
+                          tone="intro"
+                          onClick={() => { setPreviewPage(null); setPreview({ title: `Intro ${i + 1}`, imageSrc: resolveImg(s.url) }); }}
+                        />
+                      ))}
+                    </PageSection>
+                  )}
+                  {pages.length > 0 && (
+                    <PageSection tone="interior" count={pages.length}>
+                      {pages.map((p, i) => {
+                        const label = deriveBookPageLabel(p, i, pages);
+                        return (
+                          <PageThumb
+                            key={p.id || i}
+                            page={p}
+                            displayNumber={label.displayNumber}
+                            tone={bookPageTone("interior", p)}
+                            onClick={() => openPageAt(i)}
+                          />
+                        );
+                      })}
+                    </PageSection>
+                  )}
                 </div>
               )}
             </Card>
