@@ -147,3 +147,83 @@ describe("stepCreateBook — moves page images into assets/{bookId}/", () => {
     expect(book.coverUrl).toBe(`/assets/${bookId}/pages/page-001.png`);
   });
 });
+
+describe("stepCreateBook — D2 classification partitioning", () => {
+  function fakeDbMixed() {
+    const created: Array<{ table: string; data: unknown }> = [];
+    return {
+      created,
+      db: {
+        cloneJob: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "j1",
+            name: "MyBook",
+            bookData: {},
+            pages: [
+              { pageNumber: 1, imageUrl: "o1", redesignedUrl: "cover.png", pageType: "cover" },
+              { pageNumber: 2, imageUrl: "o2", redesignedUrl: "intro.png", pageType: "interiorIntro" },
+              { pageNumber: 3, imageUrl: "o3", redesignedUrl: "int3.png", pageType: "interior" },
+              { pageNumber: 4, imageUrl: "o4", redesignedUrl: "int4.png", pageType: "interior", excluded: true },
+              { pageNumber: 5, imageUrl: "o5", redesignedUrl: "legacy.png" }, // no pageType → interior
+            ],
+          }),
+          update: vi.fn().mockResolvedValue(undefined),
+        },
+        book: {
+          create: vi.fn().mockImplementation(async (arg: { data: unknown }) => {
+            created.push({ table: "book", data: arg.data });
+          }),
+        },
+      } as never,
+    };
+  }
+
+  it("routes cover→coverUrl, intro→summaryPages, interior(+legacy)→coloringPages, drops excluded", async () => {
+    const { db, created } = fakeDbMixed();
+    const ctx = {
+      jobId: "j1",
+      resultBookId: undefined,
+      sourceBookId: undefined,
+      markStepComplete: vi.fn().mockResolvedValue(undefined),
+    } as never;
+
+    const bookId = await stepCreateBook(ctx, db, {
+      randomUUID: () => "uuid-1",
+      copyImage: async ({ destKey }: { sourceUrl: string; destKey: string }) => `/${destKey}`,
+    });
+
+    const book = created[0].data as {
+      coverUrl: string;
+      summaryPages: Array<{ url: string }>;
+      coloringPages: Array<{ url: string }>;
+    };
+    // interior = pages 3 and 5 (legacy undefined counts as interior); 4 excluded
+    expect(book.coloringPages).toHaveLength(2);
+    // intro = page 2
+    expect(book.summaryPages).toHaveLength(1);
+    // cover image is moved and mirrored into coverUrl
+    expect(book.coverUrl).toBe(`/assets/${bookId}/cover.png`);
+    expect(book.coverUrl).not.toContain("clone-jobs");
+  });
+
+  it("falls back coverUrl to the first interior when no cover page exists", async () => {
+    const { db, created } = fakeDbMixed();
+    (db as { cloneJob: { findUnique: ReturnType<typeof vi.fn> } }).cloneJob.findUnique.mockResolvedValueOnce({
+      id: "j1",
+      name: "MyBook",
+      bookData: {},
+      pages: [{ pageNumber: 1, imageUrl: "o1", redesignedUrl: "int1.png", pageType: "interior" }],
+    });
+    const ctx = {
+      jobId: "j1", resultBookId: undefined, sourceBookId: undefined,
+      markStepComplete: vi.fn().mockResolvedValue(undefined),
+    } as never;
+    const bookId = await stepCreateBook(ctx, db, {
+      randomUUID: () => "uuid-1",
+      copyImage: async ({ destKey }: { sourceUrl: string; destKey: string }) => `/${destKey}`,
+    });
+    const book = created[0].data as { coverUrl: string; coloringPages: unknown[] };
+    expect(book.coverUrl).toBe(`/assets/${bookId}/pages/page-001.png`);
+    expect(book.coloringPages).toHaveLength(1);
+  });
+});
