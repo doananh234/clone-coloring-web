@@ -82,6 +82,27 @@ export async function processCloneJob(jobId: string): Promise<void> {
       if (!ctx.isDone("reproduce")) await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx);
     }
 
+    // D2 gate — pause for the operator's classification review before building
+    // the Book. The default one-shot pipeline has already reproduced the pages
+    // by this point (spec §4.4), so the gate lands here: after reproduce,
+    // before create-book. Resumed by POST /api/clone/[jobId]/classify with
+    // { confirm: true }, which sets classifyConfirmed and re-enqueues the job —
+    // on the second run download/render/reproduce are all `isDone`, so the
+    // worker skips straight back to this check (now passing) and continues.
+    const gateRow = await db.cloneJob.findUnique({
+      where: { id: jobId },
+      select: { data: true },
+    });
+    const gateData = (gateRow?.data as { classifyConfirmed?: boolean } | null | undefined) ?? {};
+    if (!gateData.classifyConfirmed) {
+      await db.cloneJob.updateMany({
+        where: { id: jobId },
+        data: { status: "awaiting-classify" },
+      });
+      console.log(`[worker] clone job ${jobId} paused at classify gate`);
+      return;
+    }
+
     const bookId = ctx.isDone("create-book") && ctx.resultBookId
       ? ctx.resultBookId
       : await withRetry("create-book", () => stepCreateBook(ctx, db, createBookDeps), ctx);
