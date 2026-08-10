@@ -455,7 +455,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                   {cover && (
                     <PageSection tone="cover" count={1}>
                       <PageThumb
-                        page={{ id: "cover", url: b.coverUrl ?? "" } as BookColoringPage}
+                        page={{ id: "cover", url: (b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl) ?? "" } as BookColoringPage}
                         displayNumber="Bìa"
                         tone="cover"
                         onClick={openCoverPreview}
