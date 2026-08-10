@@ -28,7 +28,7 @@ Task mapping:
 | Q3 | Lưu marking | **DB chỉ lưu `origin` + `parentPageNumber`**; `displayNumber` + `backgroundColor` derive ở UI |
 | Q4 | Nơi đặt UI | **Gộp vào tab "So sánh & chọn trang"** (`JobCompareTab`), không tạo tab mới |
 | N1 | pageNumber additional | **Tuần tự `max(pageNumber)+1`** (xếp cuối strip) |
-| N2 | changePercent khi auto-fill | **Cố định 30%** (mặc định hệ thống) |
+| N2 | changePercent khi auto-fill | **Escalation theo vòng round-robin**: base 40, +10 mỗi lần tái dùng cùng source, cap 80. Regen-in-place: operator tự nhập % |
 | N3 | Nút "Accept" | **Bỏ** (YAGNI) — additional mặc định được giữ & đã vào book; muốn bỏ thì Regen/Xóa |
 
 ---
@@ -58,9 +58,15 @@ Hằng số trong clone-core (ví dụ cạnh `STEP_ORDER` hoặc trong `fill-in
 
 ```ts
 export const DEFAULT_TARGET_INTERIOR = 40;
+
+// Escalation % khi auto-fill nhân bản từ cùng một source qua các vòng round-robin.
+export const FILL_CHANGE_BASE = 40;   // vòng 1 (mỗi source dùng lần đầu)
+export const FILL_CHANGE_STEP = 10;   // +10 mỗi vòng tái dùng
+export const FILL_CHANGE_CAP  = 80;   // trần
 ```
 
 Target hiệu lực = `job.data.targetInteriorCount ?? DEFAULT_TARGET_INTERIOR`.
+changePercent theo vòng `r` (0-based): `min(FILL_CHANGE_CAP, FILL_CHANGE_BASE + r * FILL_CHANGE_STEP)` → 40 / 50 / 60 / 70 / 80 / 80…
 
 ### 3.4 pageNumber cho additional
 Gán tuần tự: `nextSeq = max(pages.map(p => p.pageNumber)) + 1`, tăng dần cho mỗi trang thêm. Không đụng số của trang gốc; additional xếp cuối strip theo `pageNumber`.
@@ -94,34 +100,38 @@ if (!ctx.isDone("fill-interior"))
 File mới: `packages/clone-core/src/steps/fill-interior.ts`.
 
 ```
-target    = job.data.targetInteriorCount ?? DEFAULT_TARGET_INTERIOR
-interiors = pages.filter(pageType==="interior" && !excluded)     // đếm cả original LẪN additional đã có
-pool      = pages.filter(origin!=="additional" && pageType==="interior" && !excluded && imageUrl)  // nguồn random
-nextSeq   = max(pages.pageNumber) + 1
+target       = job.data.targetInteriorCount ?? DEFAULT_TARGET_INTERIOR
+existing     = pages.filter(pageType==="interior" && !excluded).length   // đếm cả original LẪN additional đã có
+need         = max(0, target - existing)
+pool         = pages.filter(origin!=="additional" && pageType==="interior" && !excluded && imageUrl)  // nguồn random
+nextSeq      = max(pages.pageNumber) + 1
 
-if pool rỗng:
-    markStepComplete("fill-interior"); return           // không có gì để nhân bản
+if need === 0 || pool rỗng:
+    markStepComplete("fill-interior"); return           // đã đủ/vượt, hoặc không có gì để nhân bản
 
-usedThisRound = []
-while interiors.count < target:
-    if usedThisRound đã phủ hết pool → reset (round-robin)
-    src = random phần tử pool chưa dùng vòng này
-    { base64 } = generatePage({ sourceImageUrl: src.imageUrl, pageNumber: nextSeq, jobId, changePercent: 30 })
+made = 0
+while made < need:
+    round     = floor(made / pool.length)               // 0,1,2… — mỗi lần phủ hết pool = 1 vòng tái dùng
+    // đầu mỗi vòng: xáo lại pool (random không trùng trong vòng)
+    src       = pool[đã-xáo][made % pool.length]
+    changePct = min(FILL_CHANGE_CAP, FILL_CHANGE_BASE + round * FILL_CHANGE_STEP)   // 40/50/60/70/80…
+    { base64 } = generatePage({ sourceImageUrl: src.imageUrl, pageNumber: nextSeq, jobId, changePercent: changePct })
     redesignedUrl = uploadR2(base64)
     push CloneJobPage {
       pageNumber: nextSeq++, pageType:"interior", origin:"additional",
       parentPageNumber: src.pageNumber, imageUrl: src.imageUrl,
       redesignedUrl, status:"done"
     }
-    interiors.count++
+    made++
 markStepComplete("fill-interior")
 ```
 
-- **`changePercent` cố định 30** (N2). Random dùng round-robin để phủ đều pool khi target > số interior gốc.
+- **Chọn source:** random không trùng cho tới khi hết `pool`, hết thì xáo lại vòng mới (round-robin). Khi `pool >= need` (đủ hình gốc) thì **không tái dùng** — mỗi bản một source, tất cả ở %=40. Khi `need > pool` thì mới tái dùng, và **% tăng theo vòng** để các bản từ cùng một source khác biệt rõ.
+- **Ví dụ:** 30 gốc/cần 10 → 10 source khác nhau, đều 40%. · 10 gốc/cần 30 → 3 vòng: 10 bản 40% + 10 bản 50% + 10 bản 60%. · 12 gốc/cần 28 → 12@40% + 12@50% + 4@60%.
 - **Idempotency:** `isDone("fill-interior")` đảm bảo resume sau confirm chỉ fill **một lần**. Nút "Fill lại" thủ công đi qua API riêng (§5), không phụ thuộc step flag → có thể bù nhiều lần.
 
 ### 4.3 `fillInteriorDeps`
-File: `apps/worker/src/processor/step-deps.ts`. Tái dùng `generatePage` + uploader R2 (giống `reproduceDeps`). `generatePage` bỏ qua tham số `prompt`, dùng `changePercent` — khớp hiện trạng, **không cần sửa** `generatePage`/`buildRedesignPrompt`.
+File: `apps/worker/src/processor/step-deps.ts`. Tái dùng `generatePage` + uploader R2 (giống `reproduceDeps`). `generatePage` bỏ qua tham số `prompt`, dùng `changePercent` — khớp hiện trạng, **không cần sửa** `generatePage`/`buildRedesignPrompt`. `changePercent` giờ là biến (escalation §4.2), không hardcode.
 
 ---
 
@@ -132,7 +142,7 @@ Thư mục `apps/admin/src/app/api/clone/[jobId]/`:
 | Route | Method | Việc | Ràng buộc |
 |---|---|---|---|
 | `fill-interior` | POST | Nút "Fill thêm cho đủ" — chạy lại logic fill bù cho đủ target, trả pages cập nhật | Không dựa `isDone`; luôn tính lại count |
-| `pages/[pageNumber]/regen` | POST | Regen additional **thay tại chỗ**: `generatePage(parent.imageUrl)` → ghi đè `redesignedUrl` chính trang đó | Chỉ `origin==="additional"` |
+| `pages/[pageNumber]/regen` | POST | Regen additional **thay tại chỗ**: `generatePage(parent.imageUrl, { changePercent })` → ghi đè `redesignedUrl` chính trang đó. Nhận `changePercent` từ body (operator nhập, clamp 5–95) | Chỉ `origin==="additional"` |
 | `pages/[pageNumber]` | DELETE | Xóa 1 trang additional → count tụt | **Chỉ** `origin==="additional"` (từ chối xóa original) |
 
 - Logic fill của route `fill-interior` **dùng chung** phần lõi với `stepFillInterior` (tách hàm thuần trong `fill-interior.ts` để cả worker lẫn route gọi được, tránh trùng lặp).
@@ -162,7 +172,7 @@ File: `packages/coloring/src/screens/jobs/job-compare-tab.tsx` (+ hook data mớ
   - **Parent (Hình gốc #12)** — `parent.imageUrl` (tra theo `parentPageNumber`).
   - **Additional (bản gen)** — `redesignedUrl`.
   - Dùng component `Candidate` sẵn có.
-- Actions: **Regen (thay tại chỗ)** → `POST pages/[n]/regen`; **Xóa** → `DELETE pages/[n]`.
+- Actions: **Regen (thay tại chỗ)** → `POST pages/[n]/regen` với `changePercent` từ ô `% thay đổi` sẵn có ở tab (operator tự nhập, mặc định 30); **Xóa** → `DELETE pages/[n]`.
 - **Không** có nút Accept (N3).
 - Trang **original** giữ nguyên panel 4-slot cũ (không đổi).
 
@@ -191,7 +201,7 @@ Các field D3 thêm (`origin`, `parentPageNumber`) **được D4 kế thừa ngu
 - Không tách bảng DB riêng cho page/variant (đó là hướng D4 `variants[]`).
 - Không sửa `generatePage`/`buildRedesignPrompt` (prompt vẫn bị bỏ qua — chấp nhận được vì fill dùng changePercent).
 - Không thêm cờ `reviewed`/Accept.
-- Không thêm cấu hình `changePercent` per-job (cố định 30).
+- Không thêm ô cấu hình escalation trong UI ở D3 (dùng hằng số 40/+10/cap 80; regen-in-place vẫn cho operator nhập % qua ô sẵn có).
 
 ---
 
@@ -200,7 +210,8 @@ Các field D3 thêm (`origin`, `parentPageNumber`) **được D4 kế thừa ngu
 | Rủi ro | Giảm thiểu |
 |---|---|
 | `pool` rỗng (không interior gốc nào) | `stepFillInterior` skip an toàn, markComplete, không chặn pipeline |
-| Fill tốn phí AI khi target lớn | changePercent/round-robin cố định; count tính cả additional đã có nên không fill dư |
+| Fill tốn phí AI khi target lớn | `need = target − existing` nên chỉ gen đúng số thiếu; count tính cả additional đã có nên không fill dư |
+| Bản additional từ cùng source na ná nhau | Escalation % theo vòng round-robin (40/50/60/70/80) khi buộc tái dùng source |
 | Xóa nhầm trang original | API DELETE **chỉ** cho `origin==="additional"` |
 | Trùng lặp logic fill (worker vs route) | Tách hàm lõi thuần trong `fill-interior.ts`, cả hai cùng gọi |
 | Thứ tự interior lộn xộn trong book | Sort theo `pageNumber` ở create-book |
