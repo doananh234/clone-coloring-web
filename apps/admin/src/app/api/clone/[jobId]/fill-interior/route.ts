@@ -61,14 +61,24 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
 
     const fresh = await prisma.cloneJob.findUnique({ where: { id: jobId }, select: { pages: true } });
     const base = (fresh?.pages as CloneJobPage[] | null) ?? [];
-    await prisma.cloneJob.update({
-      where: { id: jobId },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data: { pages: [...base, ...created] as any },
-    });
+    // Re-check against the FRESHEST pages before writing: a concurrent fill may
+    // have already added interiors. Only append up to the remaining room so the
+    // final interior count never exceeds target (created images beyond room are
+    // discarded — wasted, but correctness over the rare concurrent double-fill).
+    const isInterior = (p: CloneJobPage) => p.pageType !== "cover" && p.pageType !== "interiorIntro";
+    const baseInterior = base.filter((p) => isInterior(p) && !p.excluded).length;
+    const room = Math.max(0, target - baseInterior);
+    const toAppend = created.slice(0, room);
+    if (toAppend.length > 0) {
+      await prisma.cloneJob.update({
+        where: { id: jobId },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: { pages: [...base, ...toAppend] as any },
+      });
+    }
     await flushLangfuse();
 
-    return NextResponse.json({ success: true, added: created.length });
+    return NextResponse.json({ success: true, added: toAppend.length });
   } catch (error) {
     console.error("[clone/fill-interior] Error:", error);
     return NextResponse.json(
