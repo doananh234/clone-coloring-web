@@ -5,8 +5,10 @@ import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { ColoringStylePickerModal, type StyleSelection } from "../../components/ui/coloring-style-picker-modal";
 import { usePageActions } from "../../data/use-page-actions";
+import { usePageVariants, type RegenAddOpts } from "../../data/use-page-variants";
 import { resolveImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
+import type { PageVariant } from "../../data/types";
 
 interface Candidate {
   url: string;
@@ -30,6 +32,9 @@ export function PageActionsRow({
 }) {
   const cloneJobId = typeof bookData?.cloneJobId === "string" ? bookData.cloneJobId : undefined;
   const actions = usePageActions(bookId, cloneJobId);
+  const variants = usePageVariants(bookId);
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [regenOpts, setRegenOpts] = useState<RegenAddOpts>({ count: 2, source: "A", changePercent: 30 });
   // Book page maps 1:1 by array index to its source clone job page.
   const pageIndex = pages.findIndex((p) => p.id === page.id);
   // Cover / thumbnail / square are set from the COLORED version (like the old
@@ -128,6 +133,10 @@ export function PageActionsRow({
             </Button>
           </>
         )}
+        <Button variant="outline" size="sm" disabled={disabled || busy !== null}
+          title="Sinh thêm biến thể (không ghi đè) — chọn nguồn A/B" onClick={() => setRegenOpen((v) => !v)}>
+          <Icon name="sparkles" size={15} /> Regen Thêm
+        </Button>
         {colored && (
           <>
             <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
@@ -149,6 +158,62 @@ export function PageActionsRow({
           <Icon name="x" size={15} /> Xóa
         </Button>
       </div>
+
+      {regenOpen && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: 10, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", background: "var(--neutral-100)" }}>
+          <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 6 }}>Nguồn
+            <select value={regenOpts.source} onChange={(e) => setRegenOpts((o) => ({ ...o, source: e.target.value as "A" | "B" }))}
+              style={{ padding: "4px 8px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)" }}>
+              <option value="A">A · New Source</option>
+              <option value="B">B · + Prompt gốc</option>
+            </select>
+          </label>
+          <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 6 }}>Số bản
+            <input type="number" min={1} max={4} value={regenOpts.count}
+              onChange={(e) => setRegenOpts((o) => ({ ...o, count: Math.min(4, Math.max(1, Number(e.target.value) || 1)) }))}
+              style={{ width: 56, padding: "4px 8px", fontFamily: "var(--font-mono)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)" }} />
+          </label>
+          <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 6 }}>% đổi
+            <input type="number" min={5} max={95} step={5} value={regenOpts.changePercent}
+              onChange={(e) => setRegenOpts((o) => ({ ...o, changePercent: Math.min(95, Math.max(5, Number(e.target.value) || 30)) }))}
+              style={{ width: 56, padding: "4px 8px", fontFamily: "var(--font-mono)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)" }} />
+          </label>
+          <Button size="sm" disabled={disabled || busy !== null}
+            onClick={run("regenadd", () => variants.regenAdd(page.id, regenOpts), () => setRegenOpen(false))}>
+            {busy === "regenadd" ? "Đang sinh…" : `Sinh ${regenOpts.count} bản`}
+          </Button>
+        </div>
+      )}
+
+      {page.variants && page.variants.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: ".04em" }}>Biến thể · {page.variants.length}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(88px,1fr))", gap: 8 }}>
+            {page.variants.map((v: PageVariant) => {
+              const isSel = v.id === page.selectedVariantId;
+              const label = v.origin === "original" ? "Gốc" : `Regen ${v.source ?? ""}`.trim();
+              return (
+                <div key={v.id} style={{ position: "relative" }}>
+                  <div onClick={disabled || isSel ? undefined : run("selvar", () => variants.select(page.id, v.id))}
+                    style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", overflow: "hidden", border: `${isSel ? 2 : 1}px solid ${isSel ? "var(--volt-600)" : "var(--border)"}`, boxShadow: isSel ? "var(--shadow-glow)" : undefined, background: "#fff", cursor: disabled || isSel ? "default" : "pointer" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={resolveImg(v.coloredUrl || v.url)} alt={label} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                  <span style={{ position: "absolute", left: 4, bottom: 4, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(11,13,12,.6)", padding: "0 4px", borderRadius: 4 }}>{label}</span>
+                  {isSel && <span style={{ position: "absolute", right: 4, top: 4, background: "var(--volt-500)", color: "var(--carbon-950)", borderRadius: 99, width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="check" size={10} /></span>}
+                  {!isSel && v.origin !== "original" && (
+                    <button type="button" title="Xoá biến thể" disabled={disabled || busy !== null}
+                      onClick={run("delvar", () => variants.remove(page.id, v.id))}
+                      style={{ position: "absolute", right: 4, top: 4, background: "rgba(11,13,12,.6)", color: "#fff", border: "none", borderRadius: 99, width: 16, height: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Icon name="x" size={10} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {cand && (
         <div style={{ display: "flex", gap: 12, alignItems: "center", padding: 10, border: "1px solid var(--volt-600)", borderRadius: "var(--radius-md)", background: "var(--neutral-100)" }}>
