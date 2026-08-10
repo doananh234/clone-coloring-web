@@ -124,6 +124,18 @@ export const extractEntitiesDeps = {
   randomUUID: () => crypto.randomUUID(),
 };
 export const reproduceDeps = { generatePage, uploadToR2, resolveR2Url };
+export const fillInteriorDeps = {
+  generatePage,
+  uploadToR2,
+  // Fisher–Yates in place; runtime-only (worker), so Math.random is fine here.
+  shuffle: <T>(a: T[]): T[] => {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  },
+};
 export const createBookDeps = { randomUUID: () => crypto.randomUUID(), copyImage };
 
 async function fetchImage(url: string): Promise<{ body: Buffer; contentType: string }> {

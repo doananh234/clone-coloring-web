@@ -1,3 +1,6 @@
+import type { PrismaClient } from "@vx/db";
+import type { JobContext } from "../job-context";
+
 export const DEFAULT_TARGET_INTERIOR = 40;
 export const FILL_CHANGE_BASE = 40;
 export const FILL_CHANGE_STEP = 10;
@@ -68,4 +71,76 @@ export function planFillInterior(
     }
   }
   return tasks;
+}
+
+export interface FillInteriorDeps {
+  generatePage: (a: {
+    prompt: string;
+    sourceImageUrl: string;
+    pageNumber: number;
+    jobId: string;
+    changePercent?: number;
+  }) => Promise<{ base64: string }>;
+  uploadToR2: (a: { key: string; body: Buffer; contentType: string }) => Promise<{ url: string }>;
+  shuffle?: <T>(a: T[]) => T[];
+}
+
+/**
+ * stepFillInterior — clone random source interiors up to the job's target so
+ * the built book has enough interior pages. Runs AFTER the D2 classify gate
+ * (operator has confirmed which pages are interior/excluded) and BEFORE
+ * create-book. Idempotent via ctx.isDone("fill-interior"): on gate-resume it
+ * fills exactly once. Appends origin:"additional" pages; never mutates originals.
+ */
+export async function stepFillInterior(
+  ctx: JobContext,
+  db: PrismaClient,
+  deps: FillInteriorDeps,
+): Promise<void> {
+  const job = await db.cloneJob.findUnique({ where: { id: ctx.jobId } });
+  if (!job) throw new Error(`cloneJob ${ctx.jobId} missing`);
+
+  const existingPages = (job.pages as FillInteriorPage[] | null | undefined) ?? [];
+  const data = (job.data as { targetInteriorCount?: number } | null | undefined) ?? {};
+  const target = data.targetInteriorCount ?? DEFAULT_TARGET_INTERIOR;
+
+  const tasks = planFillInterior(existingPages, target, { shuffle: deps.shuffle });
+  if (tasks.length === 0) {
+    await ctx.markStepComplete("fill-interior");
+    return;
+  }
+
+  const created: Record<string, unknown>[] = [];
+  for (const t of tasks) {
+    const { base64 } = await deps.generatePage({
+      prompt: "",
+      sourceImageUrl: t.sourceImageUrl,
+      pageNumber: t.pageNumber,
+      jobId: ctx.jobId,
+      changePercent: t.changePercent,
+    });
+    const body = Buffer.from(base64, "base64");
+    const key = `assets/clone-jobs/${ctx.jobId}/redesigned/page-${String(t.pageNumber).padStart(3, "0")}.png`;
+    const { url } = await deps.uploadToR2({ key, body, contentType: "image/png" });
+    created.push({
+      pageNumber: t.pageNumber,
+      imageUrl: t.sourceImageUrl,
+      redesignedUrl: url,
+      status: "reproduced",
+      pageType: "interior",
+      origin: "additional",
+      parentPageNumber: t.parentPageNumber,
+    });
+  }
+
+  // Re-read to merge against the freshest pages (operator edits at the gate
+  // landed on job.pages; we only append, never overwrite).
+  const fresh = await db.cloneJob.findUnique({ where: { id: ctx.jobId }, select: { pages: true } });
+  const base = (fresh?.pages as Record<string, unknown>[] | null | undefined) ?? [];
+  await db.cloneJob.updateMany({
+    where: { id: ctx.jobId },
+    data: { pages: [...base, ...created] as never },
+  });
+
+  await ctx.markStepComplete("fill-interior");
 }

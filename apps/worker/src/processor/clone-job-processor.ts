@@ -9,6 +9,7 @@ import {
   stepCreateBook,
   stepOneShot,
   stepGenerateCover,
+  stepFillInterior,
 } from "@vx/clone-core";
 import { db } from "../db";
 import { notifySuccess, notifyFailure } from "../notify/telegram";
@@ -21,6 +22,7 @@ import {
   createBookDeps,
   oneShotDeps,
   generateCoverDeps,
+  fillInteriorDeps,
 } from "./step-deps";
 
 // silence unused-import warnings for the manually-triggered extract step.
@@ -102,6 +104,11 @@ export async function processCloneJob(jobId: string): Promise<void> {
       console.log(`[worker] clone job ${jobId} paused at classify gate`);
       return;
     }
+
+    // D3 — reach the configured interior target by cloning source interiors.
+    // Runs only after the gate passed (operator confirmed classification).
+    if (!ctx.isDone("fill-interior"))
+      await withRetry("fill-interior", () => stepFillInterior(ctx, db, fillInteriorDeps), ctx);
 
     const bookId = ctx.isDone("create-book") && ctx.resultBookId
       ? ctx.resultBookId

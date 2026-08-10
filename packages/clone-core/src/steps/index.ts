@@ -15,6 +15,14 @@ export {
   stepGenerateCover,
   type GenerateCoverDeps,
 } from "./generate-cover";
+export {
+  stepFillInterior,
+  planFillInterior,
+  DEFAULT_TARGET_INTERIOR,
+  type FillInteriorDeps,
+  type FillInteriorPage,
+  type FillTask,
+} from "./fill-interior";
 export { buildColoringStyleRowInput } from "./build-coloring-style-row-input";
 export { upsertColoringStyleWithVariant, type UpsertColoringStyleResult } from "./upsert-coloring-style-with-variant";
 export {
