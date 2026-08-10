@@ -47,9 +47,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const kept = allPages.filter((p) => !p.excluded && p.imageUrl);
     const coverPage = kept.find((p) => p.pageType === "cover");
     const introPages = kept.filter((p) => p.pageType === "interiorIntro");
-    const interiorPages = kept.filter(
-      (p) => p.pageType !== "cover" && p.pageType !== "interiorIntro",
-    );
+    const interiorPages = kept
+      .filter((p) => p.pageType !== "cover" && p.pageType !== "interiorIntro")
+      .sort((a, b) => a.pageNumber - b.pageNumber);
 
     const buildPage = async (p: CloneJobPage, i: number) => {
       const sourceUrl = useRedesigned

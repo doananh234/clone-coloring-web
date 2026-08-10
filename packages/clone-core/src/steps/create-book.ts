@@ -106,9 +106,9 @@ export async function stepCreateBook(
   // pre-D2 jobs behave exactly as before.
   const coverPage = usablePages.find((p) => p.pageType === "cover");
   const introPages = usablePages.filter((p) => p.pageType === "interiorIntro");
-  const interiorPages = usablePages.filter(
-    (p) => p.pageType !== "cover" && p.pageType !== "interiorIntro",
-  );
+  const interiorPages = usablePages
+    .filter((p) => p.pageType !== "cover" && p.pageType !== "interiorIntro")
+    .sort((a, b) => a.pageNumber - b.pageNumber);
 
   const buildPage = async (p: JobPage, destKey: string) => {
     const sourceUrl = p.redesignedUrl ?? p.imageUrl;
