@@ -69,6 +69,10 @@ export type CloneJobPage = {
   pageType?: "cover" | "interiorIntro" | "interior";
   /** D2 inclusion flag — true drops the page from the built Book. */
   excluded?: boolean;
+  /** D3 lineage — "additional" = auto-filled clone; undefined/"original" = source page. */
+  origin?: "original" | "additional";
+  /** D3 lineage — for additional pages, the pageNumber of the interior it was cloned from. */
+  parentPageNumber?: number;
 };
 
 export type CloneJobBookData = {

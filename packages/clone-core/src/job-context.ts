@@ -10,6 +10,8 @@ interface CloneJobDataExtras {
   failedStep?: CloneStep | null;
   startedAt?: string;
   finishedAt?: string;
+  /** D3 per-job override for interior target; falls back to DEFAULT_TARGET_INTERIOR. */
+  targetInteriorCount?: number;
   [k: string]: unknown;
 }
 

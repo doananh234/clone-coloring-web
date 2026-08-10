@@ -4,6 +4,7 @@ export type CloneStep =
   | "analyze"
   | "extract-entities"
   | "reproduce"
+  | "fill-interior"
   | "create-book"
   | "generate-cover";
 
@@ -13,6 +14,7 @@ export const STEP_ORDER: readonly CloneStep[] = [
   "analyze",
   "extract-entities",
   "reproduce",
+  "fill-interior",
   "create-book",
   "generate-cover",
 ] as const;

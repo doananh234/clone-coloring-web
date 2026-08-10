@@ -29,6 +29,9 @@ export interface CloneJobPage {
   /** D2 classification fields (set during gate review). */
   pageType?: "cover" | "interiorIntro" | "interior";
   excluded?: boolean;
+  /** D3 lineage fields (set by stepFillInterior / fill route). */
+  origin?: "original" | "additional";
+  parentPageNumber?: number;
   /** Real API field for the redesigned/reproduced result. */
   reproducedUrl?: string;
   redesignedUrl?: string;
