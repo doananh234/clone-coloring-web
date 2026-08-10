@@ -45,6 +45,8 @@ interface JobPage {
   error?: string;
   pageType?: "cover" | "interiorIntro" | "interior";
   excluded?: boolean;
+  origin?: "original" | "additional";
+  parentPageNumber?: number;
 }
 
 interface BookData {
@@ -119,6 +121,9 @@ export async function stepCreateBook(
       isPublic: false,
       prompt: p.redesignPrompt || p.rawData?.reproductionPrompt || "",
       sceneData: normalizeRawData(p.rawData),
+      sourcePageNumber: p.pageNumber,
+      origin: p.origin ?? "original",
+      ...(p.parentPageNumber != null ? { parentPageNumber: p.parentPageNumber } : {}),
     };
   };
 

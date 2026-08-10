@@ -78,6 +78,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
               })),
             }
           : undefined,
+        sourcePageNumber: p.pageNumber,
+        origin: p.origin ?? "original",
+        ...(p.parentPageNumber != null ? { parentPageNumber: p.parentPageNumber } : {}),
       };
     };
 

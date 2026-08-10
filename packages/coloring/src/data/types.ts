@@ -151,6 +151,10 @@ export interface BookColoringPage {
    * object → numeric keys); use `parsePageScene()` to read it safely.
    */
   sceneData?: PageSceneData | Record<string, unknown> | string | null;
+  /** D4a lineage carried from the clone JobPage (for the book's Number/Background badges). */
+  sourcePageNumber?: number;
+  origin?: "original" | "additional";
+  parentPageNumber?: number;
 }
 
 export interface PageSceneData {
@@ -170,7 +174,7 @@ export interface BookDetail extends BookRow {
   updatedAt?: string;
   tags?: string[];
   coloringPages?: BookColoringPage[];
-  summaryPages?: { id: string; url: string; isPublic?: boolean }[];
+  summaryPages?: { id: string; url: string; isPublic?: boolean; sourcePageNumber?: number }[];
   specifications?: { pages?: number; dimensions?: string; ageRange?: string } | null;
   /** Raw JSON blob; coverMeta.sourceThumbnailUrl = clean illustration (no text). */
   data?: Record<string, unknown> | null;
