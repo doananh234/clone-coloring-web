@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { usePipelineActions, type CandidateKind } from "../../data/use-pipeline-actions";
+import { useFillInterior, deriveAdditionalMeta, interiorProgress } from "../../data/use-fill-interior";
 import { useStyleFromImage } from "../../data/use-more-actions";
 import { useCoverDesign, type CoverStylePack } from "../../data/use-cover-design";
 import { useCoverTextOverlays } from "../../data/use-cover-text-overlays";
@@ -100,6 +101,9 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
   const router = useRouter();
   const [sel, setSel] = useState(0);
   const pa = usePipelineActions(jobId);
+  const fi = useFillInterior(jobId);
+  const target = 40; // display-only default; server enforces job.data.targetInteriorCount
+  const progress = interiorProgress(pages);
   // The book created from this job — to preview the cover currently in use.
   // Only shown on the first page (the cover is derived from the source page).
   const { book } = useBook(bookId || "");
@@ -136,6 +140,10 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
   const idx = Math.min(sel, pages.length - 1);
   const page = pages[idx];
   const redo = reproduced(page);
+  const selMeta = deriveAdditionalMeta(page, pages);
+  const parentPage = selMeta.isAdditional
+    ? pages.find((p) => p.pageNumber === page.parentPageNumber)
+    : undefined;
   // Two candidate slots, matching the old clone-reproduce-step: "Regen" and
   // "Đổi camera" — BOTH generated via /reproduce (regenCandidateUrl / angleCandidateUrl),
   // applied via apply-candidate kind "regen" / "angle". (/redesign-page is a different,
@@ -214,21 +222,35 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
 
   return (
     <Card title="So sánh & chọn redesign theo trang">
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
+        <span style={capLabel}>Interior</span>
+        <span style={{ ...mono, fontWeight: 700 }}>{progress.count}/{target}</span>
+        {progress.count < target && (
+          <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>còn thiếu {target - progress.count}</span>
+        )}
+        <span style={{ flex: 1 }} />
+        <Button variant="outline" size="sm" disabled={!fi.enabled || busy !== null}
+          title={fi.enabled ? "Nhân bản thêm interior cho đủ target" : "Cần bật ghi thật (staging)"}
+          onClick={run("fill", () => fi.fill())}>
+          <Icon name="sparkles" size={14} /> {busy === "fill" ? "Đang fill…" : "Fill thêm cho đủ"}
+        </Button>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "92px minmax(0,1fr)", gap: 20, alignItems: "start" }}>
         {/* page strip */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8, alignSelf: "start", position: "sticky", top: 0, height: "min(72vh, 640px)", overflowY: "auto", overflowX: "hidden", paddingRight: 4 }}>
           {pages.map((p, i) => {
             const active = i === idx;
             const has = Boolean(reproduced(p));
+            const meta = deriveAdditionalMeta(p, pages);
             return (
-              <div key={p.pageNumber} onClick={() => setSel(i)} style={{ position: "relative", flexShrink: 0, width: "100%", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: "var(--neutral-100)", border: `${active ? 2 : 1}px solid ${active ? "var(--volt-600)" : "var(--border)"}`, boxShadow: active ? "var(--shadow-glow)" : undefined, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", cursor: "pointer", overflow: "hidden" }}>
+              <div key={p.pageNumber} onClick={() => setSel(i)} style={{ position: "relative", flexShrink: 0, width: "100%", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: meta.isAdditional ? "color-mix(in srgb, var(--warning) 14%, var(--neutral-100))" : "var(--neutral-100)", border: `${active ? 2 : 1}px solid ${active ? "var(--volt-600)" : meta.isAdditional ? "var(--warning)" : "var(--border)"}`, boxShadow: active ? "var(--shadow-glow)" : undefined, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", cursor: "pointer", overflow: "hidden" }}>
                 {p.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={resolveImg(p.imageUrl)} alt={`Trang ${p.pageNumber}`} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   <Icon name="image" size={16} />
                 )}
-                <span style={{ position: "absolute", left: 4, bottom: 3, ...mono, fontSize: 10, color: "#fff", background: "rgba(11,13,12,.6)", padding: "0 4px", borderRadius: 4 }}>{String(p.pageNumber).padStart(2, "0")}</span>
+                <span style={{ position: "absolute", left: 4, bottom: 3, ...mono, fontSize: 10, color: "#fff", background: "rgba(11,13,12,.6)", padding: "0 4px", borderRadius: 4 }}>{meta.isAdditional ? meta.displayNumber : String(p.pageNumber).padStart(2, "0")}</span>
                 {has && <span style={{ position: "absolute", right: 3, top: 3, width: 14, height: 14, borderRadius: 99, background: "var(--volt-500)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--carbon-950)" }}><Icon name="check" size={9} stroke={3} /></span>}
               </div>
             );
@@ -294,34 +316,61 @@ export function JobCompareTab({ jobId, pages, bookId }: { jobId: string; pages: 
             <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>% cao = biến đổi mạnh hơn so với bản gốc (mặc định 30%).</span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 16 }}>
-            <Candidate label="Hình gốc" src={resolveImg(page.imageUrl)} footer={
-              <Button variant="ghost" size="sm" style={{ width: "100%" }} disabled={!styleSvc.enabled || busy !== null || !page.imageUrl}
-                title={styleSvc.enabled ? "Analyze hình gốc (màu) → tạo coloring style tái sử dụng" : "Cần bật ghi thật (staging)"}
-                onClick={saveColoringStyle}>
-                <Icon name="palette" size={14} /> {busy === "savestyle" ? "Đang lưu…" : "Lưu coloring style"}
-              </Button>
-            } />
-            <Candidate
-              label="Bản đã gen"
-              src={idx === 0 ? (coverUrl ?? resolveImg(redo)) : resolveImg(redo)}
-              hint={idx === 0 ? (coverUrl ? "Cover đang dùng" : undefined) : (redo ? "Đang dùng" : undefined)}
-              empty
-              footer={idx === 0 && bookId ? (
-                <Button variant="outline" size="sm" style={{ width: "100%" }} onClick={() => router.push(`${B}/books/${bookId}/cover`)}>
-                  <Icon name="image" size={14} /> Sửa bìa
+          {selMeta.isAdditional ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Badge tone="warning" dot>Additional {selMeta.displayNumber}</Badge>
+                <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>nhân bản từ trang gốc #{page.parentPageNumber}</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 16 }}>
+                <Candidate label={`Hình gốc #${page.parentPageNumber ?? "?"}`} src={resolveImg(parentPage?.imageUrl ?? page.imageUrl)} />
+                <Candidate
+                  label="Bản additional"
+                  src={resolveImg(page.redesignedUrl)}
+                  hint="Đang dùng"
+                  empty
+                  disabled={!fi.enabled}
+                  busy={busy === "aregen"}
+                  regen={{ label: "Regen (thay tại chỗ)", busy: busy === "aregen", onClick: run("aregen", () => fi.regen(page.pageNumber, changePct)) }}
+                  footer={
+                    <Button variant="ghost" size="sm" style={{ width: "100%" }} disabled={!fi.enabled || busy !== null}
+                      onClick={run("adelete", () => fi.remove(page.pageNumber), "Xóa trang additional này? Số interior sẽ giảm.")}>
+                      <Icon name="trash-2" size={14} /> Xóa
+                    </Button>
+                  }
+                />
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 16 }}>
+              <Candidate label="Hình gốc" src={resolveImg(page.imageUrl)} footer={
+                <Button variant="ghost" size="sm" style={{ width: "100%" }} disabled={!styleSvc.enabled || busy !== null || !page.imageUrl}
+                  title={styleSvc.enabled ? "Analyze hình gốc (màu) → tạo coloring style tái sử dụng" : "Cần bật ghi thật (staging)"}
+                  onClick={saveColoringStyle}>
+                  <Icon name="palette" size={14} /> {busy === "savestyle" ? "Đang lưu…" : "Lưu coloring style"}
                 </Button>
-              ) : undefined}
-            />
-            <Candidate label="Regen" src={resolveImg(regenCand)} selected={!!regenCand && page.reproducedUrl === regenCand} empty
-              disabled={!pa.enabled} busy={busy === "applyregen"}
-              onChoose={run("applyregen", () => pa.applyCandidate(idx, "regen"))}
-              regen={{ label: regenCand ? "Regen lại" : "Tạo bản regen", busy: busy === "genregen", onClick: run("genregen", () => pa.regenCandidate(idx, false, changePct)) }} />
-            <Candidate label={angleView ? `Đổi camera · ${angleView}` : "Đổi camera"} src={resolveImg(angle)} hint={angle ? "Góc mới" : undefined} selected={!!angle && page.reproducedUrl === angle} empty
-              disabled={!pa.enabled} busy={busy === "applyangle"}
-              onChoose={run("applyangle", () => pa.applyCandidate(idx, "angle"))}
-              regen={{ label: angle ? "Đổi góc khác" : "Tạo góc mới", busy: busy === "genangle", onClick: run("genangle", () => pa.regenCandidate(idx, true, changePct)) }} />
-          </div>
+              } />
+              <Candidate
+                label="Bản đã gen"
+                src={idx === 0 ? (coverUrl ?? resolveImg(redo)) : resolveImg(redo)}
+                hint={idx === 0 ? (coverUrl ? "Cover đang dùng" : undefined) : (redo ? "Đang dùng" : undefined)}
+                empty
+                footer={idx === 0 && bookId ? (
+                  <Button variant="outline" size="sm" style={{ width: "100%" }} onClick={() => router.push(`${B}/books/${bookId}/cover`)}>
+                    <Icon name="image" size={14} /> Sửa bìa
+                  </Button>
+                ) : undefined}
+              />
+              <Candidate label="Regen" src={resolveImg(regenCand)} selected={!!regenCand && page.reproducedUrl === regenCand} empty
+                disabled={!pa.enabled} busy={busy === "applyregen"}
+                onChoose={run("applyregen", () => pa.applyCandidate(idx, "regen"))}
+                regen={{ label: regenCand ? "Regen lại" : "Tạo bản regen", busy: busy === "genregen", onClick: run("genregen", () => pa.regenCandidate(idx, false, changePct)) }} />
+              <Candidate label={angleView ? `Đổi camera · ${angleView}` : "Đổi camera"} src={resolveImg(angle)} hint={angle ? "Góc mới" : undefined} selected={!!angle && page.reproducedUrl === angle} empty
+                disabled={!pa.enabled} busy={busy === "applyangle"}
+                onChoose={run("applyangle", () => pa.applyCandidate(idx, "angle"))}
+                regen={{ label: angle ? "Đổi góc khác" : "Tạo góc mới", busy: busy === "genangle", onClick: run("genangle", () => pa.regenCandidate(idx, true, changePct)) }} />
+            </div>
+          )}
 
           {err && <div style={{ padding: "10px 12px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12.5 }}>{err}</div>}
           {styleMsg?.err && <div style={{ padding: "10px 12px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12.5 }}>{styleMsg.err}</div>}
