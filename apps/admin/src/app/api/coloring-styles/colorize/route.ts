@@ -130,6 +130,14 @@ export async function POST(req: NextRequest) {
           coloringPages[existingIdx].coloredUrl = coloredUrlWithBust;
           coloringPages[existingIdx].coloringStyleId = coloringStyleId;
           coloringPages[existingIdx].coloringVariantId = coloringVariantId ?? null;
+          // D4b: keep the selected variant's coloredUrl in sync so switching
+          // variants doesn't lose the colored result.
+          const sel = coloringPages[existingIdx].selectedVariantId as string | undefined;
+          const variants = coloringPages[existingIdx].variants as { id: string; coloredUrl?: string }[] | undefined;
+          if (sel && Array.isArray(variants)) {
+            const vIdx = variants.findIndex((v) => v.id === sel);
+            if (vIdx >= 0) variants[vIdx].coloredUrl = coloredUrlWithBust;
+          }
         } else {
           console.warn(`[colorize] Page ${pageId} not found in book ${bookId} coloringPages`);
         }
