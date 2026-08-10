@@ -26,6 +26,9 @@ export interface CloneJobPage {
   pageNumber: number;
   imageUrl: string;
   status: string;
+  /** D2 classification fields (set during gate review). */
+  pageType?: "cover" | "interiorIntro" | "interior";
+  excluded?: boolean;
   /** Real API field for the redesigned/reproduced result. */
   reproducedUrl?: string;
   redesignedUrl?: string;

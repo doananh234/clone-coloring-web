@@ -22,6 +22,7 @@ export const STATUS_META: Record<string, StatusMeta> = {
   analyzed: { bucket: "confirm", label: "Chờ xác nhận", tone: "warning" },
   confirmed: { bucket: "confirm", label: "Chờ xác nhận", tone: "warning" },
   entities_ready: { bucket: "confirm", label: "Chờ xác nhận", tone: "warning" },
+  "awaiting-classify": { bucket: "running", label: "Chờ phân loại", tone: "warning", dot: true },
   reproduced: { bucket: "done", label: "Hoàn thành", tone: "neutral" },
   error: { bucket: "error", label: "Lỗi", tone: "danger" },
 };
