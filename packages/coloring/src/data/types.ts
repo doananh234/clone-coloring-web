@@ -137,6 +137,18 @@ export interface EntityListResponse<T = EntityListItem> {
   meta?: { total?: number };
 }
 
+/** D4b: a non-destructive regenerated version of an interior page. */
+export interface PageVariant {
+  id: string;
+  url: string;
+  coloredUrl?: string;
+  origin: "original" | "regen";
+  source?: "A" | "B";
+  prompt?: string;
+  changePercent?: number;
+  createdAt: string;
+}
+
 export interface BookColoringPage {
   id: string;
   url: string;
@@ -155,6 +167,10 @@ export interface BookColoringPage {
   sourcePageNumber?: number;
   origin?: "original" | "additional";
   parentPageNumber?: number;
+  /** D4b: non-destructive regen variants; selectedVariantId is the live pointer
+   *  and url/coloredUrl mirror the selected variant. undefined = never regenerated. */
+  variants?: PageVariant[];
+  selectedVariantId?: string;
 }
 
 export interface PageSceneData {
