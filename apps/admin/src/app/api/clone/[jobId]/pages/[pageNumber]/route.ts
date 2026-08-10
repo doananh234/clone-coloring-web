@@ -58,3 +58,36 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     );
   }
 }
+
+/** Delete an ADDITIONAL page (Xóa). Originals are never deletable here. */
+export async function DELETE(_req: NextRequest, { params }: RouteParams) {
+  try {
+    const { jobId, pageNumber } = await params;
+    const pageNum = parseInt(pageNumber, 10);
+    if (isNaN(pageNum)) return NextResponse.json({ error: "Invalid page number" }, { status: 400 });
+
+    const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
+    if (!row) return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
+
+    const pages = (row.pages as CloneJobPage[]) || [];
+    const target = pages.find((p) => p.pageNumber === pageNum);
+    if (!target) return NextResponse.json({ error: "Page not found" }, { status: 404 });
+    if (target.origin !== "additional") {
+      return NextResponse.json({ error: "Only additional pages can be deleted" }, { status: 400 });
+    }
+
+    const remaining = pages.filter((p) => p.pageNumber !== pageNum);
+    await prisma.cloneJob.update({
+      where: { id: jobId },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { pages: remaining as any },
+    });
+    return NextResponse.json({ success: true, removed: pageNum });
+  } catch (error) {
+    console.error("[clone/delete-page] Error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    );
+  }
+}

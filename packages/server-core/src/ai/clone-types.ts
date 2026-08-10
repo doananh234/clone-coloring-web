@@ -45,7 +45,7 @@ export type ClonePageRawData = {
 export type CloneJobPage = {
   pageNumber: number;
   imageUrl: string;
-  status: "pending" | "analyzing" | "analyzed" | "error";
+  status: "pending" | "analyzing" | "analyzed" | "reproduced" | "error";
   rawData?: ClonePageRawData;
   /** URL of the redesigned version (image-to-image from original + prompt) */
   redesignedUrl?: string;
