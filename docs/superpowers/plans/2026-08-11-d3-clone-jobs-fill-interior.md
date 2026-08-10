@@ -210,8 +210,8 @@ describe("planFillInterior", () => {
   });
 
   it("caps change-% at 80 on deep reuse", () => {
-    // 1 interior, target 7 → rounds 0..6 → 40,50,60,70,80,80,80
-    const tasks = planFillInterior(interiors(1), 7);
+    // 1 interior, target 8 → need 7 → rounds 0..6 → 40,50,60,70,80,80,80
+    const tasks = planFillInterior(interiors(1), 8);
     expect(tasks.map((t) => t.changePercent)).toEqual([40, 50, 60, 70, 80, 80, 80]);
   });
 
