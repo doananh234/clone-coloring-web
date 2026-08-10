@@ -96,10 +96,10 @@ excluded?: boolean;                                  // true = loại khỏi Boo
 ```
 Không phá cấu trúc cũ (thêm field optional).
 
-### 4.3 Auto-classify (bước `analyze`)
-- Mở rộng prompt `analyzePage` để LLM trả `pageType` (tận dụng `isCover` sẵn có + heuristic vị trí).
-- Fallback heuristic khi LLM không chắc: page 1 = `cover`; page đầu nhiều chữ/ít nội dung = `interiorIntro`; còn lại = `interior`.
-- Back cover / trang trắng → gợi ý `excluded: true` để operator xác nhận.
+### 4.3 Auto-classify (trong `stepOneShot`)
+**Contract Diaflow (chốt 2026-08-10):** flow one-shot trả về **per-page** 3 boolean trong `llm_0_output`: `isCover`, `isIntro`, `isInterior`. `classifyPage` tiêu thụ theo **thứ tự ưu tiên `isCover` > `isIntro` > `isInterior`** → `cover`/`interiorIntro`/`interior`.
+- Fallback khi không có tín hiệu nào (flow cũ / trang không chắc): page 1 = `cover` (trừ khi đã có cover khác), còn lại = `interior`. Pre-scan `llmFlaggedCover` tránh page-1 thành cover giả khi cover thật ở trang khác.
+- `excluded` **luôn = false ở auto** — Diaflow KHÔNG gửi tín hiệu loại bỏ; back cover / trắng / rác do operator tick tại gate. (Nếu sau này Diaflow thêm `isBackCover`/`isBlank`, mở rộng `classifyPage` để set `excluded` gợi ý.)
 
 ### 4.4 Gate review bắt buộc (bước mới trong pipeline)
 
