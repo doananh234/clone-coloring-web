@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/button";
 import { Progress } from "../../components/ui/progress";
 import { EmptyState } from "../../components/ui/states";
 import { usePageActions } from "../../data/use-page-actions";
+import { usePageVariants, type RegenAddOpts } from "../../data/use-page-variants";
 import { runBatchRegen } from "../../data/run-batch-regen";
 import { resolveImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
@@ -121,6 +122,8 @@ export function PageBatchSelect({
 }) {
   const qc = useQueryClient();
   const actions = usePageActions(bookId, cloneJobId);
+  const variants = usePageVariants(bookId);
+  const [addOpts, setAddOpts] = useState<RegenAddOpts>({ count: 1, source: "A", changePercent: 30 });
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [running, setRunning] = useState(false);
   const [current, setCurrent] = useState<number | null>(null);
@@ -128,9 +131,6 @@ export function PageBatchSelect({
   const [results, setResults] = useState<Map<number, "ok" | "err">>(new Map());
   const [summary, setSummary] = useState<{ ok: number; err: number } | null>(null);
 
-  if (!cloneJobId) {
-    return <EmptyState icon="image" title="Không thể regen" sub="Sách này không có clone job nguồn để regen hàng loạt." />;
-  }
   if (pages.length === 0) {
     return <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />;
   }
@@ -175,6 +175,32 @@ export function PageBatchSelect({
     qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
   };
 
+  const runAdd = async () => {
+    const indices = [...selected].sort((a, b) => a - b);
+    if (indices.length === 0) return;
+    if (!window.confirm(`Regen Thêm ${addOpts.count} bản cho ${indices.length} trang đã chọn? Thêm biến thể (KHÔNG ghi đè), tốn phí AI.`)) return;
+
+    setRunning(true);
+    setSummary(null);
+    setResults(new Map());
+    setProgress({ done: 0, total: indices.length });
+
+    const res = await runBatchRegen(
+      indices,
+      async (i) => { setCurrent(i); await variants.regenAdd(pages[i].id, addOpts); },
+      (done, index, ok) => {
+        setProgress({ done, total: indices.length });
+        setResults((prev) => new Map(prev).set(index, ok ? "ok" : "err"));
+      },
+    );
+
+    setCurrent(null);
+    setRunning(false);
+    setSummary({ ok: res.ok.length, err: res.err.length });
+    setSelected(new Set(res.err));
+    qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
+  };
+
   const disabled = !actions.enabled;
   const pct = progress && progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 
@@ -191,13 +217,28 @@ export function PageBatchSelect({
         <Button variant="outline" size="sm" disabled={running || selected.size === 0} onClick={clear}>Bỏ chọn</Button>
         <span style={{ fontSize: 13, color: "var(--muted-foreground)" }}>Đã chọn <span style={{ ...mono, fontWeight: 600, color: "var(--foreground)" }}>{selected.size}</span>/{pages.length}</span>
         <div style={{ flex: 1 }} />
-        <Button
-          size="sm"
+        {cloneJobId && (
+          <Button size="sm" variant="outline"
+            disabled={disabled || running || selected.size === 0}
+            title={disabled ? "Cần bật ghi thật (staging)" : "Ghi đè ảnh hiện tại (bản cũ)"}
+            onClick={run}>
+            <Icon name="sparkles" size={15} /> {running ? `Đang regen ${progress?.done ?? 0}/${progress?.total ?? 0}…` : "Regen hàng loạt (ghi đè)"}
+          </Button>
+        )}
+        <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+          <select value={addOpts.source} onChange={(e) => setAddOpts((o) => ({ ...o, source: e.target.value as "A" | "B" }))} disabled={running}
+            style={{ padding: "3px 6px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)" }}>
+            <option value="A">A</option><option value="B">B</option>
+          </select>
+          <input type="number" min={1} max={4} value={addOpts.count} disabled={running}
+            onChange={(e) => setAddOpts((o) => ({ ...o, count: Math.min(4, Math.max(1, Number(e.target.value) || 1)) }))}
+            style={{ width: 46, padding: "3px 6px", fontFamily: "var(--font-mono)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)" }} />
+        </label>
+        <Button size="sm"
           disabled={disabled || running || selected.size === 0}
-          title={disabled ? "Cần bật ghi thật (staging)" : undefined}
-          onClick={run}
-        >
-          <Icon name="sparkles" size={15} /> {running ? `Đang regen ${progress?.done ?? 0}/${progress?.total ?? 0}…` : "Regen hàng loạt"}
+          title={disabled ? "Cần bật ghi thật (staging)" : "Sinh thêm biến thể (không ghi đè)"}
+          onClick={runAdd}>
+          <Icon name="sparkles" size={15} /> {running ? `Đang sinh ${progress?.done ?? 0}/${progress?.total ?? 0}…` : "Regen Thêm (Add)"}
         </Button>
       </div>
 
