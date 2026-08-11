@@ -9,6 +9,7 @@
     "./screens": "./src/screens/index.ts",
     "./data/page-variants": "./src/data/page-variants.ts",
     "./data/cover-candidates": "./src/data/cover-candidates.ts",
+    "./data/tags": "./src/data/tags.ts",
     "./styles.css": "./src/styles/motio.css"
   },
   "scripts": {
