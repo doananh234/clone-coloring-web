@@ -7,6 +7,9 @@ import { Badge } from "../../components/ui/badge";
 import { Icon } from "../../lib/icon";
 import { resolveImg } from "../../data/img";
 import { useColoringStyleVariantActions } from "../../data/use-coloring-style-variant-actions";
+import { useStyleUsages } from "../../data/use-style-usages";
+import { groupUsagesByVariant } from "../../data/group-style-usages";
+import { UsageThumbs } from "./usage-thumbs";
 
 /** One color palette captured from a source cover (see ColoringStyle.variants). */
 interface Variant {
@@ -50,6 +53,14 @@ export function ColorVariantsSection({ variants, styleId }: { variants: unknown;
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const canDelete = !!styleId && actions.enabled && list.length > 1;
+
+  // Pages colorized with this style, grouped by the variant used — shown inline
+  // under each variant card (+ a trailing "Khác" block for unknown-variant pages).
+  const { usages } = useStyleUsages(styleId ?? "");
+  const usageGroups = groupUsagesByVariant(usages, list);
+  const usagesFor = (variantId: string | undefined) =>
+    variantId ? usageGroups.find((g) => g.variantId === variantId)?.usages ?? [] : [];
+  const unknownUsages = usageGroups.find((g) => g.variantId === null)?.usages ?? [];
 
   const onDelete = async (variantId: string) => {
     if (!window.confirm("Xoá bảng màu (variant) này khỏi style? Hành động không thể hoàn tác.")) return;
@@ -125,11 +136,28 @@ export function ColorVariantsSection({ variants, styleId }: { variants: unknown;
                 <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>{meta}</div>
                 <Swatches colors={primary} />
                 {accent.length > 0 && <Swatches colors={accent} />}
+                {(() => {
+                  const vu = usagesFor(v.id);
+                  return (
+                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 2, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)" }}>Đã dùng để tô · {vu.length}</div>
+                      {vu.length > 0 ? <UsageThumbs usages={vu} /> : <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>Chưa dùng</div>}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );
         })}
       </div>
+      {unknownUsages.length > 0 && (
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+            Khác · không rõ bảng màu <Badge tone="neutral">{unknownUsages.length}</Badge>
+          </div>
+          <UsageThumbs usages={unknownUsages} />
+        </div>
+      )}
     </Card>
   );
 }
