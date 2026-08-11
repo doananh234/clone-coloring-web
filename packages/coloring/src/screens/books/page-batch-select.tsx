@@ -30,7 +30,9 @@ function SelectableThumb({
   disabled: boolean;
   onToggle: () => void;
 }) {
-  const src = resolveImg(page.coloredUrl || page.url);
+  // Batch-select shows the B&W line-art (never the colored result) — you pick
+  // pages to regen the line-art, so a colorized page must not appear coloured here.
+  const src = resolveImg(page.url);
   const border =
     state === "err"
       ? "2px solid var(--danger)"
