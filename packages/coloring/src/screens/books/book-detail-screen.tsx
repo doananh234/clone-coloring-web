@@ -427,6 +427,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                     candidates={coverCandidates}
                     selectedId={selectedCoverCandidateId}
                     coverMeta={coverMetaObj}
+                    onPreview={(url, title) => { setPreviewPage(null); setPreviewIdx(null); setPreview({ title, imageSrc: resolveImg(url) }); }}
                   />
                 ) : (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
