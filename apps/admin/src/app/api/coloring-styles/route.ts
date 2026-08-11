@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
-import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
+import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import { normalizeTags } from "@vx/coloring/data/tags";
 
 export async function GET() {
@@ -75,7 +75,10 @@ export async function POST(req: NextRequest) {
           const base64 = imgUrl.split(",")[1];
           buffer = Buffer.from(base64, "base64");
         } else {
-          const res = await fetch(imgUrl);
+          // Resolve relative R2 URLs (e.g. "/assets/...", from local file uploads)
+          // to absolute before server-side fetch — a bare relative URL throws
+          // "Failed to parse URL". Absolute/data URLs pass through unchanged.
+          const res = await fetch(resolveR2Url(imgUrl));
           const arrayBuf = await res.arrayBuffer();
           buffer = Buffer.from(arrayBuf);
         }
