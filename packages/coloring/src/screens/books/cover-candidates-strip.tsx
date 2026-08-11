@@ -12,12 +12,14 @@ import type { CoverCandidate } from "../../data/types";
 /** D4c: manage a book's cover candidates — select (mirror coverUrl), delete
  *  (non-selected), and open any candidate as the Cover editor background. */
 export function CoverCandidatesStrip({
-  bookId, candidates, selectedId, coverMeta,
+  bookId, candidates, selectedId, coverMeta, onPreview,
 }: {
   bookId: string;
   candidates: CoverCandidate[];
   selectedId?: string;
   coverMeta: Record<string, unknown>;
+  /** Click a candidate image → open the shared Preview Dialog (like a colored page). */
+  onPreview?: (url: string, title: string) => void;
 }) {
   const router = useRouter();
   const cc = useCoverCandidates(bookId);
@@ -39,16 +41,16 @@ export function CoverCandidatesStrip({
   if (candidates.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: ".04em" }}>Cover candidates · {candidates.length}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* Header lives on the parent Card title ("Cover Candidates · N") — no duplicate here. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
         {candidates.map((c) => {
           const isSel = c.id === selectedId;
           const label = c.origin === "source" ? "Nguồn" : "Push";
           return (
             <div key={c.id} style={{ position: "relative" }}>
-              <div onClick={disabled || isSel ? undefined : run(`sel-${c.id}`, () => cc.select(c.id))}
-                style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", overflow: "hidden", border: `${isSel ? 2 : 1}px solid ${isSel ? "var(--volt-600)" : "var(--border)"}`, boxShadow: isSel ? "var(--shadow-glow)" : undefined, background: "#fff", cursor: disabled || isSel ? "default" : "pointer" }}>
+              <div title="Xem trước" onClick={() => onPreview?.(c.url, isSel ? "Bìa (đang chọn)" : `Cover · ${label}`)}
+                style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", overflow: "hidden", border: `${isSel ? 2 : 1}px solid ${isSel ? "var(--volt-600)" : "var(--border)"}`, boxShadow: isSel ? "var(--shadow-glow)" : undefined, background: "#fff", cursor: "pointer" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={resolveImg(c.url)} alt={label} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               </div>
@@ -59,6 +61,13 @@ export function CoverCandidatesStrip({
                   onClick={run(`del-${c.id}`, () => cc.remove(c.id))}
                   style={{ position: "absolute", right: 4, top: 4, background: "rgba(11,13,12,.6)", color: "#fff", border: "none", borderRadius: 99, width: 16, height: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Icon name="x" size={10} />
+                </button>
+              )}
+              {!isSel && (
+                <button type="button" title="Đặt candidate này làm ảnh bìa" disabled={disabled || busy !== null}
+                  onClick={run(`sel-${c.id}`, () => cc.select(c.id))}
+                  style={{ marginTop: 4, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontSize: 10.5, padding: "3px 4px", borderRadius: "var(--radius-sm)", border: "1px solid var(--volt-600)", background: "var(--card)", cursor: disabled ? "default" : "pointer" }}>
+                  <Icon name="check" size={11} /> {busy === `sel-${c.id}` ? "Đang chọn…" : "Chọn làm bìa"}
                 </button>
               )}
               <button type="button" title="Mở trong Cover editor" disabled={disabled || busy !== null}
