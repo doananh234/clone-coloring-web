@@ -8,6 +8,7 @@
     "./components": "./src/components/index.ts",
     "./screens": "./src/screens/index.ts",
     "./data/page-variants": "./src/data/page-variants.ts",
+    "./data/cover-candidates": "./src/data/cover-candidates.ts",
     "./styles.css": "./src/styles/motio.css"
   },
   "scripts": {
