@@ -12,6 +12,9 @@ import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { useStyleFromImage } from "../../data/use-more-actions";
 import { resolveImg } from "../../data/img";
 import { StyleResultView } from "../entity/style-result-view";
+import { TagsInput } from "../../components/ui/tags-input";
+import { useEntityList } from "../../data/use-entity-list";
+import { collectTags } from "../../data/tags";
 
 export interface ExtractStyleScreenProps {
   kind: "art-styles" | "coloring-styles";
@@ -28,6 +31,9 @@ export function ExtractStyleScreen({ kind }: ExtractStyleScreenProps) {
   const svc = useStyleFromImage(kind);
   const [urls, setUrls] = useState<string[]>(["", "", ""]);
   const [name, setName] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const { items: styleItems } = useEntityList(kind);
+  const tagSuggestions = collectTags(styleItems);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState<"analyze" | "create" | null>(null);
   const [uploading, setUploading] = useState<number | null>(null);
@@ -63,7 +69,7 @@ export function ExtractStyleScreen({ kind }: ExtractStyleScreenProps) {
     if (!result) return;
     setBusy("create"); setErr(null);
     try {
-      const { id } = await svc.create({ ...result, name: name || result.name, referenceImageUrls: imgs });
+      const { id } = await svc.create({ ...result, name: name || result.name, referenceImageUrls: imgs, tags });
       router.push(id ? `${B}/entity/${kind}/${id}` : `${B}${m.back}`);
     } catch (e) { setErr(e instanceof Error ? e.message : "Tạo style thất bại"); setBusy(null); }
   };
@@ -126,6 +132,9 @@ export function ExtractStyleScreen({ kind }: ExtractStyleScreenProps) {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <label style={{ display: "block" }}><span className="mo-flabel">Tên style</span><Input value={name} onChange={(e) => setName(e.target.value)} /></label>
+                <label style={{ display: "block" }}><span className="mo-flabel">Hashtag</span>
+                  <TagsInput value={tags} onChange={setTags} suggestions={tagSuggestions} disabled={busy !== null} />
+                </label>
                 <StyleResultView data={result} />
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: 14 }}>
                   <Button variant="ghost" onClick={() => setResult(null)}>Làm lại</Button>
