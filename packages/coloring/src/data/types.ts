@@ -149,6 +149,16 @@ export interface PageVariant {
   createdAt: string;
 }
 
+/** D4c: a non-destructive cover candidate. Lives in book.data.coverCandidates[];
+ *  book.data.selectedCoverCandidateId points at the live one and book.coverUrl mirrors its url. */
+export interface CoverCandidate {
+  id: string;
+  url: string;
+  origin: "source" | "pushed";
+  fromPageId?: string;
+  createdAt: string;
+}
+
 export interface BookColoringPage {
   id: string;
   url: string;

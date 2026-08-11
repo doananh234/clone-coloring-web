@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { ColoringStylePickerModal, type StyleSelection } from "../../components/ui/coloring-style-picker-modal";
 import { usePageActions } from "../../data/use-page-actions";
 import { usePageVariants, type RegenAddOpts } from "../../data/use-page-variants";
+import { useCoverCandidates } from "../../data/use-cover-candidates";
 import { resolveImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
 import type { PageVariant } from "../../data/types";
@@ -33,6 +34,7 @@ export function PageActionsRow({
   const cloneJobId = typeof bookData?.cloneJobId === "string" ? bookData.cloneJobId : undefined;
   const actions = usePageActions(bookId, cloneJobId);
   const variants = usePageVariants(bookId);
+  const coverCandidates = useCoverCandidates(bookId);
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenOpts, setRegenOpts] = useState<RegenAddOpts>({ count: 2, source: "A", changePercent: 30 });
   // Book page maps 1:1 by array index to its source clone job page.
@@ -140,8 +142,8 @@ export function PageActionsRow({
         {colored && (
           <>
             <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
-            <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đặt bản màu làm ảnh bìa (coverUrl)" onClick={run("cover", () => actions.setCover(colored))}>
-              <Icon name="image" size={15} /> {busy === "cover" ? "Đang đặt…" : "Làm bìa"}
+            <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đẩy bản màu này thành ứng viên bìa và chọn làm bìa chính (giữ bìa cũ)" onClick={run("cover", () => coverCandidates.push(page.id, colored!))}>
+              <Icon name="image" size={15} /> {busy === "cover" ? "Đang đẩy…" : "Push to Cover"}
             </Button>
             <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Đặt bản màu làm thumbnail 3:4 (thumbnailUrl)" onClick={run("thumb", () => actions.setThumbnail(colored))}>
               <Icon name="image" size={15} /> Set thumbnail

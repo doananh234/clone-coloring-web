@@ -17,13 +17,14 @@ import { useBookJob } from "../../data/use-book-job";
 import { getBookPatch } from "../../data/local-books";
 import { useGeneratePdf, useGenerateSubtitle, useReclone, useDeleteBook, useApproveBook } from "../../data/use-book-actions";
 import { PageActionsRow } from "./page-actions-row";
+import { CoverCandidatesStrip } from "./cover-candidates-strip";
 import { BookInformationTab } from "./book-info-tab";
 import { BookOriginalSection } from "./book-original-section";
 import { PageBatchSelect } from "./page-batch-select";
 import { resolveImg } from "../../data/img";
 import { COLORING_WRITE_ENABLED, COLORING_API_BASE } from "../../data/config";
 import { parsePageScene, hasSceneDetail, type ParsedScene } from "../../data/page-scene";
-import type { BookDetail, BookColoringPage } from "../../data/types";
+import type { BookDetail, BookColoringPage, CoverCandidate } from "../../data/types";
 import { deriveBookPageLabel, bookPageTone, type BookPageTone } from "../../data/book-page-label";
 
 const mono = { fontFamily: "var(--font-mono)" as const };
@@ -438,6 +439,12 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                   })}
                   {coverVersions.length === 0 && samples.length === 0 && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Chưa có ảnh màu.</div>}
                 </div>
+                <CoverCandidatesStrip
+                  bookId={bookId}
+                  candidates={(b.data?.coverCandidates ?? []) as CoverCandidate[]}
+                  selectedId={typeof b.data?.selectedCoverCandidateId === "string" ? b.data.selectedCoverCandidateId : undefined}
+                  coverMeta={coverMetaObj}
+                />
               </Card>
               {b.description && (
                 <Card title="Mô tả"><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{b.description}</div></Card>
