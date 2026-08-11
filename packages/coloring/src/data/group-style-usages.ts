@@ -29,7 +29,7 @@ export function groupUsagesByVariant(
   usages: StyleUsage[],
   variants: UsageVariant[] | undefined,
 ): UsageGroup[] {
-  const list = variants ?? [];
+  const list = Array.isArray(variants) ? variants : [];
   const groups: UsageGroup[] = [];
   const claimed = new Set<StyleUsage>();
 

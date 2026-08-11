@@ -39,4 +39,10 @@ describe("groupUsagesByVariant", () => {
     const out = groupUsagesByVariant([u("1", "v1")], undefined);
     expect(out.map((g) => [g.variantId, g.usages.map((x) => x.pageId)])).toEqual([[null, ["p1"]]]);
   });
+
+  it("treats a non-array variants value as empty", () => {
+    // @ts-expect-error deliberately passing a malformed non-array value
+    const out = groupUsagesByVariant([u("1", "v1")], {});
+    expect(out.map((g) => [g.variantId, g.usages.map((x) => x.pageId)])).toEqual([[null, ["p1"]]]);
+  });
 });
