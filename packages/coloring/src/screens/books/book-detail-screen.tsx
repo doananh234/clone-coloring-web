@@ -192,23 +192,10 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
 
   const b: BookDetail = book;
   const cover = resolveImg(b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl);
-  // Distinct cover / colored image versions, shown as separate thumbnails
-  // (deduped by URL): the composed cover (with text), the clean colored square,
-  // the thumbnail, and the source colored image the cover was built from.
+  // coverMeta.sourceThumbnailUrl feeds the CoverCandidatesStrip "open in editor"
+  // + BookOriginalSection fallback. (The old cover-versions thumbnail grid was
+  // removed — the Info tab now shows only the Cover candidates.)
   const coverMetaObj = (b.data?.coverMeta ?? {}) as { sourceThumbnailUrl?: string };
-  const seenVer = new Set<string>();
-  const coverVersions = (
-    [
-      { url: b.coverUrl, caption: "Bìa (có chữ)", badge: "BÌA" },
-      { url: b.squareThumbnailUrl, caption: "Ảnh màu (vuông)", badge: "MÀU" },
-      { url: b.thumbnailUrl, caption: "Thumbnail", badge: "MÀU" },
-      { url: coverMetaObj.sourceThumbnailUrl, caption: "Nguồn bìa (màu)", badge: "MÀU" },
-    ] as { url?: string | null; caption: string; badge: string }[]
-  ).filter((v): v is { url: string; caption: string; badge: string } => {
-    if (!v.url || seenVer.has(v.url)) return false;
-    seenVer.add(v.url);
-    return true;
-  });
   const pages = b.coloringPages ?? [];
   const cloneJobId = typeof b.data?.cloneJobId === "string" ? b.data.cloneJobId : undefined;
   const colored = pages.filter((p) => p.coloredUrl).length;
@@ -221,7 +208,6 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   // result), while the Interior section still lists EVERY page as B&W line-art.
   // Keep each page's ORIGINAL index (for labels + preview prev/next via openPageAt).
   const coloredPages = pages.map((p, i) => ({ p, i })).filter((x) => Boolean(x.p.coloredUrl));
-  const samples = (b.summaryPages ?? []).slice(0, 3);
   const specs = b.specifications;
   const edited = Boolean(getBookPatch(bookId));
 
@@ -434,27 +420,23 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
           />
           {tab === "info" ? (
             <>
-              <Card title="Cover & hình màu">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
-                  {coverVersions.map((v) => {
-                    const src = resolveImg(v.url);
-                    // The composed cover keeps its rich preview (Cover editor + download);
-                    // the colored versions open a plain image preview.
-                    const onClick = v.badge === "BÌA" ? openCoverPreview : () => { setPreviewPage(null); setPreview({ title: v.caption, imageSrc: src }); };
-                    return <Thumb key={v.url} src={src} caption={v.caption} badge={v.badge} onClick={onClick} />;
-                  })}
-                  {samples.map((s, i) => {
-                    const src = resolveImg(s.url);
-                    return <Thumb key={s.id || i} src={src} caption={`Trang mẫu ${String(i + 1).padStart(2, "0")}`} badge="MÀU" onClick={() => { setPreviewPage(null); setPreview({ title: `Trang mẫu ${String(i + 1).padStart(2, "0")}`, imageSrc: src }); }} />;
-                  })}
-                  {coverVersions.length === 0 && samples.length === 0 && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Chưa có ảnh màu.</div>}
-                </div>
-                <CoverCandidatesStrip
-                  bookId={bookId}
-                  candidates={(b.data?.coverCandidates ?? []) as CoverCandidate[]}
-                  selectedId={typeof b.data?.selectedCoverCandidateId === "string" ? b.data.selectedCoverCandidateId : undefined}
-                  coverMeta={coverMetaObj}
-                />
+              <Card title="Cover candidates">
+                {coverCandidates.length > 0 ? (
+                  <CoverCandidatesStrip
+                    bookId={bookId}
+                    candidates={coverCandidates}
+                    selectedId={selectedCoverCandidateId}
+                    coverMeta={coverMetaObj}
+                  />
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
+                    {cover ? (
+                      <Thumb src={cover} caption="Bìa hiện tại" badge="BÌA" onClick={openCoverPreview} />
+                    ) : (
+                      <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Chưa có cover candidate.</div>
+                    )}
+                  </div>
+                )}
               </Card>
               {b.description && (
                 <Card title="Mô tả"><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{b.description}</div></Card>
