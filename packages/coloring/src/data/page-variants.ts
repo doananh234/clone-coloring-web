@@ -53,3 +53,14 @@ export function deleteVariant(page: VariantPage, variantId: string): VariantPage
   if (v?.origin === "original") throw new Error("cannot delete the original variant");
   return { ...page, variants: (page.variants ?? []).filter((x) => x.id !== variantId) };
 }
+
+/** Keep the mirror invariant when an external overwrite sets page.url directly:
+ *  if a variant is selected, propagate the new url onto that variant too.
+ *  No-op for pages without variants/selection (backward-compatible). */
+export function mirrorUrlToSelectedVariant<T extends VariantPage>(page: T, url: string): T {
+  if (!page.selectedVariantId || !page.variants) return page;
+  return {
+    ...page,
+    variants: page.variants.map((v) => (v.id === page.selectedVariantId ? { ...v, url } : v)),
+  };
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ensureOriginalVariant, addVariants, selectVariant, deleteVariant, type VariantPage } from "./page-variants";
+import { ensureOriginalVariant, addVariants, selectVariant, deleteVariant, mirrorUrlToSelectedVariant, type VariantPage } from "./page-variants";
 import type { PageVariant } from "./types";
 
 const regen = (id: string): PageVariant => ({ id, url: `/r/${id}.png`, origin: "regen", source: "A", createdAt: "t" });
@@ -85,5 +85,24 @@ describe("deleteVariant", () => {
   });
   it("refuses to delete the original", () => {
     expect(() => deleteVariant(base(), "o1")).toThrow();
+  });
+});
+
+describe("mirrorUrlToSelectedVariant", () => {
+  it("updates the selected variant's url", () => {
+    const page = {
+      url: "/new.png", selectedVariantId: "r1",
+      variants: [
+        { id: "o1", url: "/base.png", origin: "original" as const, createdAt: "t" },
+        { id: "r1", url: "/old.png", origin: "regen" as const, source: "A" as const, createdAt: "t" },
+      ],
+    };
+    const out = mirrorUrlToSelectedVariant(page, "/new.png");
+    expect(out.variants!.find((v) => v.id === "r1")!.url).toBe("/new.png");
+    expect(out.variants!.find((v) => v.id === "o1")!.url).toBe("/base.png");
+  });
+  it("is a no-op when the page has no variants/selection", () => {
+    const page = { url: "/x.png" };
+    expect(mirrorUrlToSelectedVariant(page, "/y.png")).toBe(page);
   });
 });

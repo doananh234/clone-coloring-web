@@ -3,6 +3,7 @@ import { editImage } from "@vx/server-core/ai";
 import { buildRedesignPrompt, type CameraView } from "@vx/server-core/ai/prompts";
 import { createR2Client, getR2Config, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
+import { mirrorUrlToSelectedVariant } from "@vx/coloring/data/page-variants";
 
 export type R2Client = ReturnType<typeof createR2Client>;
 export type R2Config = ReturnType<typeof getR2Config>;
@@ -116,7 +117,7 @@ export async function updateBookPageUrl(
     const coloringPages = ((book.coloringPages as any[]) || []).slice();
     if (!coloringPages[pageIndex]) return false;
 
-    coloringPages[pageIndex] = { ...coloringPages[pageIndex], url, status: "done" };
+    coloringPages[pageIndex] = mirrorUrlToSelectedVariant({ ...coloringPages[pageIndex], url, status: "done" }, url);
     await prisma.book.update({
       where: { id: bookId },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

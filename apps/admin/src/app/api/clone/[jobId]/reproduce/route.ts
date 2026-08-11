@@ -5,6 +5,7 @@ import { getR2Config, createR2Client } from "@vx/server-core/r2";
 import { flushLangfuse } from "@vx/server-core/langfuse";
 import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { generateVariation, patchJobPage, updateBookPageUrl } from "./helpers";
+import { mirrorUrlToSelectedVariant } from "@vx/coloring/data/page-variants";
 
 export const maxDuration = 300;
 
@@ -277,8 +278,7 @@ async function reproducePendingPages(jobId: string, row: JobRow): Promise<NextRe
         r2Config,
       });
 
-      coloringPages[idx].url = url;
-      coloringPages[idx].status = "done";
+      coloringPages[idx] = mirrorUrlToSelectedVariant({ ...coloringPages[idx], url, status: "done" }, url);
       await prisma.book.update({
         where: { id: bookId },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
