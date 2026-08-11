@@ -29,6 +29,8 @@ export interface BooksFilter {
   status?: string;
   /** Assignment filter: "mine" (assigned to me) | "assigned" (has any assignee) | "unassigned". */
   assign?: string;
+  /** "gt40" → only books with more than 40 interior pages (data.specifications.pages). */
+  interior?: string;
 }
 
 /** Books list (GET {base}/books → { data, meta }). Filters run server-side. */
@@ -37,14 +39,16 @@ export function useBooks(page = 1, limit = 20, filter: BooksFilter = {}): UseBoo
   const cat = filter.cat ?? "";
   const status = filter.status && filter.status !== "all" ? filter.status : "";
   const assign = filter.assign && filter.assign !== "all" ? filter.assign : "";
+  const interior = filter.interior && filter.interior !== "" ? filter.interior : "";
   const query = useQuery({
-    queryKey: ["coloring", "books", page, limit, q, cat, status, assign],
+    queryKey: ["coloring", "books", page, limit, q, cat, status, assign, interior],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (q) params.set("q", q);
       if (cat) params.set("cat", cat);
       if (status) params.set("status", status);
       if (assign) params.set("assign", assign);
+      if (interior) params.set("interior", interior);
       return httpGet<BooksResponse>(`${COLORING_API_BASE}/books?${params.toString()}`);
     },
     // Keep showing the previous page/results while the next query loads so the

@@ -10,7 +10,7 @@ export interface BookPageLabel {
 }
 
 /** Visual tone for a page, driven by its section + (for interior) its origin. */
-export type BookPageTone = "cover" | "intro" | "interior" | "additional";
+export type BookPageTone = "cover" | "intro" | "interior" | "additional" | "colored";
 
 /**
  * Display label for a book page. `index` is the page's position in `interior`

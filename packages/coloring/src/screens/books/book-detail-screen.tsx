@@ -72,6 +72,7 @@ const TONE_STYLE: Record<BookPageTone, { border: string; bg?: string; label: str
   intro:      { border: "var(--volt-500)", bg: "var(--volt-200)",  label: "Intro" },
   interior:   { border: "var(--border)",                            label: "Interior" },
   additional: { border: "var(--warning)", bg: "color-mix(in srgb, var(--warning) 14%, var(--neutral-100))", label: "Additional" },
+  colored:    { border: "var(--success)", bg: "var(--success-bg)", label: "Colored" },
 };
 
 /** Rich per-page analyze block: scene, characters + prompts, locations + prompts, prompt. */
@@ -211,6 +212,16 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const pages = b.coloringPages ?? [];
   const cloneJobId = typeof b.data?.cloneJobId === "string" ? b.data.cloneJobId : undefined;
   const colored = pages.filter((p) => p.coloredUrl).length;
+  // D4c cover candidates (each "Push to Cover" appends one). The Cover section in
+  // the "Trang sách" tab shows them all — selected one labelled "Bìa", the rest by
+  // origin — instead of only the single live cover. Legacy books (none) fall back.
+  const coverCandidates = (b.data?.coverCandidates ?? []) as CoverCandidate[];
+  const selectedCoverCandidateId = typeof b.data?.selectedCoverCandidateId === "string" ? b.data.selectedCoverCandidateId : undefined;
+  // Split for the "Trang sách" tab: colored pages get their own section; the
+  // Interior section shows only B&W. Keep each page's ORIGINAL index (for labels
+  // + preview prev/next via openPageAt).
+  const coloredPages = pages.map((p, i) => ({ p, i })).filter((x) => Boolean(x.p.coloredUrl));
+  const bwPages = pages.map((p, i) => ({ p, i })).filter((x) => !x.p.coloredUrl);
   const samples = (b.summaryPages ?? []).slice(0, 3);
   const specs = b.specifications;
   const edited = Boolean(getBookPatch(bookId));
@@ -459,7 +470,24 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                 <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  {cover && (
+                  {coverCandidates.length > 0 ? (
+                    <PageSection tone="cover" count={coverCandidates.length}>
+                      {coverCandidates.map((c) => {
+                        const isSel = c.id === selectedCoverCandidateId;
+                        const label = isSel ? "Bìa" : c.origin === "pushed" ? "Push" : "Nguồn";
+                        const src = resolveImg(c.url);
+                        return (
+                          <PageThumb
+                            key={c.id}
+                            page={{ id: c.id, url: c.url } as BookColoringPage}
+                            displayNumber={label}
+                            tone="cover"
+                            onClick={() => { setPreviewPage(null); setPreviewIdx(null); setPreview({ title: isSel ? "Bìa (đang chọn)" : `Cover · ${label}`, imageSrc: src }); }}
+                          />
+                        );
+                      })}
+                    </PageSection>
+                  ) : cover ? (
                     <PageSection tone="cover" count={1}>
                       <PageThumb
                         page={{ id: "cover", url: (b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl) ?? "" } as BookColoringPage}
@@ -467,6 +495,22 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                         tone="cover"
                         onClick={openCoverPreview}
                       />
+                    </PageSection>
+                  ) : null}
+                  {coloredPages.length > 0 && (
+                    <PageSection tone="colored" count={coloredPages.length}>
+                      {coloredPages.map(({ p, i }) => {
+                        const label = deriveBookPageLabel(p, i, pages);
+                        return (
+                          <PageThumb
+                            key={p.id || i}
+                            page={p}
+                            displayNumber={label.displayNumber}
+                            tone="colored"
+                            onClick={() => openPageAt(i)}
+                          />
+                        );
+                      })}
                     </PageSection>
                   )}
                   {(b.summaryPages ?? []).length > 0 && (
@@ -482,9 +526,9 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                       ))}
                     </PageSection>
                   )}
-                  {pages.length > 0 && (
-                    <PageSection tone="interior" count={pages.length}>
-                      {pages.map((p, i) => {
+                  {bwPages.length > 0 && (
+                    <PageSection tone="interior" count={bwPages.length}>
+                      {bwPages.map(({ p, i }) => {
                         const label = deriveBookPageLabel(p, i, pages);
                         return (
                           <PageThumb
