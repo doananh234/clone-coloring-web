@@ -43,6 +43,14 @@ export async function GET(req: NextRequest) {
   // which must only show work that's actually in someone's queue).
   else if (assign === "assigned") and.push({ assignedToId: { not: null } });
 
+  // Temporary "Interior > 40" filter. Interior count is mirrored in the
+  // denormalized data.specifications.pages (a JSON number == coloringPages length),
+  // so we filter server-side without loading the heavy coloringPages array.
+  const interior = (searchParams.get("interior") || "").trim();
+  if (interior === "gt40") {
+    and.push({ data: { path: ["specifications", "pages"], gt: 40 } });
+  }
+
   const where: Prisma.BookWhereInput = and.length ? { AND: and } : {};
 
   try {

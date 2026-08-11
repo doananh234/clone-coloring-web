@@ -62,12 +62,14 @@ export function BooksScreen() {
   const [cat] = useQueryParam("cat", "");
   const [status] = useQueryParam("status", "pub");
   const [assignFilter] = useQueryParam("assign", "all");
+  const [interior] = useQueryParam("interior", "");
   const setParams = useSetQueryParams();
   // Changing any filter resets to page 1 (else you land on an out-of-range/empty page).
   const setQ = (v: string) => setParams({ q: v || null, page: null });
   const setCat = (v: string) => setParams({ cat: v || null, page: null });
   const setStatus = (v: string) => setParams({ status: v, page: null });
   const setAssignFilter = (v: string) => setParams({ assign: v === "all" ? null : v, page: null });
+  const setInterior = (v: string) => setParams({ interior: v || null, page: null });
 
   // Debounced search: the input updates instantly for a responsive feel, but the
   // URL param `q` (which drives the API fetch) is only written after typing
@@ -84,7 +86,7 @@ export function BooksScreen() {
   }, [searchText, q]);
   // Search/category/status all filter server-side (full library, every page) —
   // not client-side on the current page (the old "search only in this page" bug).
-  const { books, total, totalPages, isLoading, isError } = useBooks(page, 24, { q, cat, status, assign: assignFilter });
+  const { books, total, totalPages, isLoading, isError } = useBooks(page, 24, { q, cat, status, assign: assignFilter, interior });
 
   const shown = useMemo(() => books.map(applyBookPatch), [books]);
   const catOptions = useMemo(() => {
@@ -131,6 +133,7 @@ export function BooksScreen() {
           <div style={{ width: 170 }}><Select value={cat} onChange={setCat} options={catOptions} /></div>
           <div style={{ width: 150 }}><Select value={status} onChange={setStatus} options={[{ label: "Tất cả", value: "all" }, { label: "Đã duyệt", value: "pub" }, { label: "Nháp", value: "draft" }]} /></div>
           <div style={{ width: 150 }}><Select value={assignFilter} onChange={setAssignFilter} options={[{ label: "Tất cả", value: "all" }, { label: "Của tôi", value: "mine" }, { label: "Chưa giao", value: "unassigned" }]} /></div>
+          <div style={{ width: 160 }}><Select value={interior} onChange={setInterior} options={[{ label: "Tất cả", value: "" }, { label: "Interior > 40", value: "gt40" }]} /></div>
           <Button size="sm" onClick={() => router.push(`${B}/books/new`)}><Icon name="plus" size={16} /> Tạo sách</Button>
         </div>
       </div>
@@ -162,7 +165,7 @@ export function BooksScreen() {
       ) : isError ? (
         <Card><ErrorState sub="Không gọi được /api/books." /></Card>
       ) : shown.length === 0 ? (
-        q || cat || status !== "all" || assignFilter !== "all" ? (
+        q || cat || status !== "all" || assignFilter !== "all" || interior ? (
           <Card><EmptyState icon="book-open" title="Không khớp" sub="Không có sách nào khớp tìm kiếm/bộ lọc." /></Card>
         ) : (
           <Card><EmptyState icon="book-open" title="Thư viện trống" sub="Sách sẽ xuất hiện sau khi clone job hoàn tất." /></Card>
