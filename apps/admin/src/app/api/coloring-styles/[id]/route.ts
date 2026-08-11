@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
 import { buildColorizationDirective } from "@vx/server-core/ai/prompts";
+import { normalizeTags } from "@vx/coloring/data/tags";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +20,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const body = await req.json();
     const { id: _, createdAt: __, regenerateDirective, newReferenceImageUrls, ...data } = body;
+    if (Array.isArray(data.tags)) data.tags = normalizeTags(data.tags);
 
     // Regenerate directive from style properties if requested
     if (regenerateDirective) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
+import { normalizeTags } from "@vx/coloring/data/tags";
 
 export async function GET() {
   try {
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
         fillBehavior: fillBehavior || {},
         overallFeel: overallFeel || {},
         colorizationDirective: colorizationDirective || "",
-        tags: tags || [],
+        tags: normalizeTags(tags || []),
         sourceBookId: sourceBookId || null,
         data: { source: "manual" },
       },
