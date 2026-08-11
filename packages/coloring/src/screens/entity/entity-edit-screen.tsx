@@ -14,6 +14,9 @@ import { useSaveEntity } from "../../data/use-write";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { ENTITY_KINDS } from "./entity-detail-screen";
 import { humanize, editableStringFields } from "./entity-fields";
+import { TagsInput } from "../../components/ui/tags-input";
+import { useEntityList } from "../../data/use-entity-list";
+import { collectTags } from "../../data/tags";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -41,6 +44,8 @@ export function EntityEditScreen({ kind, id }: { kind: string; id: string }) {
   const { entity, isLoading, isError } = useEntity(cfg?.path ?? "", id);
   const saveEntity = useSaveEntity(kind, id);
   const [form, setForm] = useState<Record<string, string> | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
+  const { items: styleItems } = useEntityList(cfg?.path ?? "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -49,10 +54,10 @@ export function EntityEditScreen({ kind, id }: { kind: string; id: string }) {
       const init: Record<string, string> = {
         name: (entity.displayName as string) || (entity.name as string) || "",
         description: (entity.description as string) || "",
-        tags: Array.isArray(entity.tags) ? (entity.tags as string[]).join(", ") : "",
       };
       for (const k of editableStringFields(entity)) init[k] = entity[k] as string;
       setForm(init);
+      setTags(Array.isArray(entity.tags) ? (entity.tags as string[]) : []);
     }
   }, [entity, form]);
 
@@ -79,7 +84,7 @@ export function EntityEditScreen({ kind, id }: { kind: string; id: string }) {
     const patch: Record<string, unknown> = {
       [nameKey]: form.name,
       description: form.description,
-      tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+      tags,
     };
     for (const k of extraKeys) patch[k] = form[k];
     setSaving(true);
@@ -109,7 +114,7 @@ export function EntityEditScreen({ kind, id }: { kind: string; id: string }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <Field label="Tên"><Input value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
           <Field label="Mô tả"><Area value={form.description} onChange={(v) => set("description", v)} /></Field>
-          <Field label="Tags"><Input value={form.tags} onChange={(e) => set("tags", e.target.value)} placeholder="cách nhau bằng dấu phẩy" /></Field>
+          <Field label="Tags"><TagsInput value={tags} onChange={setTags} suggestions={collectTags(styleItems)} /></Field>
         </div>
       </Card>
 
