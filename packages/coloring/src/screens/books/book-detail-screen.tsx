@@ -420,7 +420,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
           />
           {tab === "info" ? (
             <>
-              <Card title="Cover candidates">
+              <Card title={coverCandidates.length > 0 ? `Cover Candidates · ${coverCandidates.length}` : "Cover"}>
                 {coverCandidates.length > 0 ? (
                   <CoverCandidatesStrip
                     bookId={bookId}

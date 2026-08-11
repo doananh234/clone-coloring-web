@@ -39,8 +39,8 @@ export function CoverCandidatesStrip({
   if (candidates.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: ".04em" }}>Cover candidates · {candidates.length}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* Header lives on the parent Card title ("Cover Candidates · N") — no duplicate here. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
         {candidates.map((c) => {
           const isSel = c.id === selectedId;
