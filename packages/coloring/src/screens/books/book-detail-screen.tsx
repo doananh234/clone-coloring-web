@@ -217,11 +217,10 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   // origin — instead of only the single live cover. Legacy books (none) fall back.
   const coverCandidates = (b.data?.coverCandidates ?? []) as CoverCandidate[];
   const selectedCoverCandidateId = typeof b.data?.selectedCoverCandidateId === "string" ? b.data.selectedCoverCandidateId : undefined;
-  // Split for the "Trang sách" tab: colored pages get their own section; the
-  // Interior section shows only B&W. Keep each page's ORIGINAL index (for labels
-  // + preview prev/next via openPageAt).
+  // "Trang sách" tab: colorized pages get their OWN "Colored" section (colored
+  // result), while the Interior section still lists EVERY page as B&W line-art.
+  // Keep each page's ORIGINAL index (for labels + preview prev/next via openPageAt).
   const coloredPages = pages.map((p, i) => ({ p, i })).filter((x) => Boolean(x.p.coloredUrl));
-  const bwPages = pages.map((p, i) => ({ p, i })).filter((x) => !x.p.coloredUrl);
   const samples = (b.summaryPages ?? []).slice(0, 3);
   const specs = b.specifications;
   const edited = Boolean(getBookPatch(bookId));
@@ -526,14 +525,17 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                       ))}
                     </PageSection>
                   )}
-                  {bwPages.length > 0 && (
-                    <PageSection tone="interior" count={bwPages.length}>
-                      {bwPages.map(({ p, i }) => {
+                  {pages.length > 0 && (
+                    <PageSection tone="interior" count={pages.length}>
+                      {pages.map((p, i) => {
                         const label = deriveBookPageLabel(p, i, pages);
                         return (
                           <PageThumb
                             key={p.id || i}
-                            page={p}
+                            // Interior always shows the B&W line-art (strip coloredUrl so the
+                            // thumb falls back to page.url + hides the "MÀU" badge). Colorized
+                            // pages still appear here as B&W AND in the Colored section.
+                            page={{ ...p, coloredUrl: undefined }}
                             displayNumber={label.displayNumber}
                             tone={bookPageTone("interior", p)}
                             onClick={() => openPageAt(i)}
