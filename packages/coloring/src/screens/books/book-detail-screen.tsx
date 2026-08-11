@@ -212,6 +212,11 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const pages = b.coloringPages ?? [];
   const cloneJobId = typeof b.data?.cloneJobId === "string" ? b.data.cloneJobId : undefined;
   const colored = pages.filter((p) => p.coloredUrl).length;
+  // D4c cover candidates (each "Push to Cover" appends one). The Cover section in
+  // the "Trang sách" tab shows them all — selected one labelled "Bìa", the rest by
+  // origin — instead of only the single live cover. Legacy books (none) fall back.
+  const coverCandidates = (b.data?.coverCandidates ?? []) as CoverCandidate[];
+  const selectedCoverCandidateId = typeof b.data?.selectedCoverCandidateId === "string" ? b.data.selectedCoverCandidateId : undefined;
   // Split for the "Trang sách" tab: colored pages get their own section; the
   // Interior section shows only B&W. Keep each page's ORIGINAL index (for labels
   // + preview prev/next via openPageAt).
@@ -465,7 +470,24 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                 <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  {cover && (
+                  {coverCandidates.length > 0 ? (
+                    <PageSection tone="cover" count={coverCandidates.length}>
+                      {coverCandidates.map((c) => {
+                        const isSel = c.id === selectedCoverCandidateId;
+                        const label = isSel ? "Bìa" : c.origin === "pushed" ? "Push" : "Nguồn";
+                        const src = resolveImg(c.url);
+                        return (
+                          <PageThumb
+                            key={c.id}
+                            page={{ id: c.id, url: c.url } as BookColoringPage}
+                            displayNumber={label}
+                            tone="cover"
+                            onClick={() => { setPreviewPage(null); setPreviewIdx(null); setPreview({ title: isSel ? "Bìa (đang chọn)" : `Cover · ${label}`, imageSrc: src }); }}
+                          />
+                        );
+                      })}
+                    </PageSection>
+                  ) : cover ? (
                     <PageSection tone="cover" count={1}>
                       <PageThumb
                         page={{ id: "cover", url: (b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl) ?? "" } as BookColoringPage}
@@ -474,7 +496,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                         onClick={openCoverPreview}
                       />
                     </PageSection>
-                  )}
+                  ) : null}
                   {coloredPages.length > 0 && (
                     <PageSection tone="colored" count={coloredPages.length}>
                       {coloredPages.map(({ p, i }) => {
