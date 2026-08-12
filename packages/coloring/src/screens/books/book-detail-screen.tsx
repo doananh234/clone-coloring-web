@@ -137,9 +137,9 @@ function PageSection({ tone, count, children }: { tone: BookPageTone; count: num
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ width: 10, height: 10, borderRadius: 3, background: t.border }} />
-        <span style={{ ...cap }}>{t.label}</span>
-        <span style={{ ...mono, fontSize: 12, color: "var(--muted-foreground)" }}>{count}</span>
+        <span style={{ width: 11, height: 11, borderRadius: 3, background: t.border }} />
+        <span style={{ ...cap, fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{t.label}</span>
+        <span style={{ ...mono, fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{count}</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
         {children}
@@ -268,6 +268,29 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
       ),
     });
   };
+
+  // Shared cover block — identical UI/UX in both the "Tổng quan" and "Trang sách"
+  // tabs (single source of truth so the two can't drift out of sync again).
+  const coverCard = (
+    <Card title={coverCandidates.length > 0 ? `Cover Candidates · ${coverCandidates.length}` : "Cover"}>
+      {coverCandidates.length > 0 ? (
+        <CoverCandidatesStrip
+          bookId={bookId}
+          candidates={coverCandidates}
+          selectedId={selectedCoverCandidateId}
+          onPreview={(url, title) => { setPreviewPage(null); setPreviewIdx(null); setPreview({ title, imageSrc: resolveImg(url) }); }}
+        />
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
+          {cover ? (
+            <Thumb src={cover} caption="Bìa hiện tại" badge="BÌA" onClick={openCoverPreview} />
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Chưa có cover candidate.</div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -420,25 +443,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
           />
           {tab === "info" ? (
             <>
-              <Card title={coverCandidates.length > 0 ? `Cover Candidates · ${coverCandidates.length}` : "Cover"}>
-                {coverCandidates.length > 0 ? (
-                  <CoverCandidatesStrip
-                    bookId={bookId}
-                    candidates={coverCandidates}
-                    selectedId={selectedCoverCandidateId}
-                    coverMeta={coverMetaObj}
-                    onPreview={(url, title) => { setPreviewPage(null); setPreviewIdx(null); setPreview({ title, imageSrc: resolveImg(url) }); }}
-                  />
-                ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
-                    {cover ? (
-                      <Thumb src={cover} caption="Bìa hiện tại" badge="BÌA" onClick={openCoverPreview} />
-                    ) : (
-                      <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Chưa có cover candidate.</div>
-                    )}
-                  </div>
-                )}
-              </Card>
+              {coverCard}
               {b.description && (
                 <Card title="Mô tả"><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{b.description}</div></Card>
               )}
@@ -447,38 +452,13 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
           ) : tab === "meta" ? (
             <BookInformationTab b={b} pages={pages} />
           ) : tab === "pages" ? (
-            <Card title={`Trang sách · ${pages.length}`}>
-              {pages.length === 0 && (b.summaryPages ?? []).length === 0 && !cover ? (
+            <>
+              {coverCard}
+              <Card>
+              {pages.length === 0 && (b.summaryPages ?? []).length === 0 ? (
                 <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  {coverCandidates.length > 0 ? (
-                    <PageSection tone="cover" count={coverCandidates.length}>
-                      {coverCandidates.map((c) => {
-                        const isSel = c.id === selectedCoverCandidateId;
-                        const label = isSel ? "Bìa" : c.origin === "pushed" ? "Push" : "Nguồn";
-                        const src = resolveImg(c.url);
-                        return (
-                          <PageThumb
-                            key={c.id}
-                            page={{ id: c.id, url: c.url } as BookColoringPage}
-                            displayNumber={label}
-                            tone="cover"
-                            onClick={() => { setPreviewPage(null); setPreviewIdx(null); setPreview({ title: isSel ? "Bìa (đang chọn)" : `Cover · ${label}`, imageSrc: src }); }}
-                          />
-                        );
-                      })}
-                    </PageSection>
-                  ) : cover ? (
-                    <PageSection tone="cover" count={1}>
-                      <PageThumb
-                        page={{ id: "cover", url: (b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl) ?? "" } as BookColoringPage}
-                        displayNumber="Bìa"
-                        tone="cover"
-                        onClick={openCoverPreview}
-                      />
-                    </PageSection>
-                  ) : null}
                   {coloredPages.length > 0 && (
                     <PageSection tone="colored" count={coloredPages.length}>
                       {coloredPages.map(({ p, i }) => {
@@ -529,7 +509,8 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                   )}
                 </div>
               )}
-            </Card>
+              </Card>
+            </>
           ) : (
             <Card title="Chọn hình · Regen hàng loạt">
               <PageBatchSelect bookId={bookId} pages={pages} cloneJobId={cloneJobId} />
