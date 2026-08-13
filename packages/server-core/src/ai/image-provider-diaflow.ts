@@ -521,14 +521,23 @@ function parseOneShotFromLoopOutputNode(
     for (const item of items) {
       if (!item || typeof item !== "object") continue;
       const o = item as Record<string, unknown>;
-      const imgPath = findFirstImagePathInObject(o);
+      const analyzeData = normalizeLlmOutput(findFirstLlmOutputInObject(o));
+
+      // Intro pages (isIntro) render their title/intro variant into
+      // `image_generation_1_output`; cover/interior use the default index-0
+      // image. Prefer index 1 for intros, falling back to the first image key
+      // when the flow didn't emit a second render.
+      const isIntro =
+        (analyzeData as { isIntro?: unknown } | null | undefined)?.isIntro === true;
+      let imgPath = isIntro ? findImagePathAtIndex(o, 1) : "";
+      if (!imgPath) imgPath = findFirstImagePathInObject(o);
       if (!imgPath) continue; // skip error items like {error, iteration}
-      const llmRaw = findFirstLlmOutputInObject(o);
+
       const originalUrl = findOriginalImageUrlInObject(o);
       pages.push({
         redesignedImageUrl: toCdnUrl(imgPath),
         originalImageUrl: originalUrl ? toCdnUrl(originalUrl) : undefined,
-        analyzeData: normalizeLlmOutput(llmRaw),
+        analyzeData,
       });
     }
     if (pages.length > 0) return pages;
@@ -652,6 +661,22 @@ function findFirstImagePathInObject(o: Record<string, unknown>): string {
   for (const k of ["image", "image_url", "url", "path"]) {
     const v = o[k];
     if (typeof v === "string" && v.length > 0) return v;
+  }
+  return "";
+}
+
+/**
+ * Return the `image_generation_<index>_output` value for a specific node index.
+ * Intro pages carry a second generated image (index 1 — the title/intro
+ * variant) alongside the default index-0 render; the loop-output parser uses
+ * this to pick index 1 for intros while cover/interior keep index 0.
+ * Returns "" when that index isn't present.
+ */
+function findImagePathAtIndex(o: Record<string, unknown>, index: number): string {
+  for (const [k, v] of Object.entries(o)) {
+    if (typeof v !== "string" || !v) continue;
+    const m = k.match(/^image[_-]generation[_-](\d+)[_-]output$/i);
+    if (m && Number(m[1]) === index) return v;
   }
   return "";
 }

@@ -1,4 +1,4 @@
-import { colorizeImage } from "../ai";
+import { generateCoverSource } from "../ai";
 import { visionAnalyzeJSON } from "../ai/llm-provider";
 import { COLORING_STYLE_EXTRACTION_PROMPT } from "../ai/prompts";
 import {
@@ -13,8 +13,9 @@ import { generateAiCover } from "./generate-ai-cover";
  * SHARED `GenerateCoverDeps` wiring for `stepGenerateCover` (@vx/clone-core).
  *
  * SINGLE SOURCE OF TRUTH for the dependency object that regenerates a book
- * cover: extract source-page coloring style → colorize the middle page →
- * AI cover typography → upload to R2. Consumed by BOTH:
+ * cover: extract source-page coloring style → colorize + recompose the middle
+ * page into a cover-source layout → AI cover typography → upload to R2.
+ * Consumed by BOTH:
  *   - apps/worker (processor/step-deps.ts re-exports this)
  *   - apps/admin  (POST /api/clone/regenerate-covers backfill route)
  *
@@ -44,11 +45,14 @@ async function uploadToR2(args: {
 }
 
 export const generateCoverDeps = {
-  colorizeImage: (
+  // Colorize + recompose the middle page into a text-free cover-source layout
+  // (title-safe area up top, illustration in the lower band). Single combined
+  // image-to-image call — no separate plain-colorized asset is produced.
+  generateCoverSource: (
     imageUrl: string,
     directive: string,
     opts?: { referenceImageUrls?: string[] },
-  ) => colorizeImage(imageUrl, directive, opts),
+  ) => generateCoverSource(imageUrl, directive, opts),
   generateAiCover,
   // Extract the source page's coloring style (palette + directive) so the
   // cover keeps the original book's look — same prompt the admin's create-book

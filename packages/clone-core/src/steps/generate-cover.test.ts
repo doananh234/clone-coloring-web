@@ -68,6 +68,9 @@ function makeDb() {
           referenceImages: [],
         }),
         findUnique: vi.fn().mockResolvedValue(OK_STYLE),
+        // upsertColoringStyleWithVariant looks up an existing same-named style;
+        // null → it takes the create path (returns the "src-style" row above).
+        findFirst: vi.fn().mockResolvedValue(null),
         // Only hit as a last-resort fallback when extraction produces nothing.
         findMany: vi.fn().mockResolvedValue([OK_STYLE]),
       },
@@ -88,7 +91,7 @@ function makeDeps() {
       name: "Source Cover Style",
       colorizationDirective: "source cover style",
     }),
-    colorizeImage: vi.fn().mockResolvedValue({
+    generateCoverSource: vi.fn().mockResolvedValue({
       base64: Buffer.from("colorized").toString("base64"),
       dataUrl: "data:image/png;base64,Y29sb3JpemVk",
     }),
@@ -115,37 +118,34 @@ describe("stepGenerateCover — happy path", () => {
 
     // Style comes from the SOURCE page, not a random DB pick.
     expect(deps.extractColoringStyle).toHaveBeenCalledWith("https://r2/source/cover.png");
-    // Middle page: 4 pages → floor(4/2)=2, 1-indexed page 2 → coloringPages[1].
-    // Directive is the extracted source-cover directive, not the random style.
-    expect(deps.colorizeImage).toHaveBeenCalledWith(
-      "https://r2/pages/2.png",
-      "source cover style",
-      { referenceImageUrls: [] },
-    );
+    // Cover source is now a RANDOM interior page (1 of 4). Directive is the
+    // extracted source-cover directive, not the brand-default style.
+    const coverCall = deps.generateCoverSource.mock.calls[0] as [
+      string,
+      string,
+      { referenceImageUrls: string[] },
+    ];
+    expect(coverCall[0]).toMatch(/^https:\/\/r2\/pages\/[1-4]\.png$/);
+    expect(coverCall[1]).toBe("source cover style");
+    // The extracted source style carries the source cover as a style reference.
+    expect(coverCall[2]).toEqual({
+      referenceImageUrls: ["https://r2/source/cover.png"],
+    });
     // findMany (the old random-pick path) must NOT be used on the happy path.
     expect(
       (db as { coloringStyle: { findMany: ReturnType<typeof vi.fn> } }).coloringStyle.findMany,
     ).not.toHaveBeenCalled();
-    // Shared module owns the AI blend + upload of the final cover.
-    expect(deps.generateAiCover).toHaveBeenCalledTimes(1);
-    const aiCall = deps.generateAiCover.mock.calls[0][0] as {
-      cleanImageUrl: string;
-      brandName: string;
-      titleHint?: string;
-      subtitleHint?: string;
-      r2Key: string;
-    };
-    expect(aiCall.cleanImageUrl).toBe("https://r2/cover/thumbnail.png");
-    expect(aiCall.brandName).toBe("Cozy Brand");
-    expect(aiCall.titleHint).toBe("My Cover");
-    expect(aiCall.subtitleHint).toBe("My Sub");
-    expect(aiCall.r2Key).toBe("assets/clone-jobs/j1/cover/cover-ai.png");
-    // Only the thumbnail upload happens inside the step; the AI cover upload
-    // lives in generateAiCover.
+    // CLEAN cover source: the step does NOT bake typography here — it stores
+    // the text-free recomposed illustration and leaves generateAiCover for the
+    // on-demand Cover editor. So generateAiCover is NOT called in the worker.
+    expect(deps.generateAiCover).not.toHaveBeenCalled();
+    // Only the cover-source thumbnail is uploaded inside the step.
     expect(deps.uploadToR2).toHaveBeenCalledTimes(1);
 
     const update = bookUpdates[0];
-    expect(update.coverUrl).toBe("https://r2/cover/cover-ai.png?v=1");
+    // coverUrl points at the clean text-free cover source (= thumbnail), not a
+    // typography-baked AI cover.
+    expect(update.coverUrl).toBe("https://r2/cover/thumbnail.png");
     expect(update.thumbnailUrl).toBe("https://r2/cover/thumbnail.png");
     expect(update.squareThumbnailUrl).toBe("https://r2/cover/thumbnail.png");
     const meta = (update.data as { coverMeta: Record<string, unknown> }).coverMeta;
@@ -155,7 +155,10 @@ describe("stepGenerateCover — happy path", () => {
     expect(meta.brandId).toBe("b1");
     // Style row created from the source cover, not the brand default "cs1".
     expect(meta.coloringStyleId).toBe("src-style");
-    expect(meta.middlePageIndex).toBe(2);
+    // Random interior index (1-4), and it must match the page actually used.
+    expect(meta.middlePageIndex).toBeGreaterThanOrEqual(1);
+    expect(meta.middlePageIndex).toBeLessThanOrEqual(4);
+    expect(coverCall[0]).toBe(`https://r2/pages/${meta.middlePageIndex}.png`);
     expect(meta.sourceThumbnailUrl).toBe("https://r2/cover/thumbnail.png");
     expect(ctx.markStepComplete).toHaveBeenCalledWith("generate-cover");
   });
@@ -202,8 +205,8 @@ describe("stepGenerateCover — failure paths", () => {
     expect(
       (db as { coloringStyle: { create: ReturnType<typeof vi.fn> } }).coloringStyle.create,
     ).not.toHaveBeenCalled();
-    expect(deps.colorizeImage).toHaveBeenCalledWith(
-      "https://r2/pages/2.png",
+    expect(deps.generateCoverSource).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/r2\/pages\/[1-4]\.png$/),
       "watercolor style",
       { referenceImageUrls: [] },
     );
@@ -223,11 +226,11 @@ describe("stepGenerateCover — failure paths", () => {
     );
   });
 
-  it("throws when colorizeImage fails and marks coverMeta.status=failed", async () => {
+  it("throws when generateCoverSource fails and marks coverMeta.status=failed", async () => {
     const { db, bookUpdates } = makeDb();
     const ctx = fakeCtx("j1", "book1");
     const deps = makeDeps();
-    deps.colorizeImage.mockRejectedValueOnce(new Error("Diaflow 500"));
+    deps.generateCoverSource.mockRejectedValueOnce(new Error("Diaflow 500"));
 
     await expect(stepGenerateCover(ctx, db, deps)).rejects.toThrow(/Diaflow 500/);
     const failedUpdate = bookUpdates.find(
@@ -266,7 +269,7 @@ describe("stepGenerateCover — failure paths", () => {
     const deps = makeDeps();
 
     await stepGenerateCover(ctx, db, deps);
-    expect(deps.colorizeImage).toHaveBeenCalledWith(
+    expect(deps.generateCoverSource).toHaveBeenCalledWith(
       "https://r2/only.png",
       expect.any(String),
       expect.any(Object),

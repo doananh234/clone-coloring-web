@@ -4,9 +4,12 @@ import type { CoverMeta } from "@vx/server-core/text-overlay";
 import { upsertColoringStyleWithVariant } from "./upsert-coloring-style-with-variant";
 
 /**
- * Post-create hook — colorizes the middle B&W page, then delegates cover
- * typography to the SHARED cover-generation module (single source of truth
- * for prompt + font selection + upload logic, also used by the admin's
+ * Post-create hook — colorizes the middle B&W page AND recomposes it into a
+ * text-free book-cover-source layout (main illustration in the lower 55–70%,
+ * clean title-safe area up top with a sparse on-brand background pattern) via
+ * a single combined image-to-image call (generateCoverSource). The result is
+ * stored as the clean cover/thumbnail; typography is added on-demand later by
+ * the SHARED cover-generation module (generateAiCover, also used by the admin's
  * /api/generate/cover-export). Updates the Book row with cover + clean
  * thumbnail + coverMeta.
  *
@@ -14,7 +17,14 @@ import { upsertColoringStyleWithVariant } from "./upsert-coloring-style-with-var
  */
 
 export interface GenerateCoverDeps {
-  colorizeImage: (
+  /**
+   * Colorizes the B&W middle page AND recomposes it into a text-free
+   * cover-source layout (main illustration in the lower 55–70%, clean
+   * title-safe area up top with a sparse on-brand background pattern) in a
+   * single combined image-to-image call. Real impl is `generateCoverSource`
+   * from `@vx/server-core/ai`; injected so tests can stub the LLM call.
+   */
+  generateCoverSource: (
     imageUrl: string,
     directive: string,
     opts?: { referenceImageUrls?: string[] },
@@ -246,12 +256,18 @@ export async function stepGenerateCover(
       .map((r) => (typeof r.url === "string" ? deps.resolveR2Url(r.url) : ""))
       .filter(Boolean);
 
-    // 2. Middle page
+    // 2. Cover-source page — pick a RANDOM interior page (was: always the
+    //    middle page). Random each run so retries / regenerations can surface a
+    //    different illustration for the cover instead of locking to the middle.
+    //    Stored below as coverMeta.middlePageIndex (kept for CoverMeta type
+    //    compatibility; now holds the randomly-picked interior index).
     const pages = (book.coloringPages as JobPage[] | null | undefined) ?? [];
     if (pages.length === 0) throw new Error("Book has no coloring pages");
-    const middleIdx = Math.max(1, Math.floor(pages.length / 2));
-    const middlePage = pages[middleIdx - 1];
-    if (!middlePage?.url) throw new Error(`Middle page ${middleIdx} has no url`);
+    const sourceIdx =
+      pages.length === 1 ? 1 : Math.floor(Math.random() * pages.length) + 1;
+    const sourcePage = pages[sourceIdx - 1];
+    if (!sourcePage?.url)
+      throw new Error(`Cover source page ${sourceIdx} has no url`);
 
     // 3. Cover text — pulled from bookData (already populated by stepOneShot)
     const bookData = (job.bookData as Record<string, unknown> | null | undefined) ?? {};
@@ -263,11 +279,13 @@ export async function stepGenerateCover(
     const subtitle =
       (typeof bookData.subtitle === "string" && bookData.subtitle) || "";
 
-    // 4. Colorize (colorizationDirective is guaranteed non-null by the
-    //    stylesWithDirective filter above; cast to satisfy the compiler
-    //    since Array.filter doesn't narrow through a boolean check).
-    const colorized = await deps.colorizeImage(
-      deps.resolveR2Url(middlePage.url),
+    // 4. Colorize + recompose into a cover-source layout in ONE combined call
+    //    (colorizationDirective is guaranteed non-null by the fallback chain
+    //    above; cast to satisfy the compiler since Array.filter doesn't narrow
+    //    through a boolean check). Output is text-free — typography is added
+    //    later by the Cover editor via generateAiCover.
+    const colorized = await deps.generateCoverSource(
+      deps.resolveR2Url(sourcePage.url),
       style.colorizationDirective as string,
       { referenceImageUrls },
     );
@@ -321,8 +339,8 @@ export async function stepGenerateCover(
             coloringStyleId,
             coloringVariantId,
             sourceThumbnailUrl,
-            middlePageIndex: middleIdx,
-            presetId: "ai-typography",
+            middlePageIndex: sourceIdx,
+            presetId: "cover-source-recompose",
             status: "generated" as const,
             generatedAt: new Date().toISOString(),
           },

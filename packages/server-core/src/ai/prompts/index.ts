@@ -10,6 +10,8 @@ export { buildReproductionPrompt } from "./clone-prompt-builder";
 
 export { buildColorizationPrompt } from "./colorization-prompt-template";
 
+export { buildCoverSourcePrompt } from "./cover-source-prompt-template";
+
 export {
   ART_STYLE_EXTRACTION_PROMPT,
   buildDirectiveFromProperties,

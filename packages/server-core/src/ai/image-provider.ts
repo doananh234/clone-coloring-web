@@ -223,3 +223,21 @@ export async function colorizeImage(
   const colorizePrompt = buildColorizationPrompt(colorizationDirective);
   return editImage(imageUrl, colorizePrompt, options);
 }
+
+/**
+ * Cover-source generation — single combined image-to-image call that BOTH
+ * colorizes the B&W page AND recomposes it into a book-cover-ready layout
+ * (main illustration in the lower 55–70%, clean title-safe area up top with a
+ * sparse on-brand background pattern). Output is text-free; typography is added
+ * later by generateAiCover. Mirrors colorizeImage's signature so it can be
+ * swapped straight into the cover pipeline's dependency slot.
+ */
+export async function generateCoverSource(
+  imageUrl: string,
+  colorizationDirective: string,
+  options: ColorizeOptions = {},
+): Promise<GeneratedImage> {
+  const { buildCoverSourcePrompt } = await import("./prompts/cover-source-prompt-template");
+  const coverSourcePrompt = buildCoverSourcePrompt(colorizationDirective);
+  return editImage(imageUrl, coverSourcePrompt, options);
+}

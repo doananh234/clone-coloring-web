@@ -30,6 +30,7 @@ export {
   generateCategoryIcon,
   generateColoringPage,
   colorizeImage,
+  generateCoverSource,
   type ImageGenerationOptions,
   type GeneratedImage,
   type CharacterExtractionOptions,
