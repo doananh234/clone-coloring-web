@@ -26,6 +26,8 @@ import { COLORING_WRITE_ENABLED, COLORING_API_BASE } from "../../data/config";
 import { parsePageScene, hasSceneDetail, type ParsedScene } from "../../data/page-scene";
 import type { BookDetail, BookColoringPage, CoverCandidate } from "../../data/types";
 import { deriveBookPageLabel, bookPageTone, type BookPageTone } from "../../data/book-page-label";
+import { SourceCoverSection } from "./source-cover-section";
+import type { SourceCover } from "../../data/source-covers";
 
 const mono = { fontFamily: "var(--font-mono)" as const };
 const cap = { fontSize: 11, fontWeight: 600 as const, color: "var(--muted-foreground)", textTransform: "uppercase" as const, letterSpacing: "var(--tracking-caps)" };
@@ -204,6 +206,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   // origin — instead of only the single live cover. Legacy books (none) fall back.
   const coverCandidates = (b.data?.coverCandidates ?? []) as CoverCandidate[];
   const selectedCoverCandidateId = typeof b.data?.selectedCoverCandidateId === "string" ? b.data.selectedCoverCandidateId : undefined;
+  const sourceCovers = (b.data?.sourceCovers ?? []) as SourceCover[];
   // "Trang sách" tab: colorized pages get their OWN "Colored" section (colored
   // result), while the Interior section still lists EVERY page as B&W line-art.
   // Keep each page's ORIGINAL index (for labels + preview prev/next via openPageAt).
@@ -265,6 +268,30 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
             </a>
           )}
         </>
+      ),
+    });
+  };
+
+  const openSourceCover = (s: SourceCover) => {
+    const bw = resolveImg(s.url);
+    const colored = resolveImg(s.coloredUrl);
+    setPreviewPage(null);
+    setPreviewIdx(null);
+    setPreview({
+      title: "Source Cover",
+      imageSrc: colored || bw,
+      imageNode: colored && bw ? <ImageComparison beforeSrc={bw} afterSrc={colored} /> : undefined,
+      badges: <Badge tone={s.coloredUrl ? "success" : "neutral"}>{s.coloredUrl ? "Đã tô màu" : "B&W"}</Badge>,
+      actions: (
+        <PageActionsRow
+          bookId={bookId}
+          pages={pages}
+          page={{ id: s.id, url: s.url, coloredUrl: s.coloredUrl, isPublic: s.isPublic } as BookColoringPage}
+          bookData={(b.data ?? undefined) as Record<string, unknown> | undefined}
+          onRemoved={closePreview}
+          variant="sourceCover"
+          sourceCover={s}
+        />
       ),
     });
   };
@@ -454,6 +481,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
           ) : tab === "pages" ? (
             <>
               {coverCard}
+              <SourceCoverSection bookId={bookId} interiors={pages} sourceCovers={sourceCovers} onOpen={openSourceCover} />
               <Card>
               {pages.length === 0 && (b.summaryPages ?? []).length === 0 ? (
                 <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />
@@ -473,6 +501,19 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                           />
                         );
                       })}
+                    </PageSection>
+                  )}
+                  {sourceCovers.some((s) => s.coloredUrl) && (
+                    <PageSection tone="colored" count={sourceCovers.filter((s) => s.coloredUrl).length}>
+                      {sourceCovers.filter((s) => s.coloredUrl).map((s) => (
+                        <PageThumb
+                          key={`sc-${s.id}`}
+                          page={{ id: s.id, url: s.url, coloredUrl: s.coloredUrl, isPublic: s.isPublic } as BookColoringPage}
+                          displayNumber="SC"
+                          tone="colored"
+                          onClick={() => openSourceCover(s)}
+                        />
+                      ))}
                     </PageSection>
                   )}
                   {(b.summaryPages ?? []).length > 0 && (
