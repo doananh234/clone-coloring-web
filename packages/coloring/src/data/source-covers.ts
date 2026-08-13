@@ -29,7 +29,7 @@ export function upsertColoredSourceCover(
 ): SourceCover[] {
   return covers.map((c) =>
     c.id === scId
-      ? { ...c, coloredUrl, coloringStyleId: styleId ?? c.coloringStyleId, coloringVariantId: variantId ?? c.coloringVariantId }
+      ? { ...c, coloredUrl, coloringStyleId: styleId ?? c.coloringStyleId, coloringVariantId: variantId !== undefined ? variantId : c.coloringVariantId }
       : c,
   );
 }

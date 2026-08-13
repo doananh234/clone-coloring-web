@@ -27,4 +27,10 @@ describe("upsertColoredSourceCover", () => {
     const list = [sc({ id: "a" })];
     expect(upsertColoredSourceCover(list, "missing", "/c/x.png")).toEqual(list);
   });
+
+  it("propagates an explicit null variantId (clears the variant)", () => {
+    const list = [sc({ id: "a", coloringVariantId: "v1" })];
+    const next = upsertColoredSourceCover(list, "a", "/c/a.png", "style1", null);
+    expect(next[0].coloringVariantId).toBeNull();
+  });
 });
