@@ -3,11 +3,12 @@ import { prisma } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import { colorizeImage } from "@vx/server-core/ai/image-provider";
 import { flushLangfuse } from "@vx/server-core/langfuse";
+import { upsertColoredSourceCover, type SourceCover } from "@vx/coloring/data/source-covers";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageUrl, coloringStyleId, coloringVariantId, bookId, pageId, useReference = true } = body as {
+    const { imageUrl, coloringStyleId, coloringVariantId, bookId, pageId, useReference = true, target = "page" } = body as {
       imageUrl: string;
       coloringStyleId: string;
       /** Optional color variant within the style — its palette/directive/reference
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
        *  visual anchor alongside the directive. When false, colorize from the
        *  directive text only (prompt-only mode). */
       useReference?: boolean;
+      target?: "page" | "sourceCover";
     };
 
     if (!imageUrl) {
@@ -72,7 +74,9 @@ export async function POST(req: NextRequest) {
 
     let key: string;
     if (bookId && pageId) {
-      key = `assets/${bookId}/pages/${pageId}-colored.png`;
+      key = target === "sourceCover"
+        ? `assets/${bookId}/source-covers/${pageId}-colored.png`
+        : `assets/${bookId}/pages/${pageId}-colored.png`;
     } else {
       key = `assets/coloring-styles/${coloringStyleId}/test-${Date.now()}.png`;
     }
@@ -90,62 +94,71 @@ export async function POST(req: NextRequest) {
       const book = await prisma.book.findUnique({ where: { id: bookId } });
 
       if (book) {
-        let coloringPages = (book.coloringPages as any[]) || [];
-
-        // Migrate legacy orphan entries: merge {pageId, coloredUrl} back into real pages
-        type PageEntry = {
-          id?: string;
-          pageId?: string;
-          url?: string;
-          coloredUrl?: string;
-          coloringStyleId?: string;
-          [k: string]: unknown;
-        };
-        const orphans = (coloringPages as PageEntry[]).filter(
-          (p) => !p.url && p.pageId && p.coloredUrl,
-        );
-        if (orphans.length > 0) {
-          const orphanMap = new Map(orphans.map((o) => [o.pageId!, o]));
-          coloringPages = (coloringPages as PageEntry[])
-            .filter((p) => p.id && p.url) // keep only real pages
-            .map((p) => {
-              const orphan = orphanMap.get(p.id!);
-              if (orphan && !p.coloredUrl) {
-                return {
-                  ...p,
-                  coloredUrl: orphan.coloredUrl,
-                  coloringStyleId: orphan.coloringStyleId,
-                };
-              }
-              return p;
-            });
-        }
-
-        // Find existing entry by `id` and set coloredUrl
-        // Append cache-bust param so value changes even when R2 key is the same
         const coloredUrlWithBust = `${coloredUrl}?v=${Date.now()}`;
-        const existingIdx = coloringPages.findIndex((p: PageEntry) => p.id === pageId);
-
-        if (existingIdx >= 0) {
-          coloringPages[existingIdx].coloredUrl = coloredUrlWithBust;
-          coloringPages[existingIdx].coloringStyleId = coloringStyleId;
-          coloringPages[existingIdx].coloringVariantId = coloringVariantId ?? null;
-          // D4b: keep the selected variant's coloredUrl in sync so switching
-          // variants doesn't lose the colored result.
-          const sel = coloringPages[existingIdx].selectedVariantId as string | undefined;
-          const variants = coloringPages[existingIdx].variants as { id: string; coloredUrl?: string }[] | undefined;
-          if (sel && Array.isArray(variants)) {
-            const vIdx = variants.findIndex((v) => v.id === sel);
-            if (vIdx >= 0) variants[vIdx].coloredUrl = coloredUrlWithBust;
-          }
+        if (target === "sourceCover") {
+          const data = (book.data as Record<string, unknown> | null) ?? {};
+          const sourceCovers = upsertColoredSourceCover(
+            (data.sourceCovers as SourceCover[] | undefined) ?? [],
+            pageId, coloredUrlWithBust, coloringStyleId, coloringVariantId ?? null,
+          );
+          await prisma.book.update({ where: { id: bookId }, data: { data: { ...data, sourceCovers } as never } });
         } else {
-          console.warn(`[colorize] Page ${pageId} not found in book ${bookId} coloringPages`);
-        }
+          let coloringPages = (book.coloringPages as any[]) || [];
 
-        await prisma.book.update({
-          where: { id: bookId },
-          data: { coloringPages },
-        });
+          // Migrate legacy orphan entries: merge {pageId, coloredUrl} back into real pages
+          type PageEntry = {
+            id?: string;
+            pageId?: string;
+            url?: string;
+            coloredUrl?: string;
+            coloringStyleId?: string;
+            [k: string]: unknown;
+          };
+          const orphans = (coloringPages as PageEntry[]).filter(
+            (p) => !p.url && p.pageId && p.coloredUrl,
+          );
+          if (orphans.length > 0) {
+            const orphanMap = new Map(orphans.map((o) => [o.pageId!, o]));
+            coloringPages = (coloringPages as PageEntry[])
+              .filter((p) => p.id && p.url) // keep only real pages
+              .map((p) => {
+                const orphan = orphanMap.get(p.id!);
+                if (orphan && !p.coloredUrl) {
+                  return {
+                    ...p,
+                    coloredUrl: orphan.coloredUrl,
+                    coloringStyleId: orphan.coloringStyleId,
+                  };
+                }
+                return p;
+              });
+          }
+
+          // Find existing entry by `id` and set coloredUrl
+          // Append cache-bust param so value changes even when R2 key is the same
+          const existingIdx = coloringPages.findIndex((p: PageEntry) => p.id === pageId);
+
+          if (existingIdx >= 0) {
+            coloringPages[existingIdx].coloredUrl = coloredUrlWithBust;
+            coloringPages[existingIdx].coloringStyleId = coloringStyleId;
+            coloringPages[existingIdx].coloringVariantId = coloringVariantId ?? null;
+            // D4b: keep the selected variant's coloredUrl in sync so switching
+            // variants doesn't lose the colored result.
+            const sel = coloringPages[existingIdx].selectedVariantId as string | undefined;
+            const variants = coloringPages[existingIdx].variants as { id: string; coloredUrl?: string }[] | undefined;
+            if (sel && Array.isArray(variants)) {
+              const vIdx = variants.findIndex((v) => v.id === sel);
+              if (vIdx >= 0) variants[vIdx].coloredUrl = coloredUrlWithBust;
+            }
+          } else {
+            console.warn(`[colorize] Page ${pageId} not found in book ${bookId} coloringPages`);
+          }
+
+          await prisma.book.update({
+            where: { id: bookId },
+            data: { coloringPages },
+          });
+        }
       }
     }
 

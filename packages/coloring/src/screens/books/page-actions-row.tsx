@@ -7,6 +7,7 @@ import { ColoringStylePickerModal, type StyleSelection } from "../../components/
 import { usePageActions } from "../../data/use-page-actions";
 import { usePageVariants, type RegenAddOpts } from "../../data/use-page-variants";
 import { useCoverCandidates } from "../../data/use-cover-candidates";
+import { useSourceCovers } from "../../data/use-source-covers";
 import { resolveImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
 import type { PageVariant } from "../../data/types";
@@ -23,6 +24,8 @@ export function PageActionsRow({
   page,
   bookData,
   onRemoved,
+  variant = "page",
+  sourceCover,
 }: {
   bookId: string;
   pages: BookColoringPage[];
@@ -30,11 +33,15 @@ export function PageActionsRow({
   /** Full book.data JSON blob — merged (with coverMeta) when setting this page as cover source. */
   bookData?: Record<string, unknown>;
   onRemoved: () => void;
+  variant?: "page" | "sourceCover";
+  sourceCover?: import("../../data/source-covers").SourceCover;
 }) {
   const cloneJobId = typeof bookData?.cloneJobId === "string" ? bookData.cloneJobId : undefined;
   const actions = usePageActions(bookId, cloneJobId);
   const variants = usePageVariants(bookId);
   const coverCandidates = useCoverCandidates(bookId);
+  const sourceCovers = useSourceCovers(bookId);
+  const isSC = variant === "sourceCover" && !!sourceCover;
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenOpts, setRegenOpts] = useState<RegenAddOpts>({ count: 2, source: "A", changePercent: 30 });
   // Book page maps 1:1 by array index to its source clone job page.
@@ -122,10 +129,14 @@ export function PageActionsRow({
           </span>
           <Icon name="chevron-down" size={16} />
         </button>
-        <Button size="sm" disabled={disabled || !sel || busy !== null} onClick={run("colorize", () => actions.colorize(page.id, page.url, sel!.styleId, sel!.variantId))}>
+        <Button size="sm" disabled={disabled || !sel || busy !== null} onClick={run("colorize", () =>
+          isSC
+            ? sourceCovers.colorize(sourceCover!, sel!.styleId, sel!.variantId)
+            : actions.colorize(page.id, page.url, sel!.styleId, sel!.variantId),
+        )}>
           <Icon name="palette" size={15} /> {busy === "colorize" ? "Đang tô…" : "Tô màu"}
         </Button>
-        {actions.canRegen && (
+        {!isSC && actions.canRegen && (
           <>
             <Button variant="outline" size="sm" disabled={disabled || busy !== null || pageIndex < 0} title="Tạo bản vẽ lại (giữ nguyên góc) để xem trước" onClick={doGen(false)}>
               <Icon name="sparkles" size={15} /> {busy === "regen" ? "Đang tạo…" : "Regen"}
@@ -135,10 +146,12 @@ export function PageActionsRow({
             </Button>
           </>
         )}
-        <Button variant="outline" size="sm" disabled={disabled || busy !== null}
-          title="Sinh thêm biến thể (không ghi đè) — chọn nguồn A/B" onClick={() => setRegenOpen((v) => !v)}>
-          <Icon name="sparkles" size={15} /> Regen Thêm
-        </Button>
+        {!isSC && (
+          <Button variant="outline" size="sm" disabled={disabled || busy !== null}
+            title="Sinh thêm biến thể (không ghi đè) — chọn nguồn A/B" onClick={() => setRegenOpen((v) => !v)}>
+            <Icon name="sparkles" size={15} /> Regen Thêm
+          </Button>
+        )}
         {colored && (
           <>
             <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
@@ -153,15 +166,15 @@ export function PageActionsRow({
             </Button>
           </>
         )}
-        <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("pub", () => actions.togglePublic(pages, page.id))}>
+        <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("pub", () => isSC ? sourceCovers.togglePublic(sourceCover!.id) : actions.togglePublic(pages, page.id))}>
           {page.isPublic ? "Ẩn" : "Công khai"}
         </Button>
-        <Button variant="danger" size="sm" disabled={disabled || busy !== null} onClick={run("del", () => actions.removePage(pages, page.id), onRemoved)}>
+        <Button variant="danger" size="sm" disabled={disabled || busy !== null} onClick={run("del", () => isSC ? sourceCovers.remove(sourceCover!.id) : actions.removePage(pages, page.id), onRemoved)}>
           <Icon name="x" size={15} /> Xóa
         </Button>
       </div>
 
-      {regenOpen && (
+      {!isSC && regenOpen && (
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: 10, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", background: "var(--neutral-100)" }}>
           <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 6 }}>Nguồn
             <select value={regenOpts.source} onChange={(e) => setRegenOpts((o) => ({ ...o, source: e.target.value as "A" | "B" }))}
@@ -187,7 +200,7 @@ export function PageActionsRow({
         </div>
       )}
 
-      {page.variants && page.variants.length > 0 && (
+      {!isSC && page.variants && page.variants.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: ".04em" }}>Biến thể · {page.variants.length}</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(88px,1fr))", gap: 8 }}>

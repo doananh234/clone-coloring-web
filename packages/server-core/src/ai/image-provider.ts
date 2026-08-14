@@ -241,3 +241,19 @@ export async function generateCoverSource(
   const coverSourcePrompt = buildCoverSourcePrompt(colorizationDirective);
   return editImage(imageUrl, coverSourcePrompt, options);
 }
+
+/**
+ * B&W cover-source generation — recompose the interior line-art into a cover
+ * LAYOUT (title-safe area at top/middle/bottom, illustration in the rest) while
+ * staying pure black-and-white line art. NEVER colorizes. Uses the same
+ * editImage path as generateCoverSource.
+ */
+export async function generateCoverSourceBW(
+  imageUrl: string,
+  titleSafe: "top" | "middle" | "bottom",
+  options: ColorizeOptions = {},
+): Promise<GeneratedImage> {
+  const { buildCoverSourceBWPrompt } = await import("./prompts/cover-source-bw-prompt-template");
+  const prompt = buildCoverSourceBWPrompt(titleSafe);
+  return editImage(imageUrl, prompt, options);
+}

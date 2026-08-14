@@ -12,6 +12,8 @@ export { buildColorizationPrompt } from "./colorization-prompt-template";
 
 export { buildCoverSourcePrompt } from "./cover-source-prompt-template";
 
+export { buildCoverSourceBWPrompt } from "./cover-source-bw-prompt-template";
+
 export {
   ART_STYLE_EXTRACTION_PROMPT,
   buildDirectiveFromProperties,
