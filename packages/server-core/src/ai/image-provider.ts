@@ -239,7 +239,8 @@ export async function generateCoverSource(
 ): Promise<GeneratedImage> {
   const { buildCoverSourcePrompt } = await import("./prompts/cover-source-prompt-template");
   const coverSourcePrompt = buildCoverSourcePrompt(colorizationDirective);
-  return editImage(imageUrl, coverSourcePrompt, options);
+  // Cover generation runs on Diaflow's GPT-image flow.
+  return editImage(imageUrl, coverSourcePrompt, { ...options, flow: "gpt_image" });
 }
 
 /**
@@ -255,5 +256,6 @@ export async function generateCoverSourceBW(
 ): Promise<GeneratedImage> {
   const { buildCoverSourceBWPrompt } = await import("./prompts/cover-source-bw-prompt-template");
   const prompt = buildCoverSourceBWPrompt(titleSafe);
-  return editImage(imageUrl, prompt, options);
+  // Cover generation runs on Diaflow's GPT-image flow.
+  return editImage(imageUrl, prompt, { ...options, flow: "gpt_image" });
 }

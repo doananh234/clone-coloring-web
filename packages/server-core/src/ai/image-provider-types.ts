@@ -26,6 +26,13 @@ export type GeneratedImage = {
 
 export type ColorizeOptions = ImageGenerationOptions & {
   referenceImageUrls?: string[];
+  /**
+   * Diaflow flow override for the underlying image-to-image call.
+   * Defaults to "image". Cover generation passes "gpt_image" to route
+   * through Diaflow's GPT-image flow. Non-Diaflow providers ignore this.
+   * Output handling is identical — both flows return an "image" output_type.
+   */
+  flow?: "image" | "gpt_image";
 };
 
 export interface ImageProviderInterface {

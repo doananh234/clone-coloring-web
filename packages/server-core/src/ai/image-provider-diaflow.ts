@@ -922,7 +922,7 @@ export const diaflowImageProvider: ImageProviderInterface = {
     prompt: string,
     options: ColorizeOptions & { imageLabel?: string } = {},
   ): Promise<GeneratedImage> {
-    const { referenceImageUrls, imageLabel } = options;
+    const { referenceImageUrls, imageLabel, flow } = options;
 
     // Upload images, then embed remote paths in the request string
     const parts: string[] = [];
@@ -936,7 +936,10 @@ export const diaflowImageProvider: ImageProviderInterface = {
     }
     parts.push(prompt);
 
-    const { extracted } = await runDiaflow({ flow: "image", request: parts.join("\n") });
+    // flow defaults to "image"; cover generation passes "gpt_image" to route
+    // through Diaflow's GPT-image flow. Response parsing is flow-agnostic —
+    // extractFromOutput keys off output_type === "image", not the flow name.
+    const { extracted } = await runDiaflow({ flow: flow ?? "image", request: parts.join("\n") });
 
     if (!extracted.image) {
       throw new Error("Diaflow returned no image in result");
