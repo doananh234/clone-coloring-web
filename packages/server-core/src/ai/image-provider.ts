@@ -256,6 +256,9 @@ export async function generateCoverSourceBW(
 ): Promise<GeneratedImage> {
   const { buildCoverSourceBWPrompt } = await import("./prompts/cover-source-bw-prompt-template");
   const prompt = buildCoverSourceBWPrompt(titleSafe);
-  // Cover generation runs on Diaflow's GPT-image flow.
-  return editImage(imageUrl, prompt, { ...options, flow: "gpt_image" });
+  // Runs on the DEFAULT Diaflow "image" flow — NOT the gpt_image flow. The
+  // gpt_image flow's model ignores the 25/75 title-safe layout (fills the whole
+  // canvas), so the B&W cover-source recompose must stay on the default flow
+  // that respects it. See ceaf66b (which wrongly routed this through gpt_image).
+  return editImage(imageUrl, prompt, options);
 }
