@@ -52,34 +52,6 @@ function getProvider(): ImageProviderInterface {
 }
 
 /**
- * Provider used specifically for COVER generation (generateCoverSource +
- * generateCoverSourceBW), independent of the global IMAGE_PROVIDER.
- *
- * WHY: prod runs IMAGE_PROVIDER=diaflow, but Diaflow's image/gpt_image flows
- * ignore the recompose title-safe LAYOUT (they fill the whole canvas and drop
- * the top band). Azure OpenAI GPT-image-2 respects it — it produced the good
- * reference covers. So covers are pinned to Azure here.
- *
- * REVERT: to undo, delete this helper and point both cover functions back at
- * editImage(...) (the IMAGE_PROVIDER default). Or set COVER_IMAGE_PROVIDER at
- * runtime to force a different provider without a code change.
- */
-function getCoverProvider(): ImageProviderInterface {
-  const provider = process.env.COVER_IMAGE_PROVIDER || "azure";
-  if (provider === "diaflow")
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("./image-provider-diaflow").diaflowImageProvider;
-  if (provider === "vertex")
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("./image-provider-vertex").vertexImageProvider;
-  if (provider === "gemini")
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("./image-provider-gemini").geminiImageProvider;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("./image-provider-azure").azureImageProvider;
-}
-
-/**
  * Normalize image URL: resolve relative R2 paths to full URLs.
  * Ensures any /assets/... path becomes https://cdn.example.com/assets/...
  */
@@ -267,9 +239,8 @@ export async function generateCoverSource(
 ): Promise<GeneratedImage> {
   const { buildCoverSourcePrompt } = await import("./prompts/cover-source-prompt-template");
   const coverSourcePrompt = buildCoverSourcePrompt(colorizationDirective);
-  // Covers run on Azure GPT-image-2 (respects the title-safe layout), NOT the
-  // global IMAGE_PROVIDER (prod=diaflow, which ignores it). See getCoverProvider.
-  return getCoverProvider().editImage(normalizeImageUrl(imageUrl), coverSourcePrompt, options);
+  // Cover generation runs on Diaflow's GPT-image flow.
+  return editImage(imageUrl, coverSourcePrompt, { ...options, flow: "gpt_image" });
 }
 
 /**
@@ -285,8 +256,6 @@ export async function generateCoverSourceBW(
 ): Promise<GeneratedImage> {
   const { buildCoverSourceBWPrompt } = await import("./prompts/cover-source-bw-prompt-template");
   const prompt = buildCoverSourceBWPrompt(titleSafe);
-  // Covers run on Azure GPT-image-2 (respects the 25/75 title-safe layout), NOT
-  // the global IMAGE_PROVIDER (prod=diaflow, whose model fills the whole canvas
-  // and drops the top band). See getCoverProvider.
-  return getCoverProvider().editImage(normalizeImageUrl(imageUrl), prompt, options);
+  // Cover generation runs on Diaflow's GPT-image flow.
+  return editImage(imageUrl, prompt, { ...options, flow: "gpt_image" });
 }
