@@ -125,13 +125,21 @@ JWT secret from `JWT_SECRET` env. Access/refresh separated by an embedded `typ` 
 - `page` (default 1), `limit` (default 20, max 100).
 - `sort`: whitelist `createdAt|title|price` with `:asc|:desc` (default `createdAt:desc`). Reject non-whitelisted fields.
 - `search`: case-insensitive `contains` over `title` (+ `subtitle`) via Prisma `mode: "insensitive"`. (Fuzzy pg_trgm/unaccent is a later enhancement; Phase 1 uses ILIKE-style contains to avoid a DB-extension dependency.)
-- `price` stored as `String?` — filtering by `minPrice/maxPrice` casts in a raw predicate or parses numerically in-service; documented as best-effort given price is a free-form string column.
+- `price`: filtered/sorted on the new **numeric column `Book.priceAmount`** (minor units, Int). `minPrice/maxPrice` are numeric (major units) → converted to minor units in-service. `sort` price key maps to `priceAmount`. The legacy free-form `price String?` stays for display/admin compat.
 
 ## 5. Data Model Changes (`packages/db/prisma/schema.prisma`)
 
 All additive / non-destructive. One Prisma migration.
 
 ```prisma
+model Book {
+  // ...existing fields unchanged (price String? kept for display/admin)...
+  priceAmount Int?    // new — normalized price in minor units (e.g. cents); backfilled from `price`
+
+  @@index([priceAmount])
+  // ...existing indexes unchanged...
+}
+
 model User {
   id           String   @id @default(cuid())   // was: no default
   email        String?  @unique
@@ -183,6 +191,7 @@ model UserColoring {
 
 - Existing admin `Purchase` CRUD writes `{ data: body }` only → unaffected by the added optional columns.
 - Changing `User.id` to `@default(cuid())` does not alter existing rows; new customer signups get generated ids.
+- **`Book.priceAmount` backfill:** the migration parses each existing `price` string (strip currency symbols/commas, parse to a number, ×100 → minor units) into `priceAmount`; unparseable/empty prices become `NULL`. Admin still writes `price` as a string; keeping `priceAmount` in sync on admin edits is a small follow-up (admin write-through or a periodic sync) — noted, not in Phase 1.
 - **Phase 2 models (not in this migration):** `Subscription`, `Payment`.
 
 ## 6. Error Handling & Validation
@@ -192,6 +201,7 @@ model UserColoring {
 
 ## 7. Security
 - `JWT_SECRET` from env (min length enforced at boot). Access TTL ~1h, refresh ~30d.
+- Refresh is **stateless** in Phase 1 (no DB revocation store) — a leaked refresh token is valid until expiry. DB-backed revocation/rotation is deferred to Phase 2.
 - bcrypt cost ≥ 10.
 - Global guard denies by default; only `@Public()` routes are open.
 - CORS enabled (tighten origins for prod via env).
@@ -212,8 +222,10 @@ model UserColoring {
 - Commerce module: buy book, subscription plans, entitlements.
 - Payment providers: Apple IAP + Google Play Billing (receipt verification + server notifications) and Stripe (Checkout + webhooks); unified entitlement layer writing `Purchase`/`Subscription`.
 - Wire `/me/library/books` to real entitlements.
+- DB-backed refresh-token revocation/rotation store.
+- Keep `Book.priceAmount` in sync on admin price edits (write-through or periodic sync).
 
-## 11. Open Questions
-- Price filtering semantics given `Book.price` is a free-form `String?` — acceptable as best-effort numeric parse, or should price be normalized to a numeric column in this migration?
-- Refresh-token revocation/rotation store (DB-backed) needed in Phase 1, or stateless refresh acceptable until Phase 2?
-- Should `/home` require auth (personalized) or stay public (static feed)? Currently public.
+## 11. Resolved Decisions
+- **Price filtering:** normalized numeric column `Book.priceAmount` (minor units), backfilled from `price`; catalog filters/sorts on it. (§4.4, §5)
+- **Refresh tokens:** stateless in Phase 1; DB revocation store → Phase 2. (§7)
+- **`/home`:** stays **public** (static feed). (§4.3)
