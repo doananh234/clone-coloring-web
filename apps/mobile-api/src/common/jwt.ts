@@ -39,5 +39,6 @@ export async function verifyAuthToken(token: string, typ: "access" | "refresh"):
   const { payload } = await jwtVerify(token, secret(), { audience: AUD });
   const p = payload as JWTPayload & { role?: string; typ?: string };
   if (p.typ !== typ) throw new Error(`Expected ${typ} token`);
-  return { sub: String(p.sub), role: String(p.role ?? "user"), typ };
+  if (typeof p.role !== "string") throw new Error("Invalid role claim");
+  return { sub: String(p.sub), role: p.role, typ };
 }
