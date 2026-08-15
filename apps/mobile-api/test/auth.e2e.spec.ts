@@ -33,4 +33,17 @@ describe("Auth (e2e)", () => {
     const res = await request(app.getHttpServer()).post("/api/auth/login").send({ email, password: "nope" });
     expect(res.status).toBe(401);
   });
+
+  it("GET /api/me requires auth and returns profile via x-user-id", async () => {
+    const anon = await request(app.getHttpServer()).get("/api/me");
+    expect(anon.status).toBe(401);
+
+    const reg = await request(app.getHttpServer()).post("/api/auth/register").send({ email: `me_${Date.now()}@test.co`, password: "password1" });
+    const userId = reg.body.user.id;
+
+    const me = await request(app.getHttpServer()).get("/api/me").set("x-user-id", userId);
+    expect(me.status).toBe(200);
+    expect(me.body.id).toBe(userId);
+    expect(me.body.passwordHash).toBeUndefined();
+  });
 });
