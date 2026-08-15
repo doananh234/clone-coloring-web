@@ -74,4 +74,19 @@ export class MeService {
     await this.prisma.userColoring.delete({ where: { id } });
     return { ok: true };
   }
+
+  async listLibraryBooks(userId: string, opts: { page?: string; limit?: string }): Promise<Paginated<unknown>> {
+    const q = parseListQuery(opts);
+    const paid = await this.prisma.purchase.findMany({
+      where: { userId, status: "paid", bookId: { not: null } },
+      select: { bookId: true },
+    });
+    const bookIds = [...new Set(paid.map((p) => p.bookId).filter((b): b is string => Boolean(b)))];
+    if (bookIds.length === 0) return toPage([], 0, q);
+    const [rows, total] = await Promise.all([
+      this.prisma.book.findMany({ where: { id: { in: bookIds } }, orderBy: { createdAt: "desc" }, skip: q.skip, take: q.limit }),
+      this.prisma.book.count({ where: { id: { in: bookIds } } }),
+    ]);
+    return toPage(rows, total, q);
+  }
 }

@@ -17,4 +17,12 @@ describe("MeService colorings", () => {
     await svc.listColorings("u1", { status: "finished" });
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "u1", status: "finished" } }));
   });
+
+  it("listLibraryBooks returns empty page when no paid purchases", async () => {
+    const prisma = { purchase: { findMany: vi.fn().mockResolvedValue([]) } } as never;
+    const svc = new MeService(prisma);
+    const res = await svc.listLibraryBooks("u1", {});
+    expect(res.data).toEqual([]);
+    expect(res.meta.total).toBe(0);
+  });
 });

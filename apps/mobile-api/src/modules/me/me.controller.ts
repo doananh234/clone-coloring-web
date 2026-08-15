@@ -58,4 +58,9 @@ export class MeController {
   deleteColoring(@CurrentUser() userId: string, @Param("id") id: string) {
     return this.me.deleteColoring(userId, id);
   }
+
+  @Get("library/books")
+  library(@CurrentUser() userId: string, @Query("page") page?: string, @Query("limit") limit?: string) {
+    return this.me.listLibraryBooks(userId, { page, limit });
+  }
 }
