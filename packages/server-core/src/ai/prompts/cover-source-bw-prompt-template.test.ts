@@ -44,11 +44,11 @@ describe("buildCoverSourceBWPrompt", () => {
 
   // --- top: dedicated square-cover prompt (top-center title header) ---
 
-  it("top uses the 1:1 square cover prompt with a top-center title/subtitle header", () => {
+  it("top uses the 1:1 square cover prompt with an upper title/subtitle staging area", () => {
     const p = buildCoverSourceBWPrompt("top");
     const lower = p.toLowerCase();
     expect(p).toMatch(/1:1 square/i);
-    expect(lower).toMatch(/top center/);
+    expect(lower).toMatch(/top center|upper 2\d/);
     expect(lower).toMatch(/subtitle/);
     expect(lower).toMatch(/black-and-white|black line art/);
     expect(lower).toMatch(/no border|borderless/);
