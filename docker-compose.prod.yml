@@ -19,3 +19,7 @@ services:
   worker:
     env_file:
       - apps/worker/.env.prod
+
+  mobile-api:
+    env_file:
+      - apps/mobile-api/.env.prod

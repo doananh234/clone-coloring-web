@@ -13,7 +13,7 @@ echo "=== VX Admin Deploy ==="
 # Pre-flight: production env files must exist locally (they are git-ignored).
 # Distinct from the local-dev .env.local / .env files so dev secrets never
 # leak to prod. Both files get rsync'd + loaded by docker-compose.prod.yml.
-for f in apps/admin/.env.prod apps/worker/.env.prod; do
+for f in apps/admin/.env.prod apps/worker/.env.prod apps/mobile-api/.env.prod; do
     if [ ! -f "$f" ]; then
         echo "ERROR: $f not found. Copy from the matching .env.example and fill in production secrets." >&2
         exit 1
@@ -136,6 +136,7 @@ sleep 8
 
 echo "Verifying..."
 ssh ${SSH_OPTS} ${SERVER} "curl -sf -o /dev/null http://localhost:3000/ && echo 'Admin OK (port 3000)' || echo 'Admin FAIL (port 3000)'"
+ssh ${SSH_OPTS} ${SERVER} "if curl -fsS http://localhost:3001/api/health >/dev/null 2>&1; then echo 'Mobile API OK (port 3001)'; else echo 'WARNING: Mobile API health check failed on port 3001' >&2; fi"
 ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && docker compose ${COMPOSE_FILES} ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
 
 # 6. Reclaim Docker disk. TWO sources of creep across deploys:
