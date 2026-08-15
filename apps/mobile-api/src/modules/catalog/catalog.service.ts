@@ -10,7 +10,7 @@ const SORT_ALIASES: Record<string, string> = { price: "priceAmount" };
 
 /** Builds the Prisma `where` for a public-book query. Exported for unit testing. */
 export function buildBookWhere(params: BookListParams, extra: Prisma.BookWhereInput = {}): Prisma.BookWhereInput {
-  const where: Prisma.BookWhereInput = { isPublic: true, ...extra };
+  const where: Prisma.BookWhereInput = { ...extra, isPublic: true };
   if (params.categoryId) where.categoryId = params.categoryId;
   if (params.search && params.search.trim().length > 0) {
     const q = params.search.trim();
