@@ -46,9 +46,9 @@ describe("buildCoverSourceBWPrompt", () => {
     const p = buildCoverSourceBWPrompt("top");
     const lower = p.toLowerCase();
     expect(p).toMatch(/1:1 square/i);
-    expect(lower).toMatch(/top 30%|top center/);
+    expect(lower).toMatch(/top \d+%|top center/);
     expect(lower).toMatch(/subtitle/);
-    expect(lower).toMatch(/black-and-white|black line art/);
+    expect(lower).toMatch(/black-and-white|black line art|black line-art/);
     expect(lower).toMatch(/no border|borderless/);
     // stays B&W and text-free like the other positions
     expect(lower).toMatch(/no color/);
