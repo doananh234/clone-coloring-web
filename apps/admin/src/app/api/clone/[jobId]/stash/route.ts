@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import { removeQueuedCloneJob } from "@vx/clone-core/queue-enqueue";
 import { cloneQueue } from "@/lib/queue/clone-queue";
+import { withQueueTimeout, isQueueTimeout, queueUnavailableResponse } from "@/lib/queue/queue-timeout";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,13 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  const removal = await removeQueuedCloneJob(cloneQueue, jobId);
+  let removal;
+  try {
+    removal = await withQueueTimeout(removeQueuedCloneJob(cloneQueue, jobId));
+  } catch (err) {
+    if (isQueueTimeout(err)) return queueUnavailableResponse({ jobId });
+    throw err;
+  }
   if (!removal.removed && removal.state !== "missing") {
     // active / remove-failed — the worker already owns this job.
     return NextResponse.json(
