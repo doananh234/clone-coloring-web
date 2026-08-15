@@ -65,6 +65,9 @@ export async function GET(req: NextRequest) {
         sourceBookId: extra.sourceBookId ?? null,
         currentStep: extra.currentStep ?? null,
         failedStep: extra.failedStep ?? null,
+        // Surface the failure reason in the list (badge tooltip / inline note),
+        // not just on the detail screen.
+        error: row.error ?? null,
         retryHistory: extra.retryHistory ?? [],
         thumbnailUrl: extra.thumbnailUrl ?? null,
         brand: extra.brand ?? null,

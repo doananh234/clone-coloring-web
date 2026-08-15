@@ -1,3 +1,11 @@
+/** One recorded retry attempt (from CloneJob.data.retryHistory[]). */
+export interface CloneRetryRecord {
+  step: string;
+  attempt: number;
+  error: string;
+  at: string;
+}
+
 /** Shape returned by GET /api/clone (see apps/admin/src/app/api/clone/route.ts). */
 export interface CloneJobRow {
   id: string;
@@ -9,7 +17,9 @@ export interface CloneJobRow {
   sourceBookId: string | null;
   currentStep: string | null;
   failedStep: string | null;
-  retryHistory: unknown[];
+  /** Failure reason message (from CloneJob.error). Null unless the job errored. */
+  error: string | null;
+  retryHistory: CloneRetryRecord[];
   thumbnailUrl: string | null;
   brand: string | null;
   createdAt: string;
@@ -69,6 +79,10 @@ export interface CloneJobDetail {
   brand?: string | null;
   currentStep?: string | null;
   error?: string;
+  /** Which pipeline step failed (from CloneJob.data.failedStep). */
+  failedStep?: string | null;
+  /** All retry attempts recorded before the final failure. */
+  retryHistory?: CloneRetryRecord[];
   bookId?: string | null;
   resultBookId?: string | null;
   pages: CloneJobPage[];

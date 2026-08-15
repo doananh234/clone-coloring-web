@@ -108,9 +108,9 @@ export function JobsScreen() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Button variant="outline" size="sm" disabled={!qa.enabled || pending !== null} onClick={runAction("q:pause", qa.pause)} title={qa.enabled ? undefined : "Cần bật ghi thật (staging)"}>Tạm dừng queue</Button>
-          <Button variant="outline" size="sm" disabled={!qa.enabled || pending !== null} onClick={runAction("q:resume", qa.resume)}>Tiếp tục</Button>
-          <Button variant="outline" size="sm" disabled={!qa.enabled || pending !== null || queuedCount === 0} onClick={runAction("q:stashall", qa.stashAll)}>Tạm hoãn tất cả</Button>
+          <Button variant="outline" size="sm" disabled={!qa.enabled || pending === "q:pause"} onClick={runAction("q:pause", qa.pause)} title={qa.enabled ? undefined : "Cần bật ghi thật (staging)"}>Tạm dừng queue</Button>
+          <Button variant="outline" size="sm" disabled={!qa.enabled || pending === "q:resume"} onClick={runAction("q:resume", qa.resume)}>Tiếp tục</Button>
+          <Button variant="outline" size="sm" disabled={!qa.enabled || pending === "q:stashall" || queuedCount === 0} onClick={runAction("q:stashall", qa.stashAll)}>Tạm hoãn tất cả</Button>
           <Button onClick={() => router.push(`${B}/jobs/new`)}>
             <Icon name="plus" size={18} /> Tạo clone job
           </Button>
@@ -195,9 +195,27 @@ export function JobsScreen() {
                         </div>
                       </td>
                       <td style={td}>
-                        <Badge tone={meta.tone} dot={meta.dot}>
-                          {meta.label}
-                        </Badge>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 260 }}>
+                          <Badge tone={meta.tone} dot={meta.dot}>
+                            {meta.label}
+                          </Badge>
+                          {meta.bucket === "error" && (j.failedStep || j.error) && (
+                            <span
+                              title={j.error || undefined}
+                              style={{
+                                fontSize: 11,
+                                color: "var(--danger)",
+                                cursor: j.error ? "help" : "default",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {j.failedStep ? `⚠ ${j.failedStep}` : "⚠ lỗi"}
+                              {j.error ? `: ${j.error}` : ""}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{ ...td, ...mono, fontSize: 12, whiteSpace: "nowrap", color: "var(--muted-foreground)" }}>{fmtDateTime(j.createdAt)}</td>
                       <td style={{ ...td, ...mono, fontSize: 12, whiteSpace: "nowrap", color: "var(--muted-foreground)" }}>{fmtDateTime(j.updatedAt)}</td>
@@ -209,7 +227,7 @@ export function JobsScreen() {
                             <Button
                               variant={a.variant}
                               size="sm"
-                              disabled={!qa.enabled || pending !== null}
+                              disabled={!qa.enabled || pending === j.id}
                               title={qa.enabled ? undefined : "Cần bật ghi thật (staging)"}
                               onClick={runAction(j.id, () => qa[a.key](j.id), a.confirm)}
                               style={{ marginRight: 6 }}
@@ -228,6 +246,22 @@ export function JobsScreen() {
                         >
                           Xem
                         </Button>
+                        {!("__local" in j) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={!qa.enabled || pending === j.id}
+                            title={qa.enabled ? "Xóa job + book + toàn bộ ảnh liên quan" : "Cần bật ghi thật (staging)"}
+                            onClick={runAction(
+                              j.id,
+                              () => qa.remove(j.id),
+                              `Xóa job "${j.name || j.id.slice(0, 8)}"?\n\nSẽ xóa VĨNH VIỄN: clone job này, book do nó tạo ra, và toàn bộ ảnh trên R2. Không thể hoàn tác.`,
+                            )}
+                            style={{ marginLeft: 6, color: "var(--danger)" }}
+                          >
+                            {pending === j.id ? "…" : <Icon name="trash-2" size={16} />}
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   );
