@@ -33,16 +33,20 @@ Render ZERO text of any kind. Do NOT draw letters, words, characters, numbers, t
 The upper area is left open ONLY so a human editor can drop in a title later. You must leave it as clean line art (open background + sparse motifs), NEVER as written text. If you are ever about to draw a letterform, stop and leave that space empty instead. The finished image must contain no readable text anywhere.
 
 ==================================================
-CANVAS + LAYOUT
+CANVAS + LAYOUT — RESERVE THE TOP (CRITICAL)
 ==================================================
 
-Final canvas: exactly 1:1 square, pure white background.
+Final canvas: exactly 1:1 square, pure white background. Split it into two zones:
 
-Keep the top 30% of the canvas as an AIRY, title-safe area: open sky / plain background only, lightly filled with a few small sparse decorative motifs. No main subject and no large or dense object may sit there.
+• TOP 30% = TITLE-SAFE ZONE. This band MUST stay open and airy — only open sky / plain white background plus a few small sparse motifs. NO part of any major subject may enter it: the hot-air balloon (INCLUDING the very top of the balloon), the basket, characters, animals, vehicle or building must ALL sit BELOW this band. The highest point of the main illustration must land at or below the 30% line, leaving clear headroom above it.
 
-The main illustration occupies the lower ~70%, beginning naturally below the title-safe area with a soft, organic transition — NO hard dividing line and NO stark empty white rectangle. The upper area should read as natural open sky that happens to be uncluttered, not as a blank template block.
+• LOWER 70% = ARTWORK ZONE. The main illustration lives here.
 
-Do NOT push the main illustration upward into the title-safe area. The hot-air balloon, characters, animals, vehicle, building, basket, or any other major subject MUST stay in the lower region. If needed, scale the illustration down slightly so its top stays clear.
+To achieve this, SHIFT the whole illustration DOWNWARD and, if needed, SCALE IT DOWN so nothing crosses up into the top 30%. It is REQUIRED to leave clear open space at the top for a title to be added later. Do NOT let the balloon, clouds, or any element rise to the top edge of the canvas.
+
+The transition between the open top and the artwork must be soft and natural — no hard dividing line, no stark empty white rectangle. The top simply reads as calm open sky.
+
+COMMON MISTAKE TO AVOID: filling the entire canvas top-to-bottom with the balloon so it touches the top edge. That is WRONG — the top 30% must visibly stay open.
 
 ==================================================
 MAIN ILLUSTRATION — PRESERVE FAITHFULLY
@@ -70,7 +74,7 @@ Pure black line art on clean white. NO color, NO gray, NO shading, NO gradients,
 FINAL OUTPUT
 ==================================================
 
-Generate ONE strictly 1:1 square black-and-white coloring-book cover: a faithful recomposition of the original scene, with a clean airy TEXT-FREE title-safe area at the top (open sky + a few sparse motifs), large artwork below reaching close to the left, right, and bottom edges, sparse on-theme decoration, borderless — and absolutely no letters, words, or a "TITLE"/"SUBTITLE" mockup anywhere.`;
+Generate ONE strictly 1:1 square black-and-white coloring-book cover: a faithful recomposition of the original scene, with a clean airy TEXT-FREE title-safe area kept open across the TOP 30% (open sky + a few sparse motifs, with the balloon and every major subject sitting BELOW it), the artwork filling the lower 70% and reaching close to the left, right, and bottom edges, sparse on-theme decoration, borderless — and absolutely no letters, words, or a "TITLE"/"SUBTITLE" mockup anywhere.`;
 
 function regionClauses(titleSafe: TitleSafePosition): { safe: string; art: string } {
   switch (titleSafe) {
