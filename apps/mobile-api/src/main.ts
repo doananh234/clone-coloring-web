@@ -2,8 +2,10 @@ import "reflect-metadata";
 
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
+import { assertJwtSecret } from "./common/jwt";
 
 async function bootstrap(): Promise<void> {
+  assertJwtSecret();
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix("api");
   app.enableCors();

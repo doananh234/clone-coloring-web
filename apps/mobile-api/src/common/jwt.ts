@@ -42,3 +42,8 @@ export async function verifyAuthToken(token: string, typ: "access" | "refresh"):
   if (typeof p.role !== "string") throw new Error("Invalid role claim");
   return { sub: String(p.sub), role: p.role, typ };
 }
+
+/** Validate JWT_SECRET is present and long enough. Call once at startup to fail fast. */
+export function assertJwtSecret(): void {
+  secret();
+}

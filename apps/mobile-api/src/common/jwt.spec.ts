@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { SignJWT } from "jose";
-import { signAccessToken, signRefreshToken, verifyAuthToken } from "./jwt";
+import { signAccessToken, signRefreshToken, verifyAuthToken, assertJwtSecret } from "./jwt";
 import { hashPassword, verifyPassword } from "./password";
 
 beforeAll(() => { process.env.JWT_SECRET = "test-secret-at-least-16-chars"; });
@@ -37,6 +37,30 @@ describe("jwt", () => {
     } finally {
       process.env.JWT_SECRET = valid;
     }
+  });
+
+  it("throws when JWT_SECRET is missing", () => {
+    const valid = process.env.JWT_SECRET;
+    process.env.JWT_SECRET = undefined;
+    try {
+      expect(() => assertJwtSecret()).toThrow();
+    } finally {
+      process.env.JWT_SECRET = valid;
+    }
+  });
+
+  it("throws when JWT_SECRET is shorter than 16 chars", () => {
+    const valid = process.env.JWT_SECRET;
+    process.env.JWT_SECRET = "short";
+    try {
+      expect(() => assertJwtSecret()).toThrow();
+    } finally {
+      process.env.JWT_SECRET = valid;
+    }
+  });
+
+  it("does not throw when JWT_SECRET is valid", () => {
+    expect(() => assertJwtSecret()).not.toThrow();
   });
 });
 
