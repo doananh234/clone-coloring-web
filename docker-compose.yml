@@ -83,5 +83,25 @@ services:
       postgres:
         condition: service_healthy
 
+  mobile-api:
+    build:
+      context: .
+      dockerfile: apps/mobile-api/Dockerfile
+    container_name: vx-mobile-api
+    restart: unless-stopped
+    env_file:
+      - apps/mobile-api/.env.local
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/coloring
+      DIRECT_URL: postgresql://postgres:postgres@postgres:5432/coloring
+      PORT: "3001"
+    ports:
+      - "3001:3001"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
