@@ -39,11 +39,13 @@ model Book {
   // to all operators). Once assigned, only the assignee + admins see it.
   assignedToId       String?
   data               Json     @default("{}")
+  priceAmount        Int?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@index([categoryId])
   @@index([assignedToId])
+  @@index([priceAmount])
 }
 
 model Category {
@@ -172,10 +174,21 @@ model SourceBook {
 }
 
 model Purchase {
-  id        String   @id @default(cuid())
-  data      Json     @default("{}")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String?
+  bookId      String?
+  type        String?
+  status      String?  @default("pending")
+  amount      Int?
+  currency    String?  @default("USD")
+  provider    String?
+  providerRef String?
+  data        Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([bookId])
 }
 
 model Wallet {
@@ -188,13 +201,15 @@ model Wallet {
 }
 
 model User {
-  id        String   @id
-  email     String?  @unique
-  name      String?
-  role      String   @default("user")
-  data      Json     @default("{}")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  name         String?
+  avatarUrl    String?
+  passwordHash String?
+  role         String   @default("user")
+  data         Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model CreditLedger {
@@ -269,6 +284,23 @@ model CoverTextOverlay {
   data              Json     @default("{}")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+model UserColoring {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  pageId    String?
+  pageIndex Int?
+  status    String   @default("in_progress")
+  imageUrl  String?
+  progress  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([bookId])
 }
 
 // Admin/operator accounts for the custom DB-backed admin auth. Separate from
