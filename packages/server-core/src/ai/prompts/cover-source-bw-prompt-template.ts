@@ -13,349 +13,64 @@
 type TitleSafePosition = "top" | "middle" | "bottom";
 
 /**
- * TOP button — premium square coloring-book cover built as three vertical
- * regions: a title+subtitle band (top 28%), a breathing gap (28–32%), and the
- * original artwork kept large below (32–100%), borderless, pure B&W line art,
- * with sparse organic decoration around/below the future title. Static (no
- * per-call interpolation).
+ * TOP button — premium square coloring-book cover: an airy, text-free
+ * title-safe area across the top ~30% (open sky + sparse motifs), the original
+ * artwork kept large below, borderless, pure B&W line art. Deliberately does
+ * NOT spell out a "TITLE / SUBTITLE" mockup — image models render those as
+ * literal words — and forbids all lettering outright. Static (no per-call
+ * interpolation).
  */
-const TOP_COVER_PROMPT = `You are a professional coloring-book cover designer.
+const TOP_COVER_PROMPT = `You are a professional coloring-book cover designer working in pure black-and-white line art.
 
-Transform the FIRST PROVIDED IMAGE into a premium STRICTLY 1:1 square coloring-book cover.
-
-The FIRST PROVIDED IMAGE is the PRIMARY SOURCE OF TRUTH.
-
-This is a RECOMPOSITION task, NOT a redesign.
-
-Preserve the original illustration as faithfully as possible.
+Transform the FIRST PROVIDED IMAGE into a premium, STRICTLY 1:1 square coloring-book cover. The FIRST PROVIDED IMAGE is the PRIMARY SOURCE OF TRUTH. This is a RECOMPOSITION task, NOT a redesign: keep the original scene, characters, objects, poses, proportions and line style faithfully recognizable.
 
 ==================================================
-CRITICAL CANVAS LAYOUT
+ABSOLUTELY NO TEXT — HIGHEST PRIORITY
 ==================================================
 
-The final canvas MUST be exactly 1:1 square.
+Render ZERO text of any kind. Do NOT draw letters, words, characters, numbers, typography, captions, labels, headings, watermarks, or any placeholder wording. In particular, do NOT write the words "TITLE" or "SUBTITLE" — never render them as letters.
 
-Divide the canvas into three clear vertical regions:
-
-TOP 0–28%:
-DEDICATED TITLE + SUBTITLE REGION
-
-28–32%:
-NATURAL BREATHING SPACE
-
-32–100%:
-MAIN ORIGINAL ILLUSTRATION REGION
-
-THIS SPATIAL STRUCTURE IS CRITICAL.
-
-The MAIN ORIGINAL ILLUSTRATION MUST NOT ENTER THE TOP 28% TITLE REGION.
-
-The top 28% must remain visually available for future TITLE and SUBTITLE placement.
-
-Do NOT move the original illustration upward to fill the title region.
-
-Do NOT allow any major original object to enter the title region.
-
-The balloon, characters, animals, vehicle, building, basket, clouds belonging to the main scene, or any other major original subject MUST remain below the title region.
-
-If necessary, make the original illustration slightly smaller to preserve this layout.
+The upper area is left open ONLY so a human editor can drop in a title later. You must leave it as clean line art (open background + sparse motifs), NEVER as written text. If you are ever about to draw a letterform, stop and leave that space empty instead. The finished image must contain no readable text anywhere.
 
 ==================================================
-TITLE REGION
+CANVAS + LAYOUT
 ==================================================
 
-Reserve the upper portion of the canvas specifically for future typography.
+Final canvas: exactly 1:1 square, pure white background.
 
-The future layout is:
+Keep the top 30% of the canvas as an AIRY, title-safe area: open sky / plain background only, lightly filled with a few small sparse decorative motifs. No main subject and no large or dense object may sit there.
 
-             TITLE
+The main illustration occupies the lower ~70%, beginning naturally below the title-safe area with a soft, organic transition — NO hard dividing line and NO stark empty white rectangle. The upper area should read as natural open sky that happens to be uncluttered, not as a blank template block.
 
-        small decoration
-
-            SUBTITLE
-
-The TITLE will be added later by an editor.
-
-The SUBTITLE will be added later by an editor.
-
-Do NOT generate any text.
-
-Do NOT generate placeholder text.
-
-Do NOT generate letters.
-
-Do NOT generate typography.
-
-The actual future TITLE placement area must remain completely empty.
-
-The actual future SUBTITLE placement area must remain completely empty.
-
-Both areas must have clean white background.
+Do NOT push the main illustration upward into the title-safe area. The hot-air balloon, characters, animals, vehicle, building, basket, or any other major subject MUST stay in the lower region. If needed, scale the illustration down slightly so its top stays clear.
 
 ==================================================
-DECORATION AROUND TITLE
+MAIN ILLUSTRATION — PRESERVE FAITHFULLY
 ==================================================
 
-The title region should NOT look like a completely empty rectangular white block.
+Preserve the original illustration: characters, animals, objects, poses, gestures, facial expressions, proportions, relative scale, important details, line weight, and overall style. Do NOT replace characters, invent new major objects, or change the scene. It must remain immediately recognizable as the SAME original illustration.
 
-A FEW small, lightweight, context-aware decorative motifs may appear around the typography.
-
-Decorations may appear:
-
-- near the upper-left of the title
-- near the upper-right of the title
-- beside the title
-- immediately below the title
-- between the title and subtitle
-- beside the subtitle
-- near the lower edges of the typography region
-
-This is intentional.
-
-Small decorative motifs MAY appear immediately below the future TITLE and in the whitespace between TITLE and SUBTITLE.
-
-They should look like small floating thematic accents.
-
-Use only a FEW motifs.
-
-Keep them:
-
-- small
-- sparse
-- lightweight
-- irregular
-- asymmetrical
-- organically positioned
-- visually secondary
-
-The actual TITLE and SUBTITLE placement areas must remain unobstructed.
-
-Do NOT place decorations directly behind the future text.
-
-Do NOT allow decorations to overlap the future text.
-
-Do NOT create an underline.
-
-Do NOT create a divider.
-
-Do NOT create a decorative banner.
-
-Do NOT create a frame.
-
-Do NOT create a decorative ceiling.
-
-Do NOT create a repetitive pattern.
-
-The correct concept is:
-
-CLEAN TEXT AREAS
-+
-SMALL ORGANIC DECORATION AROUND THEM
+Make it large and dominant within the lower region: extend the artwork close to the LEFT and RIGHT edges (tiny white safety gap only) and close to the BOTTOM edge (small bottom margin, ~5px). Do NOT crop or clip important elements to gain width.
 
 ==================================================
-BREATHING SPACE
+DECORATION
 ==================================================
 
-Between the typography region and the main illustration, maintain a MODERATE NATURAL WHITE BREATHING SPACE.
+Scatter a FEW small, sparse, context-aware BLACK LINE-ART motifs derived from the original scene — e.g. clouds, stars, flowers, hearts, sparkles, a crescent moon, small thematic objects — across the open areas, including the upper title-safe area and around the illustration. Keep them small, lightweight, irregular, asymmetrical, and visually secondary.
 
-Do not make this gap excessively large.
-
-Do not allow the illustration to creep upward into the typography region.
-
-The main illustration should begin naturally around the 32% vertical position.
+Do NOT form patterns, rows, columns, grids, or symmetrical arrangements. Do NOT create a decorative ceiling, an underline, a divider, a banner, a ribbon, a frame, or a border. The composition stays open and borderless.
 
 ==================================================
-MAIN ORIGINAL ILLUSTRATION
+STYLE
 ==================================================
 
-Preserve the FIRST PROVIDED IMAGE's original illustration as faithfully as possible.
-
-Preserve:
-
-- characters
-- animals
-- objects
-- poses
-- gestures
-- facial expressions
-- proportions
-- relative scale
-- important details
-- line-art style
-- visual identity
-- thematic identity
-
-Do NOT redesign the original scene.
-
-Do NOT replace characters.
-
-Do NOT invent new major objects.
-
-Do NOT substantially change the composition.
-
-Do NOT change character identity.
-
-Do NOT change poses or expressions.
-
-The result must remain immediately recognizable as the SAME ORIGINAL ILLUSTRATION.
+Pure black line art on clean white. NO color, NO gray, NO shading, NO gradients, NO shadows, NO cross-hatching, NO texture, NO filled areas. If the source has an outer border, frame, or rounded-rectangle enclosure, REMOVE it completely and do not add a new one.
 
 ==================================================
-ARTWORK SIZE
+FINAL OUTPUT
 ==================================================
 
-The original illustration should be LARGE and visually dominant within the LOWER ARTWORK REGION.
-
-Do NOT make the artwork small.
-
-Do NOT center a small isolated illustration.
-
-Do NOT create excessive side margins.
-
-Within the lower artwork region, maximize the illustration's horizontal width.
-
-The illustration should extend very close to both the LEFT and RIGHT canvas edges where physically possible.
-
-Keep only a tiny white safety gap.
-
-Do NOT crop important objects.
-
-Do NOT clip important elements.
-
-IMPORTANT:
-
-MAXIMIZE THE ARTWORK ONLY WITHIN THE LOWER ARTWORK REGION.
-
-NEVER enlarge the artwork upward into the title region.
-
-==================================================
-BOTTOM EDGE
-==================================================
-
-Push the lower artwork toward the bottom edge.
-
-Target approximately 5px of white margin at the bottom.
-
-Do NOT create a large bottom margin.
-
-==================================================
-SOURCE BORDER
-==================================================
-
-If the original image contains a border, frame, rounded rectangle, perimeter outline, or enclosing frame:
-
-REMOVE IT COMPLETELY.
-
-Do NOT preserve it.
-
-Do NOT replace it.
-
-Do NOT create a new border.
-
-==================================================
-DECORATION STYLE
-==================================================
-
-Derive decorative motifs from the original illustration's:
-
-- environment
-- season
-- weather
-- activity
-- atmosphere
-- subject matter
-- visual theme
-
-Use only simple BLACK LINE-ART motifs.
-
-No unrelated decorative objects.
-
-No large new illustrations.
-
-No color.
-
-No gray.
-
-No shading.
-
-No gradients.
-
-No shadows.
-
-No texture.
-
-==================================================
-OPEN BORDERLESS DESIGN
-==================================================
-
-The final cover must have NO:
-
-- border
-- frame
-- perimeter line
-- decorative frame
-- corner frame
-- enclosing outline
-- panel
-- box
-- banner
-- ribbon
-- divider
-- separator
-
-The composition must remain open and borderless.
-
-==================================================
-FINAL COMPOSITION PRIORITY
-==================================================
-
-Follow this priority order:
-
-1. STRICTLY preserve the original illustration.
-2. STRICTLY preserve the TOP 28% typography region.
-3. Keep the TITLE placement area empty.
-4. Keep the SUBTITLE placement area empty.
-5. Allow a FEW small decorative motifs around and immediately below the TITLE.
-6. Allow a FEW small decorative motifs between TITLE and SUBTITLE.
-7. Maintain natural breathing space below the SUBTITLE.
-8. Place the original illustration beginning below approximately 32% of the canvas height.
-9. Make the original illustration as large as possible ONLY within the lower region.
-10. Maximize left/right artwork coverage within that lower region.
-11. Minimize the bottom margin.
-12. Keep decoration sparse and organic.
-13. Keep the entire composition borderless.
-14. Never generate text.
-
-==================================================
-FINAL VISUAL CHECK
-==================================================
-
-Before generating, verify:
-
-- Exactly 1:1 square.
-- TOP 28% is reserved for TITLE + SUBTITLE.
-- No major original artwork enters the TOP 28%.
-- TITLE placement area is clean white space.
-- SUBTITLE placement area is clean white space.
-- Small decorative motifs may appear around the title.
-- Small decorative motifs may appear immediately below the title.
-- Small decorative motifs may appear between title and subtitle.
-- Decorations do not overlap future text.
-- Main illustration begins BELOW the typography region.
-- Main illustration occupies approximately the lower 68% of the canvas.
-- Main illustration is large.
-- Main illustration reaches very close to left and right edges.
-- Bottom margin is extremely small.
-- Original illustration remains recognizable.
-- Source border is removed.
-- No new border or frame is created.
-- No text is generated.
-- No color.
-- No gray.
-- No shading.
-- No gradients.
-- No repetitive decorative pattern.
-
-Generate ONE strictly 1:1 square coloring-book cover.`;
+Generate ONE strictly 1:1 square black-and-white coloring-book cover: a faithful recomposition of the original scene, with a clean airy TEXT-FREE title-safe area at the top (open sky + a few sparse motifs), large artwork below reaching close to the left, right, and bottom edges, sparse on-theme decoration, borderless — and absolutely no letters, words, or a "TITLE"/"SUBTITLE" mockup anywhere.`;
 
 function regionClauses(titleSafe: TitleSafePosition): { safe: string; art: string } {
   switch (titleSafe) {
