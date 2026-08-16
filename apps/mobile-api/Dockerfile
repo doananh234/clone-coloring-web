@@ -9,6 +9,11 @@ COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn .yarn
 COPY tooling tooling
 COPY packages packages
+# Yarn workspace install resolves ALL workspaces (apps/*), so every app's
+# package.json must be present or --immutable sees a different workspace set
+# than yarn.lock was generated with and aborts (YN0028).
+COPY apps/admin/package.json apps/admin/package.json
+COPY apps/worker/package.json apps/worker/package.json
 COPY apps/mobile-api/package.json apps/mobile-api/package.json
 RUN yarn install --immutable
 
