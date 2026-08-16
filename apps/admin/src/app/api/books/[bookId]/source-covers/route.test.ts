@@ -47,13 +47,26 @@ describe("POST /api/books/[bookId]/source-covers", () => {
     findUnique.mockResolvedValue({ id: "b1", coloringPages: [{ id: "p1", url: "/p1.png" }], data: {} });
     const res = await POST(req({ interiorPageId: "p1", titleSafe: "bottom" }), params);
     expect(res.status).toBe(200);
-    // called with the resolved interior url + the requested title-safe position
-    expect(generateCoverSourceBW).toHaveBeenCalledWith("https://r2/p1.png", "bottom", expect.any(Object));
+    // resolved interior url + title-safe position + options; no prompt override
+    expect(generateCoverSourceBW).toHaveBeenCalledWith("https://r2/p1.png", "bottom", expect.any(Object), undefined);
     const saved = update.mock.calls[0][0].data.data.sourceCovers;
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ titleSafe: "bottom", sourceInteriorId: "p1", url: "https://r2/sc.png" });
     const json = await res.json();
     expect(json.sourceCover.titleSafe).toBe("bottom");
+  });
+
+  it("passes a non-empty prompt override through to generateCoverSourceBW", async () => {
+    findUnique.mockResolvedValue({ id: "b1", coloringPages: [{ id: "p1", url: "/p1.png" }], data: {} });
+    const res = await POST(req({ interiorPageId: "p1", titleSafe: "top", prompt: "  custom prompt  " }), params);
+    expect(res.status).toBe(200);
+    expect(generateCoverSourceBW).toHaveBeenCalledWith("https://r2/p1.png", "top", expect.any(Object), "  custom prompt  ");
+  });
+
+  it("treats a blank prompt as no override (undefined)", async () => {
+    findUnique.mockResolvedValue({ id: "b1", coloringPages: [{ id: "p1", url: "/p1.png" }], data: {} });
+    await POST(req({ interiorPageId: "p1", titleSafe: "top", prompt: "   " }), params);
+    expect(generateCoverSourceBW).toHaveBeenCalledWith("https://r2/p1.png", "top", expect.any(Object), undefined);
   });
 });
 

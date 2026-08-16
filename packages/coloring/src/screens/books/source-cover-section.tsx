@@ -25,10 +25,10 @@ export function SourceCoverSection({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const doGen = async (interiorPageId: string) => {
+  const doGen = async (interiorPageId: string, promptOverride: string) => {
     if (!pickFor) return;
     setBusy(true); setErr(null);
-    try { await sc.gen(interiorPageId, pickFor); setPickFor(null); }
+    try { await sc.gen(interiorPageId, pickFor, promptOverride); setPickFor(null); }
     catch (e) { setErr(e instanceof Error ? e.message : "Tạo source cover thất bại"); }
     finally { setBusy(false); }
   };
@@ -38,7 +38,7 @@ export function SourceCoverSection({
     <Card
       title={`Source Cover · ${sourceCovers.length}`}
       action={
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {(["top", "middle", "bottom"] as const).map((pos) => (
             <Button key={pos} size="sm" variant="outline" disabled={!sc.enabled || interiors.length === 0}
               onClick={() => { setErr(null); setPickFor(pos); }}>
@@ -65,7 +65,9 @@ export function SourceCoverSection({
       <InteriorPickerModal
         open={pickFor !== null}
         title={`Chọn interior để tạo Source Cover (${pickFor ? LABEL[pickFor] : ""})`}
+        titleSafe={pickFor}
         pages={interiors} busy={busy} onPick={doGen} onClose={() => setPickFor(null)}
+        fetchDefaultPrompt={sc.defaultPrompt}
       />
     </Card>
   );
