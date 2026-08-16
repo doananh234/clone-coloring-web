@@ -21,6 +21,7 @@ export function Card({ title, action, children, className, style, bodyStyle }: C
             justifyContent: "space-between",
             gap: 12,
             marginBottom: 14,
+            flexWrap: "wrap",
           }}
         >
           {title ? <h3 className="mo-card__title" style={{ margin: 0 }}>{title}</h3> : <span />}

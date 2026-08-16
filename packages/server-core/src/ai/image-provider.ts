@@ -253,9 +253,13 @@ export async function generateCoverSourceBW(
   imageUrl: string,
   titleSafe: "top" | "middle" | "bottom",
   options: ColorizeOptions = {},
+  promptOverride?: string,
 ): Promise<GeneratedImage> {
   const { buildCoverSourceBWPrompt } = await import("./prompts/cover-source-bw-prompt-template");
-  const prompt = buildCoverSourceBWPrompt(titleSafe);
+  // Operators can pass a custom prompt (the staging prompt-tuning tool in the
+  // Source Cover dialog) to iterate without a redeploy; empty/whitespace falls
+  // back to the built-in default for the position.
+  const prompt = promptOverride?.trim() ? promptOverride : buildCoverSourceBWPrompt(titleSafe);
   // Cover generation runs on Diaflow's GPT-image flow.
   return editImage(imageUrl, prompt, { ...options, flow: "gpt_image" });
 }

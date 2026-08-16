@@ -16,8 +16,8 @@ type Page = { id?: string; url?: string };
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { bookId } = await params;
-    const { interiorPageId, titleSafe } = (await req.json().catch(() => ({}))) as {
-      interiorPageId?: string; titleSafe?: TitleSafePosition;
+    const { interiorPageId, titleSafe, prompt } = (await req.json().catch(() => ({}))) as {
+      interiorPageId?: string; titleSafe?: TitleSafePosition; prompt?: string;
     };
     if (!interiorPageId || !titleSafe)
       return NextResponse.json({ error: "interiorPageId and titleSafe are required" }, { status: 400 });
@@ -30,9 +30,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (!interior?.url)
       return NextResponse.json({ error: "Interior page not found" }, { status: 404 });
 
-    const img = await generateCoverSourceBW(resolveR2Url(interior.url), titleSafe, {
-      trace: { caller: "books/source-covers" },
-    });
+    const img = await generateCoverSourceBW(
+      resolveR2Url(interior.url),
+      titleSafe,
+      { trace: { caller: "books/source-covers" } },
+      typeof prompt === "string" && prompt.trim() ? prompt : undefined,
+    );
 
     const scId = crypto.randomUUID();
     const r2Config = getR2Config();

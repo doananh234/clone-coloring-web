@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { httpPost, httpPatch, httpDel } from "@vx/core-uikit/api";
+import { httpGet, httpPost, httpPatch, httpDel } from "@vx/core-uikit/api";
 import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
 import type { SourceCover, TitleSafePosition } from "./source-covers";
 
@@ -16,10 +16,19 @@ export function useSourceCovers(bookId: string) {
 
   return {
     enabled: COLORING_WRITE_ENABLED,
-    gen: async (interiorPageId: string, titleSafe: TitleSafePosition) => {
+    gen: async (interiorPageId: string, titleSafe: TitleSafePosition, promptOverride?: string) => {
       guard();
-      await httpPost(base, { interiorPageId, titleSafe });
+      // A non-empty promptOverride lets operators tune the prompt in the dialog
+      // without a redeploy; omit it (undefined) to use the server default.
+      await httpPost(base, { interiorPageId, titleSafe, prompt: promptOverride?.trim() || undefined });
       inval();
+    },
+    /** Built-in default prompt for a position — used to prefill the editable box. */
+    defaultPrompt: async (titleSafe: TitleSafePosition): Promise<string> => {
+      const res = await httpGet<{ prompt: string }>(
+        `${COLORING_API_BASE}/cover-prompt?titleSafe=${titleSafe}`,
+      );
+      return res.prompt;
     },
     colorize: async (sc: SourceCover, styleId: string, variantId?: string | null) => {
       guard();
