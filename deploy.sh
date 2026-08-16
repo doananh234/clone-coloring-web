@@ -20,6 +20,43 @@ for f in apps/admin/.env.prod apps/worker/.env.prod apps/mobile-api/.env.prod; d
     fi
 done
 
+# Pre-flight guardrail: STOP if any local .env.prod differs from the copy already
+# on the server. This deploy OVERWRITES the server's .env.prod with the LOCAL one,
+# so a stale local copy would silently REVERT a teammate's env change. Compares
+# sha256; a file missing on the server (first deploy) is fine. Bypass with
+# ALLOW_ENV_OVERWRITE=1 when you INTENTIONALLY want to push your local env
+# (after scp-ing the server's version down and editing it). See the
+# deploy-overwrites-prod-env note.
+if [ "${ALLOW_ENV_OVERWRITE:-0}" != "1" ]; then
+    echo "[pre-flight] Checking local .env.prod vs server..."
+    env_drift=0
+    for f in apps/admin/.env.prod apps/worker/.env.prod apps/mobile-api/.env.prod; do
+        local_h=$(sha256sum "$f" | awk '{print $1}')
+        server_h=$(ssh ${SSH_OPTS} ${SERVER} "sha256sum ${REMOTE_DIR}/$f 2>/dev/null | awk '{print \$1}'" 2>/dev/null | tr -d '\r')
+        if [ -z "$server_h" ]; then
+            echo "  -> $f: not on server yet (first deploy) — will be created."
+        elif [ "$local_h" != "$server_h" ]; then
+            echo "  !! DRIFT: $f differs from the server copy (local=$local_h server=$server_h)" >&2
+            env_drift=1
+        else
+            echo "  -> $f: in sync."
+        fi
+    done
+    if [ "$env_drift" = "1" ]; then
+        {
+            echo ""
+            echo "ABORTING: local .env.prod does not match the server. Deploying now would OVERWRITE"
+            echo "the server's env with your local copy (possibly reverting someone else's change)."
+            echo ""
+            echo "  * Keep the server's env (usual): pull it down first, then re-run deploy.sh —"
+            echo "      for f in apps/admin/.env.prod apps/worker/.env.prod apps/mobile-api/.env.prod; do"
+            echo "        scp ${SSH_OPTS} ${SERVER}:${REMOTE_DIR}/\$f \"\$f\"; done"
+            echo "  * Intentionally push your local env: ALLOW_ENV_OVERWRITE=1 ./deploy.sh"
+        } >&2
+        exit 1
+    fi
+fi
+
 # Docker Compose file set used for every remote docker command below.
 COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
 
