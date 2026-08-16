@@ -925,16 +925,20 @@ export const diaflowImageProvider: ImageProviderInterface = {
     const { referenceImageUrls, imageLabel, flow } = options;
 
     // Upload images, then embed remote paths in the request string
-    const parts: string[] = [];
     const characterPath = await uploadImage(imageUrl);
-    parts.push(`${imageLabel || "source image"}: ${characterPath}`);
+    const imageLines: string[] = [`${imageLabel || "source image"}: ${characterPath}`];
     if (referenceImageUrls?.length) {
       for (const refUrl of referenceImageUrls) {
         const refPath = await uploadImage(refUrl);
-        parts.push(`reference image: ${refPath}`);
+        imageLines.push(`reference image: ${refPath}`);
       }
     }
-    parts.push(prompt);
+
+    // Cover generation (gpt_image flow) places the prompt FIRST and the input
+    // image(s) at the END of the request; the default image flow keeps the
+    // image(s) first, then the prompt.
+    const parts =
+      flow === "gpt_image" ? [prompt, ...imageLines] : [...imageLines, prompt];
 
     // flow defaults to "image"; cover generation passes "gpt_image" to route
     // through Diaflow's GPT-image flow. Response parsing is flow-agnostic —
