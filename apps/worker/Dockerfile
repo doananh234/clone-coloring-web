@@ -11,6 +11,7 @@ COPY tooling tooling
 COPY packages packages
 COPY apps/admin/package.json apps/admin/package.json
 COPY apps/worker/package.json apps/worker/package.json
+COPY apps/mobile-api/package.json apps/mobile-api/package.json
 RUN yarn install --immutable
 
 # --- build ---
