@@ -1,0 +1,9 @@
+# Local-only override — auto-merged by `docker compose up` (no -f flags).
+# NOT used by deploy.sh, which passes explicit `-f docker-compose.yml
+# -f docker-compose.prod.yml`. Purpose: bake NEXT_PUBLIC_COLORING_WRITE=1 so the
+# write-gated actions (Gen Cover, etc.) are enabled when testing locally.
+services:
+  admin:
+    build:
+      args:
+        NEXT_PUBLIC_COLORING_WRITE: "1"
