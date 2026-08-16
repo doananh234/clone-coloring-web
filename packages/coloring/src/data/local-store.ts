@@ -73,6 +73,7 @@ export function addLocalJob(input: NewLocalJobInput): LocalJob {
     sourceBookId: input.sourceFileName ?? null,
     currentStep: input.mode ? `Chờ xử lý · ${input.mode}` : "Chờ xử lý",
     failedStep: null,
+    error: null,
     retryHistory: [],
     thumbnailUrl: null,
     brand: input.brand?.trim() || null,

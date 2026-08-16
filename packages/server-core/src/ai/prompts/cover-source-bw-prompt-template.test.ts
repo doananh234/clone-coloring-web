@@ -32,21 +32,23 @@ describe("buildCoverSourceBWPrompt", () => {
     expect(buildCoverSourceBWPrompt("middle").toLowerCase()).toMatch(/middle ~?25%|middle band/);
   });
 
-  it("middle forbids color — stays pure black-and-white line art", () => {
-    const p = buildCoverSourceBWPrompt("middle").toLowerCase();
-    expect(p).toMatch(/black-and-white|black and white/);
-    expect(p).toMatch(/line art|line-art/);
-    expect(p).toMatch(/no color|do not colou?r|no colour/);
-    expect(p).toMatch(/no (grayscale|gray|shading|fills?)/);
+  it("middle & bottom forbid color — stay pure black-and-white line art", () => {
+    for (const pos of ["middle", "bottom"] as const) {
+      const p = buildCoverSourceBWPrompt(pos).toLowerCase();
+      expect(p).toMatch(/black-and-white|black and white/);
+      expect(p).toMatch(/line art|line-art/);
+      expect(p).toMatch(/no color|do not colou?r|no colour/);
+      expect(p).toMatch(/no (grayscale|gray|shading|fills?)/);
+    }
   });
 
-  // --- top: dedicated premium square-cover prompt (tuned separately) ---
+  // --- top: dedicated square-cover prompt (top-center title header) ---
 
-  it("top uses the 1:1 square premium cover prompt with a protected top title zone", () => {
+  it("top uses the 1:1 square cover prompt with an upper title/subtitle staging area", () => {
     const p = buildCoverSourceBWPrompt("top");
     const lower = p.toLowerCase();
     expect(p).toMatch(/1:1 square/i);
-    expect(lower).toMatch(/top 30%|top center/);
+    expect(lower).toMatch(/top center|upper 2\d/);
     expect(lower).toMatch(/subtitle/);
     expect(lower).toMatch(/black-and-white|black line art/);
     expect(lower).toMatch(/no border|borderless/);

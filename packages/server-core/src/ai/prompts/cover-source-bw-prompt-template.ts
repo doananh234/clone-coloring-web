@@ -3,368 +3,541 @@
  * book-cover LAYOUT while staying PURE BLACK-AND-WHITE LINE ART. Unlike
  * buildCoverSourcePrompt, this NEVER colorizes.
  *
- * - "top": premium 1:1 square cover prompt with a protected TOP-CENTER
- *   title/subtitle zone (TOP_COVER_PROMPT below) — tuned separately.
+ * - "top": a dedicated square-cover prompt (TOP_COVER_PROMPT below) — preserves
+ *   the source artwork + its connections faithfully, reserves the upper ~25-28%
+ *   for future title/subtitle, sparse optional context-aware decoration.
  * - "middle" / "bottom": the shared recompose template that reserves a 25%
- *   title-safe band (middle band / lower band) with the illustration in the
- *   remaining 75%.
+ *   title-safe band with the illustration in the remaining 75%.
  */
 type TitleSafePosition = "top" | "middle" | "bottom";
 
 /**
- * TOP button — premium square coloring-book cover with a large, clean
- * TOP-CENTER title + subtitle zone (with organic decoration around/below the
- * title), the original artwork kept large below, borderless, pure B&W line art.
- * Static (no per-call interpolation).
+ * TOP button — dedicated premium square coloring-book cover: faithful source
+ * recomposition (source connections are immutable, decoration must yield to the
+ * source), an upper ~25-28% typography staging area, sparse OPTIONAL context-
+ * aware motifs, borderless, pure B&W. Static (no per-call interpolation).
  */
-const TOP_COVER_PROMPT = `You are a professional coloring-book cover designer specializing in premium square coloring-book covers, clean black-and-white line art, and faithful image recomposition.
+const TOP_COVER_PROMPT = `You are a professional coloring-book cover designer specializing in
+premium square coloring-book covers, faithful source-artwork
+recomposition, and clean black-and-white line art.
 
-Transform the FIRST PROVIDED IMAGE into a premium STRICTLY 1:1 square coloring-book cover. The FIRST PROVIDED IMAGE is the PRIMARY SOURCE OF TRUTH. This is a RECOMPOSITION task, NOT a redesign. Preserve the original illustration as faithfully as possible.
+Transform the FIRST PROVIDED IMAGE into ONE premium STRICTLY 1:1 square
+coloring-book cover.
 
-==================================================
-CORE DESIGN GOAL
-==================================================
+The FIRST PROVIDED IMAGE is the PRIMARY SOURCE OF TRUTH.
 
-Create a professional square coloring-book cover with:
-1. A LARGE, CLEAN, EMPTY TITLE + SUBTITLE AREA at the TOP CENTER.
-2. The ORIGINAL ILLUSTRATION kept as LARGE as practically possible below it.
-3. Extremely narrow left and right margins around the artwork.
-4. A very small bottom margin.
-5. Sparse, context-aware decorative motifs distributed naturally around the composition.
-6. NO border and NO frame.
+This is a RECOMPOSITION task, NOT a redesign task.
 
-The most important visual balance is: LARGE TITLE SPACE + NATURAL DECORATION AROUND THE TITLE + LARGE ORIGINAL ARTWORK
-
-Do NOT sacrifice the title space in order to enlarge the artwork. Do NOT sacrifice the artwork by shrinking it excessively. The final composition should feel like a professionally designed coloring-book cover, not like an illustration placed inside a blank template.
+The goal is to preserve the original illustration while professionally
+recomposing it into a borderless square cover with natural space for
+future title and subtitle typography.
 
 ==================================================
-PROTECTED TITLE + SUBTITLE ZONE — CRITICAL
+1. SOURCE ARTWORK LOCK
 ==================================================
 
-Reserve approximately the TOP 30% of the square canvas primarily for the future TITLE and SUBTITLE. The TITLE will be added later by an editor at the TOP CENTER. The SUBTITLE will be added later by an editor directly below the TITLE.
+Treat the entire original illustration as ONE COMPLETE INTACT ARTWORK.
 
-Do NOT generate any text. Do NOT generate placeholder text. Do NOT generate letters. Do NOT generate typography. The future text placement areas must remain completely unobstructed.
+The source artwork must remain immediately recognizable as the same
+original illustration.
 
-IMPORTANT: The MAIN ILLUSTRATION must NOT enter the CENTRAL TYPOGRAPHY AREA. No major original object may extend behind or through the future TITLE or SUBTITLE. Do NOT allow the balloon, house, animal, character, vehicle, building, or any other major subject from the original illustration to enter the central title/subtitle placement area. When uncertain, prioritize preserving a clean and usable central title/subtitle area.
+Preserve the original:
 
-==================================================
-CENTRAL TYPOGRAPHY AREA VS SURROUNDING WHITESPACE
-==================================================
-
-CRITICAL DESIGN DISTINCTION: The ACTUAL FUTURE TEXT PLACEMENT AREAS must remain clean. However, the SURROUNDING WHITESPACE around those text areas does NOT need to be completely empty.
-
-The central text placement area should remain predominantly white, clean, calm, and unobstructed. The surrounding whitespace may contain a FEW small, lightweight, context-aware decorative motifs.
-
-This means: CLEAN TEXT AREA + ORGANIC DECORATION AROUND IT
-NOT: COMPLETELY EMPTY ENTIRE TOP AREA.
-
-==================================================
-TITLE ZONE — ORGANIC DECORATION
-==================================================
-
-The title area should feel clean but naturally integrated with the rest of the cover. Small decorative motifs MAY appear:
-- around the upper-left side of the title
-- around the upper-right side of the title
-- beside the title
-- near the outer edges of the title
-- immediately below the title
-- in the whitespace between TITLE and SUBTITLE
-- beside the subtitle
-- around the outer perimeter of the typography zone
-- in the transition area between typography and main artwork
-
-IMPORTANT: A FEW SMALL DECORATIVE MOTIFS MAY APPEAR DIRECTLY BELOW THE FUTURE TITLE. This is intentional. They may occupy part of the whitespace between TITLE and SUBTITLE. They should feel like small floating thematic accents, similar to professionally designed children's coloring-book covers. The area between TITLE and SUBTITLE may therefore contain a few small decorative elements.
-
-However:
-The actual TITLE placement area must remain completely clear.
-The actual SUBTITLE placement area must remain completely clear.
-Decorations must never overlap the future text.
-Decorations must never visually compete with the future text.
-Decorations must never become large enough to reduce the usable title/subtitle space.
-
-==================================================
-DECORATION STYLE
-==================================================
-
-Analyze the original illustration and derive decorations from its actual visual theme. Decorations must match:
-- environment
-- season
-- weather
-- time of day
-- activity
-- atmosphere
-- subject matter
 - characters
+- animals
 - objects
-- overall thematic identity
-
-Use only simple small BLACK LINE-ART motifs. Decorations should be:
-- sparse
-- small
-- lightweight
-- subtle
-- organic
-- irregularly distributed
-- varied in scale
-- naturally integrated
-- visually secondary to the main illustration and typography
-
-Possible motifs may include, ONLY when appropriate to the source illustration:
-- tiny flowers
-- small stars
-- leaves
-- hearts
-- clouds
-- bubbles
-- sparkles
-- tiny thematic objects
-- small nature elements
-- other simple motifs derived from the original scene
-
-Do NOT invent large new objects. Do NOT introduce unrelated themes.
-
-==================================================
-DECORATION PLACEMENT — IMPORTANT
-==================================================
-
-Decorations should be organically distributed rather than mechanically positioned. Use a few accents in different areas. Some may appear near the title. Some may appear immediately below the title. Some may appear between title and subtitle. Some may appear near the sides. Some may appear around the transition between typography and artwork. Some may appear in open areas around the main illustration.
-
-The distribution should feel natural and slightly asymmetrical.
-
-Do NOT create repetitive patterns. Do NOT create rows. Do NOT create columns. Do NOT create grids. Do NOT create symmetrical decorative arrangements. Do NOT create a decorative ceiling above the title. Do NOT create a decorative frame around the title. Do NOT create a corner frame. Do NOT create a decorative border. Do NOT create a banner. Do NOT create a ribbon. Do NOT create a panel. Do NOT create a box. Do NOT create a horizontal divider. Do NOT create a vertical divider. Do NOT create an underline beneath the title.
-
-Decorations immediately below the title must appear as a FEW INDIVIDUAL FLOATING MOTIFS, NOT as a continuous line or separator.
-
-==================================================
-TITLE / SUBTITLE VISUAL STRUCTURE
-==================================================
-
-The intended visual hierarchy is approximately:
-
-small motif small motif TITLE small motif ✦ small motif SUBTITLE natural breathing space MAIN ARTWORK
-
-The exact arrangement must NOT be rigid. Do NOT force the motifs into a symmetrical layout. The title and subtitle remain the dominant empty placement areas. Small decorative motifs may occupy the surrounding whitespace and the space between the two future text elements. The central text placement areas must remain unobstructed.
-
-==================================================
-MAIN ILLUSTRATION — PRIMARY SOURCE
-==================================================
-
-Preserve the original illustration as faithfully as possible. Preserve:
-- original characters
-- original animals
-- original objects
-- original subjects
-- facial expressions
 - poses
-- gestures
+- expressions
 - proportions
 - relative scale
 - important details
-- line-art style
-- line weight
-- visual identity
+- visual relationships
+- overlapping relationships
+- structural elements
+- line-art characteristics
 - thematic identity
-- original composition relationships
+- natural composition
 
-Do NOT redesign the original illustration. Do NOT replace characters. Do NOT invent new major objects. Do NOT substantially alter the scene. Do NOT change character identity. Do NOT change poses. Do NOT change expressions. Do NOT reinterpret the original artwork. Do NOT simplify away important original details. Do NOT transform the original illustration into a different scene.
+Do NOT redesign the source illustration.
 
-The final artwork must remain immediately recognizable as the SAME ORIGINAL ILLUSTRATION.
+Do NOT reinterpret the source illustration.
 
-==================================================
-ARTWORK VERTICAL POSITION
-==================================================
+Do NOT simplify important source elements.
 
-Position the MAIN ILLUSTRATION BELOW the protected central typography area. The topmost meaningful part of the original artwork should begin BELOW the future TITLE + SUBTITLE placement area.
+Do NOT replace original objects with newly invented alternatives.
 
-Leave a MODERATE and NATURAL breathing space between: SUBTITLE and MAIN ILLUSTRATION. Do NOT make this gap excessively large. Do NOT allow the artwork to creep upward into the central typography area. Small decorative motifs may occupy parts of this transition space if contextually appropriate.
+Do NOT independently redesign individual source elements.
 
-If there is a conflict between: A) slightly smaller artwork and B) preserving a clean usable title/subtitle area — CHOOSE A. The typography area must remain usable.
+Do NOT change the story, activity, or meaning of the scene.
 
-==================================================
-MAXIMUM ARTWORK SCALE
-==================================================
-
-After protecting the title/subtitle area, make the original illustration as LARGE as practically possible. Do NOT create a small centered illustration. Do NOT unnecessarily shrink the artwork. Do NOT create excessive white margins around the artwork. The original illustration should dominate the lower portion of the cover. Use the available lower canvas efficiently.
+The source artwork must remain the dominant visual content of the cover.
 
 ==================================================
-MAXIMUM HORIZONTAL COVERAGE
+2. PRESERVE SOURCE CONNECTIONS
 ==================================================
 
-This is a MAJOR priority. Make the main illustration extend as close as practically possible to BOTH the LEFT and RIGHT canvas edges. Target approximately 99.9% horizontal coverage where physically possible. Keep only a tiny visible white safety gap where necessary. The artwork may visually approach or nearly touch the left and right boundaries.
+Preserve every meaningful visual connection contained in the original
+artwork.
 
-DO NOT crop important artwork. DO NOT clip important objects. DO NOT remove meaningful elements merely to increase width. If the original composition naturally allows extremely narrow side margins, use them.
+This includes, when present:
 
-Prefer: LARGE ARTWORK + VERY NARROW SIDE MARGINS over: SMALL ARTWORK + LARGE SIDE MARGINS.
+- strings
+- ropes
+- cables
+- wires
+- stems
+- branches
+- paths
+- tracks
+- handles
+- supports
+- limbs
+- object attachments
+- continuous outlines
+- structural lines
+- other connected visual elements
+
+If two original elements are connected by a visible line, pathway, or
+structural relationship, preserve that relationship continuously.
+
+Do NOT:
+
+- delete a source connection
+- shorten a source connection
+- redirect a source connection
+- disconnect connected source elements
+- attach a source connection to a newly generated object
+- replace a source connection with decoration
+- reinterpret a source connection as part of a decorative motif
+
+The original source connections are immutable.
+
+If preserving a decorative element would conflict with a source connection,
+REMOVE THE DECORATION.
+
+Never modify the source to accommodate decoration.
 
 ==================================================
-BOTTOM MARGIN
+3. SOURCE EXCLUSION ZONES
 ==================================================
 
-Push the main illustration toward the bottom edge as much as practically possible. Target approximately 5px of white margin at final output resolution. Do NOT create a large bottom margin. Do NOT shrink the artwork merely to increase bottom padding.
+Important source elements create natural exclusion zones around themselves.
+
+Do not place newly generated decorative elements directly on, across,
+inside, or immediately adjacent to:
+
+- meaningful source connections
+- thin structural lines
+- important contours
+- object attachments
+- overlapping source relationships
+- important character details
+- important object boundaries
+
+Do not allow a new decorative element to visually merge with an original
+source element.
+
+Do not create ambiguity about whether a line or object belongs to the
+original illustration or to the new decoration.
+
+When a region is structurally important to the source artwork, leave it
+alone.
+
+SOURCE FIDELITY ALWAYS HAS PRIORITY OVER DECORATION.
 
 ==================================================
-SOURCE BORDER
+4. RECOMPOSE THE COMPLETE SOURCE ARTWORK
 ==================================================
 
-If the original image contains:
-- border
-- frame
-- rounded rectangle
-- perimeter outline
-- enclosing frame
-- decorative outer box
-REMOVE IT COMPLETELY. The source border is a layout artifact. Do NOT preserve it. Do NOT replace it. Do NOT create a new border.
+Remove the original source border or enclosing frame if one exists.
+
+Then uniformly scale the COMPLETE source artwork as one intact composition.
+
+Preserve the original aspect ratio.
+
+Do not stretch.
+
+Do not distort.
+
+Do not independently resize source elements.
+
+Do not crop important source content.
+
+Do not unnecessarily compress the source artwork toward the center.
+
+Do not force the artwork into a perfectly centered geometric arrangement.
+
+Do not create artificial symmetry.
+
+Preserve the source composition's natural center of visual gravity.
+
+The artwork should occupy most of the lower portion of the square cover
+while remaining as large as naturally possible.
+
+Allow meaningful source elements to extend broadly toward the left and
+right sides when the original composition naturally supports this.
+
+Do not pull peripheral source elements inward merely to create equal
+margins.
+
+Do not shrink the source artwork simply to create excessive empty margins.
+
+The final composition should feel substantial, immersive, and naturally
+balanced.
 
 ==================================================
-CANVAS
+5. TYPOGRAPHY STAGING AREA
 ==================================================
 
-Final canvas MUST be exactly 1:1 square.
-Background:
-- pure white
-- clean
-- flat
-- untextured
-Artwork:
-- pure black line art
-- white background
-Decorations:
-- pure black line art
-- white background
-Absolutely NO:
+Reserve approximately the upper 25–28% of the canvas as a flexible
+staging region for future TITLE and SUBTITLE typography.
+
+Do NOT generate:
+
+- text
+- letters
+- words
+- numbers
+- pseudo-text
+- placeholder text
+- typography
+
+The title and subtitle will be added later by an external editor.
+
+The upper area should provide calm, readable negative space for future
+typography.
+
+However, do NOT create a rigid empty rectangle.
+
+Do NOT create:
+
+- title boxes
+- banners
+- ribbons
+- panels
+- frames
+- dividers
+- underlines
+- decorative containers
+
+The transition between the typography region and the original artwork
+should feel natural rather than like a hard horizontal boundary.
+
+The title area should be clean enough for typography without making the
+entire upper region unnaturally empty.
+
+==================================================
+6. NEGATIVE SPACE IS ALLOWED
+==================================================
+
+Empty space is a valid design element.
+
+Do NOT attempt to fill every empty region.
+
+Do NOT treat every empty area as an invitation to add decoration.
+
+Preserve large areas of clean white space when they improve composition.
+
+Negative space should remain visible and intentional.
+
+The cover should feel premium and breathable rather than densely filled.
+
+When uncertain whether an empty region needs decoration:
+
+LEAVE IT EMPTY.
+
+==================================================
+7. OPTIONAL CONTEXTUAL DECORATION
+==================================================
+
+Add a SMALL NUMBER of contextual decorative motifs only when they
+naturally improve the composition.
+
+Decoration is OPTIONAL, not mandatory.
+
+The decorations must be derived from the actual FIRST PROVIDED IMAGE.
+
+Analyze the source dynamically for:
+
+- environment
+- setting
+- season
+- weather
+- activity
+- objects
+- visual motifs
+- atmosphere
+- mood
+- thematic identity
+
+Choose decorative motifs that genuinely belong to that visual world.
+
+Do NOT use a fixed decoration vocabulary.
+
+Do NOT automatically add common coloring-book symbols.
+
+Do NOT add decorations merely because they are visually cute.
+
+Do NOT introduce unrelated objects.
+
+Do NOT add decorative motifs from previous examples or previous images.
+
+The decoration vocabulary must adapt to each new source image.
+
+==================================================
+8. DECORATION DENSITY
+==================================================
+
+Keep decoration SPARSE and SUBORDINATE.
+
+Decoration is an accent layer, NOT a second illustration.
+
+The original artwork must remain significantly more visually important
+than all decorative motifs combined.
+
+Prefer a small number of well-placed motifs over many small motifs.
+
+Do NOT attempt to achieve full-canvas decoration coverage.
+
+Do NOT decorate every quadrant.
+
+Do NOT place a decoration simply to balance another decoration.
+
+Do NOT force decoration into empty areas.
+
+Large clean white regions are desirable.
+
+If the source artwork is already visually detailed, reduce decoration
+further.
+
+If the source artwork has very little natural negative space, use even
+fewer decorations.
+
+If a decoration does not clearly improve the composition, do not add it.
+
+==================================================
+9. ORGANIC DECORATION PLACEMENT
+==================================================
+
+Place decorations only in genuine, safe negative-space pockets.
+
+Use naturally irregular:
+
+- positions
+- spacing
+- scale
+- orientation
+- density
+
+Avoid mechanical distribution.
+
+Do NOT create:
+
+- grids
+- rows
+- columns
+- equal spacing
+- repeating patterns
+- wallpaper
+- radial arrangements
+- mirrored arrangements
+- evenly balanced decoration
+- decorative borders
+
+It is completely acceptable for one side of the composition to contain
+more decoration than another side.
+
+It is completely acceptable for some areas to contain no decoration.
+
+Do not force visual symmetry.
+
+The decoration should feel casually and naturally scattered, while still
+being professionally art-directed.
+
+==================================================
+10. DECORATION MUST YIELD TO THE SOURCE
+==================================================
+
+New decorative elements must NEVER modify, interrupt, replace, or visually
+confuse the original artwork.
+
+Never place decoration:
+
+- on top of important source elements
+- across meaningful source connections
+- at the endpoint of a source connection
+- immediately beside a thin structural source line when it could create
+  ambiguity
+- inside an important source object
+- between two source elements that are visibly connected
+- where it could visually become part of the original illustration
+
+If a decorative element conflicts with the source:
+
+REMOVE THE DECORATIVE ELEMENT.
+
+Do NOT move, shorten, erase, or redraw the source element.
+
+==================================================
+11. DECORATION STYLE
+==================================================
+
+All new decorative motifs must match the original illustration's visual
+language.
+
+Use:
+
+- simple black outlines
+- clean contours
+- white interiors
+- coloring-book friendly shapes
+- consistent line-art character
+
+New decoration should look as though it naturally belongs to the original
+illustration.
+
+Do not introduce:
+
 - color
 - gray
 - shading
 - gradients
 - shadows
-- cross-hatching
-- 3D effects
-- texture
-- watercolor
-- colored fills
-- gray fills
+- textures
+- realistic lighting
+- painterly effects
+- photographic elements
+- highly detailed decorative artwork
 
 ==================================================
-OPEN BORDERLESS COMPOSITION
+12. BORDERLESS COVER
 ==================================================
 
-The final cover must have NO:
+The final cover must be completely open and borderless.
+
+If the original source contains a:
+
 - border
 - frame
-- perimeter line
-- rectangular frame
-- rounded frame
-- corner frame
-- decorative frame
-- enclosing outline
-- panel
-- box
-- banner
-- ribbon
-- separator
-- horizontal divider
-- vertical divider
+- rounded rectangle
+- perimeter outline
+- enclosing boundary
 
-The composition must feel OPEN and BORDERLESS. Decorations must exist as independent organic accents. They must NEVER connect together to create an enclosing structure.
+remove it completely.
 
-==================================================
-EDGE BEHAVIOR
-==================================================
+Do NOT replace it with another border.
 
-TOP EDGE: Keep clean white space. No major artwork may touch the top edge. Small peripheral decorative motifs may approach the upper region if appropriate. However, they must never form a decorative ceiling or border.
+Do NOT create a new frame.
 
-LEFT AND RIGHT: The main artwork may approach extremely close to the edges. Keep only a tiny safety gap where necessary.
+Do NOT create corner framing.
 
-BOTTOM: Artwork may approach extremely close to the bottom edge. Target approximately 5px white margin.
+Do NOT allow decorative motifs to collectively form a border.
 
-Never create a perimeter line.
+The composition should naturally flow toward the canvas edges.
 
 ==================================================
-COMPOSITION PRIORITY
+13. COLORING-BOOK STYLE
 ==================================================
 
-Follow this priority order:
-1. Preserve the original illustration.
-2. Protect a large, usable CENTRAL TITLE + SUBTITLE placement area.
-3. Keep the actual future TITLE placement area clean.
-4. Keep the actual future SUBTITLE placement area clean.
-5. Keep the central typography area predominantly white and calm.
-6. Allow a FEW small decorative motifs around the typography.
-7. Allow a FEW small decorative motifs immediately below the TITLE.
-8. Allow a FEW small decorative motifs in the whitespace between TITLE and SUBTITLE.
-9. Keep decorations away from the actual text placement areas.
-10. Keep a moderate natural gap below the SUBTITLE.
-11. Make the original artwork as large as practically possible.
-12. Maximize left/right artwork coverage.
-13. Minimize bottom margin.
-14. Add sparse context-aware decorations.
-15. Keep decorations organic, irregular, asymmetric, and non-repetitive.
-16. Keep the entire composition open and borderless.
-17. Never generate text.
+The entire final image must remain compatible with a premium
+black-and-white coloring-book aesthetic.
 
-If any instruction conflicts with the actual future TITLE or SUBTITLE placement areas: PROTECT THE TEXT PLACEMENT AREAS FIRST. However: DO NOT interpret this as requiring the ENTIRE TOP 30% to be completely decoration-free. The actual text areas must be clean. The surrounding whitespace may contain subtle decorative accents.
+Use:
 
-==================================================
-FINAL VISUAL CHECK
-==================================================
+- pure black line art
+- clean white background
+- crisp outlines
+- readable shapes
+- consistent line-art weight and character
+- white interior areas
 
-Before generating the final image, verify:
-- Final canvas is strictly 1:1 square.
-- Original illustration remains immediately recognizable.
-- Original characters remain faithful.
-- Original animals remain faithful.
-- Original objects remain faithful.
-- Original proportions remain faithful.
-- Original poses remain faithful.
-- Original expressions remain faithful.
-- Source border is completely removed.
-- No new border or frame is created.
-- Approximately the top 30% functions primarily as the title/subtitle area.
-- The actual TITLE placement area is large and clean.
-- The actual SUBTITLE placement area is large and clean.
-- The future TITLE has sufficient room.
-- The future SUBTITLE has sufficient room.
-- No major artwork enters the central typography area.
-- No balloon, character, animal, building, vehicle, or major object enters the title/subtitle placement areas.
-- There is a moderate natural gap between subtitle and artwork.
-- Artwork remains very large.
-- Artwork is not unnecessarily shrunk.
-- Artwork reaches extremely close to both left and right edges.
-- Bottom margin is extremely small.
-- A FEW small context-aware decorative motifs appear naturally.
-- Some small decorative motifs may appear immediately below the future TITLE.
-- Some small decorative motifs may appear between TITLE and SUBTITLE.
-- These motifs remain small and visually secondary.
-- These motifs do NOT overlap the future text.
-- Decorations do NOT create an underline.
-- Decorations do NOT create a divider.
-- Decorations do NOT create a frame.
-- Decorations do NOT create a border.
-- Decorations do NOT form repetitive patterns.
-- Decorations do NOT form rows, columns, grids, or symmetrical arrangements.
-- The central text placement areas remain unobstructed.
-- The surrounding typography whitespace feels naturally decorated rather than completely empty.
-- No text is generated.
-- No letters are generated.
-- No color is present.
-- No gray is present.
-- No shading is present.
-- No gradients are present.
-- No texture is present.
+Do NOT use:
+
+- color
+- grayscale
+- gray fills
+- shading
+- gradients
+- shadows
+- textures
+- painterly rendering
+- realistic lighting
+- photographic effects
 
 ==================================================
-FINAL OUTPUT
+14. COMPOSITION PRIORITY
 ==================================================
 
-Generate ONE strictly 1:1 square coloring-book cover. The final result should visually communicate:
+When instructions conflict, follow this priority:
 
-LARGE CLEAN TITLE SPACE + NATURAL SMALL DECORATION AROUND TITLE + SMALL DECORATIVE ACCENTS BETWEEN TITLE AND SUBTITLE + CLEAN SUBTITLE SPACE + NATURAL BREATHING SPACE + LARGE ORIGINAL ILLUSTRATION + EXTREMELY NARROW SIDE MARGINS + VERY SMALL BOTTOM MARGIN + SPARSE CONTEXT-AWARE DECORATION + OPEN BORDERLESS WHITE BACKGROUND
+1. Preserve the original artwork.
+2. Preserve all original source relationships and connections.
+3. Preserve original proportions and structure.
+4. Preserve the natural spatial extent of the source artwork.
+5. Keep the source artwork large and visually dominant.
+6. Preserve the source composition's natural visual gravity.
+7. Create useful space for future title and subtitle typography.
+8. Preserve intentional negative space.
+9. Add sparse contextual decoration only when genuinely useful.
+10. Maintain visual harmony and professional cover composition.
+11. Remove the original border.
+12. Never generate text.
 
-The most important requirement is: KEEP THE ACTUAL TITLE AND SUBTITLE PLACEMENT AREAS CLEAN AND USABLE, WHILE ALLOWING A FEW SMALL, ORGANIC, CONTEXT-AWARE DECORATIVE MOTIFS TO APPEAR AROUND THE TITLE AND EVEN DIRECTLY BELOW THE TITLE.
+==================================================
+15. FINAL INTERNAL CHECK
+==================================================
 
-The decoration should feel naturally integrated into the typography area, NOT completely separated from it. The space should NOT look like a large empty white rectangle. At the same time, decorations must remain subtle enough that the future TITLE and SUBTITLE can be placed clearly and professionally.
+Before producing the final image, verify:
 
-Do NOT let the original artwork or decorations destroy the usable TITLE + SUBTITLE space. Do NOT make the entire upper area unnaturally empty. Do NOT make the decoration overly dense. The final cover should look like a professionally art-directed coloring-book cover designed specifically for later TITLE + SUBTITLE insertion.`;
+SOURCE:
+- The original illustration remains immediately recognizable.
+- Important characters and objects are preserved.
+- Original proportions are preserved.
+- Original spatial relationships are preserved.
+- Meaningful source connections remain continuous.
+- No source connection has been deleted or redirected.
+- No new decoration has become attached to a source connection.
+- No important source element has been redesigned.
+
+COMPOSITION:
+- The canvas is exactly 1:1.
+- The artwork is not unnecessarily compressed toward the center.
+- The artwork retains its natural horizontal and vertical presence.
+- The artwork remains large and visually dominant.
+- The composition does not rely on artificial symmetry.
+- The upper region provides useful future title/subtitle space.
+- The title area is not enclosed by a box or banner.
+
+DECORATION:
+- Decoration is sparse.
+- Decoration is optional rather than mandatory.
+- Decoration is derived from the actual source.
+- Decoration does not use a fixed generic vocabulary.
+- Decoration occupies only suitable negative-space pockets.
+- Large areas of clean white space remain.
+- Decoration does not cover, touch, interrupt, or confuse source elements.
+- Decoration does not form a pattern or border.
+- Decoration does not compete with the original artwork.
+
+STYLE:
+- Pure black line art.
+- Clean white background.
+- No color.
+- No gray.
+- No shading.
+- No gradients.
+- No shadows.
+- No textures.
+- No generated text.
+
+If adding a decoration would require changing, moving, deleting, shortening,
+redirecting, or obscuring any part of the original artwork:
+
+DO NOT ADD THE DECORATION.
+
+When uncertain, preserve the original artwork and leave the area empty.
+
+Generate ONE strictly 1:1 premium black-and-white coloring-book cover.`;
 
 function regionClauses(titleSafe: TitleSafePosition): { safe: string; art: string } {
   switch (titleSafe) {
@@ -381,7 +554,8 @@ function regionClauses(titleSafe: TitleSafePosition): { safe: string; art: strin
 }
 
 export function buildCoverSourceBWPrompt(titleSafe: TitleSafePosition): string {
-  // TOP uses the dedicated premium square-cover prompt (tuned separately).
+  // TOP uses the dedicated square-cover prompt (faithful source recomposition +
+  // upper title staging); middle/bottom use the shared 25/75 template.
   if (titleSafe === "top") return TOP_COVER_PROMPT;
 
   const { safe, art } = regionClauses(titleSafe);

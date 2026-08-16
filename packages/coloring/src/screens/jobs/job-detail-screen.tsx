@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
@@ -18,7 +18,7 @@ import { JobClassifyTab } from "./job-classify-tab";
 import { metaFor } from "../../data/status";
 import { useQueueActions, rowActionFor } from "../../data/use-queue-actions";
 import { resolveImg } from "../../data/img";
-import type { CloneJobDetail, CloneJobPage } from "../../data/types";
+import type { CloneJobDetail, CloneJobPage, CloneRetryRecord } from "../../data/types";
 
 const capLabel = {
   fontSize: 11,
@@ -56,9 +56,15 @@ function InfoTab({ job }: { job: CloneJobDetail }) {
     ["Số trang", <span style={mono} key="p">{job.totalPages}</span>],
     ["Đã xử lý", <span style={mono} key="a">{`${job.analyzedPages}/${job.totalPages}`}</span>],
     ["Trạng thái", <Badge tone={meta.tone} dot={meta.dot} key="st">{meta.label}</Badge>],
+  ];
+  if (job.status === "error" && job.failedStep) {
+    rows.push(["Bước lỗi", <span style={{ ...mono, color: "var(--danger)" }} key="fs">{job.failedStep}</span>]);
+  }
+  rows.push(
     ["Tạo", <span style={mono} key="c">{fmtDate(job.createdAt)}</span>],
     ["Cập nhật", <span style={mono} key="u">{fmtDate(job.updatedAt)}</span>],
-  ];
+  );
+  const retries: CloneRetryRecord[] = Array.isArray(job.retryHistory) ? job.retryHistory : [];
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, alignItems: "start" }}>
       <Card title="Thông tin job">
@@ -71,8 +77,26 @@ function InfoTab({ job }: { job: CloneJobDetail }) {
           ))}
         </div>
         {job.error && (
-          <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12.5 }}>
+          <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
             {job.error}
+          </div>
+        )}
+        {retries.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginBottom: 6 }}>
+              Lịch sử retry ({retries.length})
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {retries.map((r, i) => (
+                <div key={i} style={{ borderLeft: "2px solid var(--danger)", paddingLeft: 8, fontSize: 11.5 }}>
+                  <div style={{ ...mono, color: "var(--muted-foreground)" }}>
+                    <span style={{ color: "var(--foreground)", fontWeight: 600 }}>{r.step} · lần {r.attempt}</span>
+                    {" · "}{fmtDate(r.at)}
+                  </div>
+                  <div style={{ color: "var(--danger)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{r.error}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </Card>
@@ -129,6 +153,17 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
         pages: [],
       }
     : fetched;
+
+  // When a job is in error, default to the info tab so the failure reason is
+  // visible immediately. Only auto-switch once, so the user can still browse
+  // other tabs afterwards.
+  const autoSwitchedToError = useRef(false);
+  useEffect(() => {
+    if (!autoSwitchedToError.current && job?.status === "error") {
+      setTab("info");
+      autoSwitchedToError.current = true;
+    }
+  }, [job?.status]);
 
   if (!localJob && isLoading) {
     return (

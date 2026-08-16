@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import { enqueueCloneJob } from "@vx/clone-core/queue-enqueue";
 import { cloneQueue } from "@/lib/queue/clone-queue";
+import { withQueueTimeout, isQueueTimeout, queueUnavailableResponse } from "@/lib/queue/queue-timeout";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,12 @@ const RUNNING_STALE_MS = 15 * 60_000;
  * via jobId dedupe). Re-enqueue those so Resume always restarts real work.
  */
 export async function POST() {
-  await cloneQueue.resume();
+  try {
+    await withQueueTimeout(cloneQueue.resume());
+  } catch (err) {
+    if (isQueueTimeout(err)) return queueUnavailableResponse();
+    throw err;
+  }
 
   const staleThreshold = new Date(Date.now() - RUNNING_STALE_MS);
   const dbQueued = await prisma.cloneJob.findMany({
@@ -34,9 +40,15 @@ export async function POST() {
   const errors: string[] = [];
   for (const { id } of dbQueued) {
     try {
-      const result = await enqueueCloneJob(cloneQueue, id);
+      const result = await withQueueTimeout(enqueueCloneJob(cloneQueue, id));
       if (result.enqueued) requeued.push(id);
     } catch (err) {
+      // If Redis stops answering mid-loop, bail out rather than eating one
+      // timeout per remaining job — the reconciler will finish the rest later.
+      if (isQueueTimeout(err)) {
+        console.error("resume: queue went unreachable mid-reconcile; aborting", err);
+        return queueUnavailableResponse({ requeued: requeued.length });
+      }
       // One bad job must not abort reconciliation of the rest.
       console.error(`resume: failed to re-enqueue clone job ${id}`, err);
       errors.push(id);
