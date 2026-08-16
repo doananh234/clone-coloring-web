@@ -134,13 +134,13 @@ function PageThumb({ page, displayNumber, tone, onClick }: { page: BookColoringP
   );
 }
 
-function PageSection({ tone, count, children }: { tone: BookPageTone; count: number; children: ReactNode }) {
+function PageSection({ tone, count, children, label }: { tone: BookPageTone; count: number; children: ReactNode; label?: string }) {
   const t = TONE_STYLE[tone];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ width: 11, height: 11, borderRadius: 3, background: t.border }} />
-        <span style={{ ...cap, fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{t.label}</span>
+        <span style={{ ...cap, fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{label ?? t.label}</span>
         <span style={{ ...mono, fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{count}</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
@@ -488,7 +488,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {coloredPages.length > 0 && (
-                    <PageSection tone="colored" count={coloredPages.length}>
+                    <PageSection tone="colored" count={coloredPages.length} label="Interior Colored">
                       {coloredPages.map(({ p, i }) => {
                         const label = deriveBookPageLabel(p, i, pages);
                         return (
@@ -504,7 +504,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                     </PageSection>
                   )}
                   {sourceCovers.some((s) => s.coloredUrl) && (
-                    <PageSection tone="colored" count={sourceCovers.filter((s) => s.coloredUrl).length}>
+                    <PageSection tone="colored" count={sourceCovers.filter((s) => s.coloredUrl).length} label="Source Cover Colored">
                       {sourceCovers.filter((s) => s.coloredUrl).map((s) => (
                         <PageThumb
                           key={`sc-${s.id}`}

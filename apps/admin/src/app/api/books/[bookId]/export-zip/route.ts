@@ -12,10 +12,13 @@ import { resolveR2Url } from "@vx/server-core/r2";
  *     Book cover/     ← source pages pageType="cover" (fallback: first source page)
  *     Book intro/     ← source pages pageType="interiorIntro"
  *     Book interior/  ← source pages pageType="interior"/unclassified  (excluded pages skipped)
- *   Clone book/  (this Book — B&W line-art, NOT the colored result)
- *     Book cover/     ← ALL cover candidates (data.coverCandidates[]; fallback coverUrl)
- *     Book intro/     ← summaryPages[].url (B&W)
- *     Book interior/  ← coloringPages[].url (B&W — colorized / pushed-to-cover pages stay here)
+ *   Clone book/  (this Book)
+ *     Book cover/            ← ALL cover candidates (data.coverCandidates[]; fallback coverUrl)
+ *     Book intro/            ← summaryPages[].url (B&W)
+ *     Book interior/         ← coloringPages[].url (B&W — colorized / pushed-to-cover pages stay here)
+ *     Book colored/          ← coloringPages[].coloredUrl (interior pages that were colorized)
+ *     Source cover/          ← data.sourceCovers[].url (on-demand B&W covers from interiors)
+ *     Source cover colored/  ← data.sourceCovers[].coloredUrl (colorized source covers)
  *
  * "Main book" = the ORIGINAL source it was cloned from (the source CloneJob);
  * "Clone book" = this Book record (the AI-generated clone/reproduction).
@@ -65,7 +68,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ boo
   type Page = { url?: string; coloredUrl?: string; imageUrl?: string; pageType?: string; excluded?: boolean };
   const data = (book.data as Record<string, unknown> | null) ?? {};
   const pad = (i: number) => `page-${String(i + 1).padStart(3, "0")}`;
-  const toEntries = (arr: Page[], key: "imageUrl" | "url"): ImageEntry[] =>
+  const toEntries = (arr: Page[], key: "imageUrl" | "url" | "coloredUrl"): ImageEntry[] =>
     arr.map((p, i) => ({ url: p[key] || "", name: pad(i) })).filter((e) => e.url);
 
   const zip = new JSZip();
@@ -103,9 +106,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ boo
         : [];
   const summaryPages = (book.summaryPages as Page[] | null) ?? [];
   const coloringPages = (book.coloringPages as Page[] | null) ?? [];
+  const sourceCovers = (data.sourceCovers as Page[] | null) ?? [];
   await addFolder(zip, "Clone book/Book cover", cloneCover);
   await addFolder(zip, "Clone book/Book intro", toEntries(summaryPages, "url"));
   await addFolder(zip, "Clone book/Book interior", toEntries(coloringPages, "url"));
+  // Colorized interior pages (only those that actually have a colored render).
+  await addFolder(zip, "Clone book/Book colored", toEntries(coloringPages, "coloredUrl"));
+  // On-demand source covers (B&W) + their colorized versions.
+  await addFolder(zip, "Clone book/Source cover", toEntries(sourceCovers, "url"));
+  await addFolder(zip, "Clone book/Source cover colored", toEntries(sourceCovers, "coloredUrl"));
 
   const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
   const filename = `${slug(book.title)}-export.zip`;
