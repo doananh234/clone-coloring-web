@@ -3,11 +3,12 @@
  * book-cover LAYOUT while staying PURE BLACK-AND-WHITE LINE ART. Unlike
  * buildCoverSourcePrompt, this NEVER colorizes.
  *
- * - "top": a dedicated square-cover prompt (TOP_COVER_PROMPT below) — preserves
- *   the source artwork + its connections faithfully, reserves the upper ~25-28%
- *   for future title/subtitle, sparse optional context-aware decoration.
- * - "middle" / "bottom": the shared recompose template that reserves a 25%
- *   title-safe band with the illustration in the remaining 75%.
+ * Each title-safe position has its own dedicated, user-tuned prompt:
+ * - "top": a TOP-CENTER title/subtitle header above the largest practical artwork.
+ * - "middle": preserve the source composition, keep a usable MIDDLE title area.
+ * - "bottom": preserve the source composition, keep a usable LOWER title area.
+ * All three lock the original artwork + its structural connections; middle/bottom
+ * additionally append a shared black-and-white / no-text / no-border guard.
  */
 type TitleSafePosition = "top" | "middle" | "bottom";
 
@@ -539,70 +540,146 @@ When uncertain, preserve the original artwork and leave the area empty.
 
 Generate ONE strictly 1:1 premium black-and-white coloring-book cover.`;
 
-function regionClauses(titleSafe: TitleSafePosition): { safe: string; art: string } {
-  switch (titleSafe) {
-    case "top":
-      return { safe: "the UPPER 25% of the canvas", art: "the lower 75% of the canvas" };
-    case "bottom":
-      return { safe: "the LOWER 25% of the canvas", art: "the upper 75% of the canvas" };
-    case "middle":
-      return {
-        safe: "a horizontal band across the MIDDLE ~25% of the canvas",
-        art: "the remaining ~75% split above and below that middle band",
-      };
-  }
-}
+/** Shared black-and-white / no-text / no-border guard appended to the middle and
+ * bottom prompts (whose user-authored bodies omit the B&W + no-text contract). */
+const BW_GUARD = `
+
+==================================================
+BLACK-AND-WHITE COLORING-BOOK LINE ART — NO TEXT
+==================================================
+
+The final image MUST be pure black-and-white coloring-book line art: clean black outlines on a pure white background. NO color, NO gray, NO grayscale, NO shading, NO gradients, NO shadows, NO textures, NO filled areas. Keep the original line weight and style.
+
+Do NOT generate any text, letters, words, numbers, or typography — the title and subtitle are added later by an editor.
+
+If the source contains an outer border, frame, rounded rectangle, or enclosing outline, remove it completely and do not add a new one.`;
+
+/** MIDDLE button — preserve the source composition + structural connections, keep
+ * a usable MIDDLE title area, sparse decoration, plus the shared B&W guard. */
+const MIDDLE_COVER_PROMPT = `Create a children's book cover illustration based closely on the provided original artwork.
+
+The most important requirement is to preserve the original artwork and composition. Treat the provided image as the structural foundation of the cover, not merely as inspiration.
+
+PRESERVE THE ORIGINAL ARTWORK:
+- Keep all main characters, objects, props, shapes, patterns, poses, proportions, orientations, and visual relationships faithful to the original.
+- Preserve the original subject scale, relative positions, composition, perspective, and overall framing.
+- Do not automatically center, shrink, enlarge, rearrange, or rebalance the main artwork just to create space for decorations or typography.
+- Preserve the original cropping and allow elements to naturally approach or extend beyond the canvas edges when the original composition does so.
+- Do not invent new major characters, objects, actions, or story elements.
+- Do not redesign or reinterpret the main subject.
+
+PRESERVE STRUCTURAL CONTINUITY:
+- Preserve every original structural element and connection, including ropes, strings, cables, handles, straps, stems, borders, outlines, attachments, supports, and connecting lines.
+- Every line that connects two original objects must remain connected to the correct objects.
+- Never delete, replace, redirect, merge, hide, or reinterpret an original structural line as a decorative element.
+- Do not allow clouds, flowers, stars, hearts, or other decorations to interrupt or attach themselves to original structural elements.
+
+DECORATION:
+Add a small amount of cute, playful background decoration that matches the visual language of the original artwork, such as simple clouds, stars, flowers, hearts, dots, sparkles, or other motifs that naturally belong to the illustration.
+
+The decoration must remain secondary to the original artwork.
+
+Use the existing negative space of the composition as the primary area for decoration. Do not rearrange the original artwork to create artificial space for decorations.
+
+Keep the decoration sparse, varied, and naturally irregular:
+- Avoid dense decoration.
+- Avoid evenly filling the entire canvas.
+- Avoid grid-like or symmetrical placement.
+- Avoid repetitive spacing or identical clusters.
+- Maintain generous areas of calm negative space.
+- Let some areas remain almost completely undecorated.
+- Decorations may appear near the main artwork when visually natural, but must never interfere with important characters, objects, or structural connections.
+
+MIDDLE TITLE AREA:
+Reserve a visually usable title area around the middle portion of the composition for later typography.
+
+The middle title area should feel like a natural part of the original composition rather than an artificially empty band.
+
+Maintain sufficient calm negative space around the middle area so that a title can later be placed clearly and read comfortably.
+
+Do NOT force all characters or objects away from the middle merely to create a title area. Preserve the original composition first.
+
+Decorations do not need to completely avoid the middle title area. A small number of subtle decorations may appear around or within the surrounding area when they naturally fit the composition, but keep the central title space visually calm and uncluttered.
+
+The title area should have enough visual breathing room for typography without looking like a large empty hole.
+
+OVERALL COMPOSITION:
+The final result should feel like a professionally composed children's book cover while still looking unmistakably like the original artwork.
+
+Preserve the original composition first.
+Preserve structural relationships second.
+Use existing negative space for decoration and typography third.
+
+Do not redesign the artwork simply to make it look more like a generic book cover.${BW_GUARD}`;
+
+/** BOTTOM button — preserve the source composition + structural connections, keep
+ * a usable LOWER title area, sparse decoration, plus the shared B&W guard. */
+const BOTTOM_COVER_PROMPT = `Create a children's book cover illustration based closely on the provided original artwork.
+
+The most important requirement is to preserve the original artwork and composition. Treat the provided image as the structural foundation of the cover, not merely as inspiration.
+
+PRESERVE THE ORIGINAL ARTWORK:
+- Keep all main characters, objects, props, shapes, patterns, poses, proportions, orientations, and visual relationships faithful to the original.
+- Preserve the original subject scale, relative positions, composition, perspective, and overall framing.
+- Do not automatically center, shrink, enlarge, rearrange, or rebalance the main artwork just to create space for decorations or typography.
+- Preserve the original cropping and allow elements to naturally approach or extend beyond the canvas edges when the original composition does so.
+- Do not invent new major characters, objects, actions, or story elements.
+- Do not redesign or reinterpret the main subject.
+
+PRESERVE STRUCTURAL CONTINUITY:
+- Preserve every original structural element and connection, including ropes, strings, cables, handles, straps, stems, borders, outlines, attachments, supports, and connecting lines.
+- Every line that connects two original objects must remain connected to the correct objects.
+- Never delete, replace, redirect, merge, hide, or reinterpret an original structural line as a decorative element.
+- Do not allow clouds, flowers, stars, hearts, or other decorations to interrupt or attach themselves to original structural elements.
+
+DECORATION:
+Add a small amount of cute, playful background decoration that matches the visual language of the original artwork, such as simple clouds, stars, flowers, hearts, dots, sparkles, or other motifs that naturally belong to the illustration.
+
+The decoration must remain secondary to the original artwork.
+
+Use the existing negative space of the composition as the primary area for decoration. Do not rearrange the original artwork to create artificial space for decorations.
+
+Keep the decoration sparse, varied, and naturally irregular:
+- Avoid dense decoration.
+- Avoid evenly filling the entire canvas.
+- Avoid grid-like or symmetrical placement.
+- Avoid repetitive spacing or identical clusters.
+- Maintain generous areas of calm negative space.
+- Let some areas remain almost completely undecorated.
+- Decorations may appear near the main artwork when visually natural, but must never interfere with important characters, objects, or structural connections.
+
+BOTTOM TITLE AREA:
+Reserve a visually usable title area around the lower portion of the composition for later typography.
+
+The bottom title area should feel like a natural part of the original composition rather than an artificially empty block.
+
+Maintain sufficient calm negative space in the lower portion so that a title can later be placed clearly and read comfortably.
+
+Do NOT force all characters or objects upward or away from the bottom merely to create a title area. Preserve the original composition first.
+
+If important original artwork naturally occupies part of the lower area, do not remove, move, shrink, or redesign it just to create title space. Instead, use the naturally available negative space around it.
+
+Decorations do not need to completely avoid the bottom title area. A small number of subtle decorations may appear around the surrounding area when they naturally fit the composition, but keep the main title placement area visually calm and uncluttered.
+
+The bottom title area should have enough visual breathing room for typography without looking like a large artificial empty block.
+
+OVERALL COMPOSITION:
+The final result should feel like a professionally composed children's book cover while still looking unmistakably like the original artwork.
+
+Preserve the original composition first.
+Preserve structural relationships second.
+Use existing negative space for decoration and typography third.
+
+Do not redesign the artwork simply to make it look more like a generic book cover.${BW_GUARD}`;
 
 export function buildCoverSourceBWPrompt(titleSafe: TitleSafePosition): string {
-  // TOP uses the dedicated square-cover prompt (faithful source recomposition +
-  // upper title staging); middle/bottom use the shared 25/75 template.
-  if (titleSafe === "top") return TOP_COVER_PROMPT;
-
-  const { safe, art } = regionClauses(titleSafe);
-  return `You are a professional coloring-book cover designer working in pure black-and-white line art.
-
-TASK:
-Recompose the FIRST provided image (a black-and-white coloring page) into a book-cover LAYOUT. Preserve the original subjects, characters, objects, concept, and line-art style. Reposition so the MAIN ILLUSTRATION occupies ${art}, and reserve ${safe} as a clean, title-safe area for a title to be added LATER.
-
-==================================================
-STAY PURE BLACK-AND-WHITE LINE ART
-==================================================
-
-- Output MUST be pure black-and-white line art: clean black outlines on a white background.
-- NO color. Do not color or colour anything.
-- NO grayscale, NO gray shading, NO gradients, NO filled areas, NO tonal rendering.
-- Keep the exact same line weight, shape language, and stroke quality as the original drawing.
-
-==================================================
-PRESERVE THE ORIGINAL ARTWORK
-==================================================
-
-Keep the original main subject(s), characters, objects, concept, mood, and line-art style. Do NOT switch to a new scene, invent large new characters, or remove important details. The goal is to RE-COMPOSE the page into a cover layout, not to draw a new picture.
-
-==================================================
-TITLE-SAFE AREA (25%)
-==================================================
-
-Reserve ${safe} as a title-safe area for a title/subtitle to be placed LATER (do NOT draw any text now). It must be airy and open — free of the main subject, large objects, and dense detail — but NOT completely empty: scatter SPARSE, small black-and-white line-art motifs drawn from the original's own decorative elements (e.g. stars, leaves, dots, hearts, sparkles) at low density. The transition to the illustration must be natural — no hard dividing line.
-
-==================================================
-MAIN ILLUSTRATION (75%)
-==================================================
-
-Keep the main illustration in ${art}: large enough to read as a thumbnail, do not crop out the character or important objects, keep the rich detail of the source. You MAY gently reposition, rescale, or lightly outpaint the background to fit the cover layout, but everything you add must match the original's line weight and style.
-
-==================================================
-DO NOT GENERATE
-==================================================
-
-- any text: title, subtitle, author name, logo, brand, fake typography, random letters, or watermark
-- any color, grayscale shading, gradients, or filled/painted areas
-- a collage, grid, or multi-panel layout
-- a completely empty title area, or a hard horizontal divider
-
-==================================================
-FINAL OUTPUT
-==================================================
-
-A single black-and-white line-art COVER SOURCE: the original illustration re-composed for a cover, main artwork in ${art}, a clean title-safe area in ${safe} holding only sparse on-brand line-art motifs, and NO text anywhere.`;
+  // Each title-safe position has its own dedicated, user-tuned prompt.
+  switch (titleSafe) {
+    case "top":
+      return TOP_COVER_PROMPT;
+    case "middle":
+      return MIDDLE_COVER_PROMPT;
+    case "bottom":
+      return BOTTOM_COVER_PROMPT;
+  }
 }
