@@ -259,6 +259,29 @@ model CloneJobStatusCount {
   updatedAt DateTime @updatedAt
 }
 
+// Background image-generation job. Long-running gen (Diaflow ~2min) is enqueued
+// here and processed by the worker so the operator can keep working while it
+// runs. Currently: source-cover generation. `type` is a string so colorize (and
+// other kinds) can be added later without a schema change.
+model GenerationJob {
+  id        String   @id @default(cuid())
+  type      String // "source-cover"
+  status    String   @default("pending") // pending | running | done | error
+  bookId    String
+  bookTitle String?
+  // Kind-specific input, e.g. { interiorPageId, titleSafe, prompt?, sourceImageUrl? }.
+  payload   Json     @default("{}")
+  resultUrl String? // generated image url (for quick preview in the drawer)
+  resultId  String? // id of the created artifact (e.g. sourceCover id)
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([bookId])
+  @@index([createdAt])
+}
+
 model Font {
   id        String   @id @default(cuid())
   name      String

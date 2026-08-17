@@ -21,3 +21,24 @@ export function createWorker(processor: Processor): Worker {
     stalledInterval: 30_000,
   });
 }
+
+// Background image-generation jobs (source cover now; colorize later). Kept on a
+// separate queue so a gen backlog never blocks the clone pipeline. lockDuration
+// is generous because a single Diaflow recompose can take ~2 minutes.
+export const generationQueue = new Queue("generation-jobs", {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { age: 7 * 24 * 3600, count: 1000 },
+    removeOnFail: { age: 30 * 24 * 3600 },
+  },
+});
+
+export function createGenerationWorker(processor: Processor): Worker {
+  return new Worker("generation-jobs", processor, {
+    connection: redis,
+    concurrency: 2,
+    lockDuration: 300_000,
+    stalledInterval: 30_000,
+  });
+}

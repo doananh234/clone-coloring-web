@@ -25,10 +25,16 @@ export function SourceCoverSection({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const doGen = async (interiorPageId: string, promptOverride: string) => {
-    if (!pickFor) return;
+  // Queue one background job per selected interior page, then close the dialog.
+  // Each sc.gen() only enqueues (returns fast) — progress shows in the header
+  // queue drawer, so the operator can keep working.
+  const doGen = async (interiorPageIds: string[], promptOverride: string) => {
+    if (!pickFor || interiorPageIds.length === 0) return;
     setBusy(true); setErr(null);
-    try { await sc.gen(interiorPageId, pickFor, promptOverride); setPickFor(null); }
+    try {
+      for (const id of interiorPageIds) await sc.gen(id, pickFor, promptOverride);
+      setPickFor(null);
+    }
     catch (e) { setErr(e instanceof Error ? e.message : "Tạo source cover thất bại"); }
     finally { setBusy(false); }
   };
@@ -66,7 +72,7 @@ export function SourceCoverSection({
         open={pickFor !== null}
         title={`Chọn interior để tạo Source Cover (${pickFor ? LABEL[pickFor] : ""})`}
         titleSafe={pickFor}
-        pages={interiors} busy={busy} onPick={doGen} onClose={() => setPickFor(null)}
+        pages={interiors} busy={busy} onConfirm={doGen} onClose={() => setPickFor(null)}
         fetchDefaultPrompt={sc.defaultPrompt}
       />
     </Card>

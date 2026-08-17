@@ -9,8 +9,11 @@ import type { TitleSafePosition } from "../../data/source-covers";
 
 const promptKey = (ts: TitleSafePosition) => `sourceCoverPrompt:${ts}`;
 
+/** Max interior pages selectable for a single Gen Cover action. */
+const MAX_SELECT = 3;
+
 export function InteriorPickerModal({
-  open, title, titleSafe, pages, busy, onPick, onClose, fetchDefaultPrompt,
+  open, title, titleSafe, pages, busy, onConfirm, onClose, fetchDefaultPrompt,
 }: {
   open: boolean;
   title: string;
@@ -18,8 +21,9 @@ export function InteriorPickerModal({
   titleSafe: TitleSafePosition | null;
   pages: BookColoringPage[];
   busy: boolean;
-  /** Second arg is the (possibly edited) prompt; empty string = server default. */
-  onPick: (interiorPageId: string, promptOverride: string) => void;
+  /** Fired on "Gen (N)": the chosen interior ids + the (possibly edited) prompt
+   *  (empty string = server default). One background job is queued per id. */
+  onConfirm: (interiorPageIds: string[], promptOverride: string) => void;
   onClose: () => void;
   fetchDefaultPrompt: (titleSafe: TitleSafePosition) => Promise<string>;
 }) {
@@ -28,6 +32,8 @@ export function InteriorPickerModal({
   const [loadingPrompt, setLoadingPrompt] = useState(false);
   // Transient status line (Copy/Xóa/Apply feedback). Cleared after a moment.
   const [notice, setNotice] = useState("");
+  // Selected interior page ids (order preserved), capped at MAX_SELECT.
+  const [selected, setSelected] = useState<string[]>([]);
 
   // On open (or position change): use the saved per-position edit if present,
   // otherwise prefill from the server's built-in default for that position.
@@ -44,10 +50,27 @@ export function InteriorPickerModal({
     return () => { cancelled = true; };
   }, [open, titleSafe, fetchDefaultPrompt]);
 
+  // Reset the selection whenever the dialog opens or switches position.
+  useEffect(() => { setSelected([]); }, [open, titleSafe]);
+
   // Edits are held in local state only; nothing is persisted until "Apply".
   const flash = (msg: string) => {
     setNotice(msg);
     window.setTimeout(() => setNotice(""), 2200);
+  };
+
+  // Toggle an interior page in/out of the selection (max MAX_SELECT).
+  const toggleSelect = (id: string) => {
+    setSelected((cur) => {
+      if (cur.includes(id)) return cur.filter((x) => x !== id);
+      if (cur.length >= MAX_SELECT) { flash(`Chỉ chọn tối đa ${MAX_SELECT} ảnh cho một lần tạo`); return cur; }
+      return [...cur, id];
+    });
+  };
+
+  const confirmGen = () => {
+    if (busy || selected.length === 0) return;
+    onConfirm(selected, prompt);
   };
 
   // Copy Prompt — put the current text on the clipboard.
@@ -141,17 +164,43 @@ export function InteriorPickerModal({
           )}
         </div>
 
-        {busy && <div style={{ marginBottom: 12, fontSize: 13, color: "var(--muted-foreground)" }}><Icon name="loader" size={14} /> Đang tạo bìa… (~2 phút, đừng đóng)</div>}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10, opacity: busy ? 0.5 : 1, pointerEvents: busy ? "none" : "auto" }}>
-          {pages.map((p, i) => (
-            <button key={p.id || i} type="button" onClick={() => onPick(p.id, prompt)} style={{ padding: 0, border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", overflow: "hidden", cursor: "pointer", background: "#fff", aspectRatio: "1 / 1" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={resolveImg(p.url)} alt={`Trang ${i + 1}`} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            </button>
-          ))}
+        <div style={{ marginBottom: 12, fontSize: 12.5, color: "var(--muted-foreground)" }}>
+          {busy ? (
+            <><Icon name="loader" size={14} /> Đang thêm vào hàng đợi…</>
+          ) : (
+            <>Tick chọn 1–{MAX_SELECT} ảnh rồi bấm <b>Gen</b>. Mỗi ảnh tạo 1 tác vụ chạy ngầm — theo dõi ở icon hàng đợi trên header.</>
+          )}
         </div>
-        <div style={{ marginTop: 14, textAlign: "right" }}>
-          <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Đóng</Button>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10, opacity: busy ? 0.5 : 1, pointerEvents: busy ? "none" : "auto" }}>
+          {pages.map((p, i) => {
+            const isSel = selected.includes(p.id);
+            const order = selected.indexOf(p.id) + 1;
+            return (
+              <button
+                key={p.id || i}
+                type="button"
+                aria-pressed={isSel}
+                onClick={() => toggleSelect(p.id)}
+                style={{ position: "relative", padding: 0, border: isSel ? "2px solid var(--accent, #4f46e5)" : "1px solid var(--border)", borderRadius: "var(--radius-sm)", overflow: "hidden", cursor: "pointer", background: "#fff", aspectRatio: "1 / 1", outline: isSel ? "2px solid color-mix(in srgb, var(--accent, #4f46e5) 30%, transparent)" : "none" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={resolveImg(p.url)} alt={`Trang ${i + 1}`} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                {/* Checkbox indicator (top-left) */}
+                <span style={{ position: "absolute", top: 6, left: 6, width: 20, height: 20, borderRadius: 5, border: "1px solid rgba(11,13,12,.35)", background: isSel ? "var(--accent, #4f46e5)" : "rgba(255,255,255,.85)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>
+                  {isSel ? order : ""}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Đã chọn {selected.length}/{MAX_SELECT}</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Đóng</Button>
+            <Button size="sm" onClick={confirmGen} disabled={busy || selected.length === 0}>
+              <Icon name="sparkles" size={14} /> Gen ({selected.length})
+            </Button>
+          </div>
         </div>
       </div>
     </div>

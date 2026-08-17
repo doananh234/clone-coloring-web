@@ -20,8 +20,13 @@ export function useSourceCovers(bookId: string) {
       guard();
       // A non-empty promptOverride lets operators tune the prompt in the dialog
       // without a redeploy; omit it (undefined) to use the server default.
-      await httpPost(base, { interiorPageId, titleSafe, prompt: promptOverride?.trim() || undefined });
-      inval();
+      // Runs in the background now — returns a GenerationJob id; progress is
+      // tracked in the header queue drawer (["coloring","generation-jobs"]).
+      const res = await httpPost<{ jobId?: string }>(base, {
+        interiorPageId, titleSafe, prompt: promptOverride?.trim() || undefined,
+      });
+      qc.invalidateQueries({ queryKey: ["coloring", "generation-jobs"] });
+      return res;
     },
     /** Built-in default prompt for a position — used to prefill the editable box. */
     defaultPrompt: async (titleSafe: TitleSafePosition): Promise<string> => {

@@ -1,18 +1,19 @@
 // apps/admin/src/app/api/books/[bookId]/source-covers/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "node:crypto";
 import { prisma } from "@vx/db";
-import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
-import { generateCoverSourceBW } from "@vx/server-core/ai";
+import { enqueueGenerationJob } from "@/lib/queue/generation-queue";
+import { withQueueTimeout, isQueueTimeout, queueUnavailableResponse } from "@/lib/queue/queue-timeout";
 import type { SourceCover, TitleSafePosition } from "@vx/coloring/data/source-covers";
-
-// Diaflow recompose runs inline; allow a long budget.
-export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ bookId: string }> };
 type Page = { id?: string; url?: string };
 
-/** POST — convert one interior page into a B&W source cover (synchronous). */
+/**
+ * POST — enqueue a background source-cover generation (Diaflow ~2min). Returns
+ * immediately with the GenerationJob id so the operator can keep working; the
+ * worker runs the gen, uploads to R2 and appends to book.data.sourceCovers.
+ * Progress is tracked via GET /api/generation-jobs (global queue drawer).
+ */
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { bookId } = await params;
@@ -30,30 +31,31 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (!interior?.url)
       return NextResponse.json({ error: "Interior page not found" }, { status: 404 });
 
-    const img = await generateCoverSourceBW(
-      resolveR2Url(interior.url),
-      titleSafe,
-      { trace: { caller: "books/source-covers" } },
-      typeof prompt === "string" && prompt.trim() ? prompt : undefined,
-    );
-
-    const scId = crypto.randomUUID();
-    const r2Config = getR2Config();
-    const buffer = Buffer.from(img.dataUrl.split(",")[1], "base64");
-    const { url } = await uploadToR2({
-      client: createR2Client(r2Config), config: r2Config,
-      key: `assets/${bookId}/source-covers/${scId}.png`, body: buffer, contentType: "image/png",
+    const job = await prisma.generationJob.create({
+      data: {
+        type: "source-cover",
+        status: "pending",
+        bookId,
+        bookTitle: book.title,
+        // Snapshot the source thumb + inputs so the drawer can render without a
+        // second lookup and the worker re-reads the page by id at run time.
+        payload: {
+          interiorPageId,
+          titleSafe,
+          prompt: typeof prompt === "string" && prompt.trim() ? prompt.trim() : undefined,
+          sourceImageUrl: interior.url,
+        },
+      },
     });
 
-    const sourceCover: SourceCover = {
-      id: scId, url, isPublic: false, titleSafe,
-      sourceInteriorId: interiorPageId, createdAt: new Date().toISOString(),
-    };
-    const data = (book.data as Record<string, unknown> | null) ?? {};
-    const sourceCovers = [ ...((data.sourceCovers as SourceCover[] | undefined) ?? []), sourceCover ];
-    await prisma.book.update({ where: { id: bookId }, data: { data: { ...data, sourceCovers } as never } });
+    try {
+      await withQueueTimeout(enqueueGenerationJob(job.id));
+    } catch (err) {
+      if (isQueueTimeout(err)) return queueUnavailableResponse({ jobId: job.id });
+      throw err;
+    }
 
-    return NextResponse.json({ success: true, sourceCover });
+    return NextResponse.json({ success: true, jobId: job.id, status: "pending" });
   } catch (error) {
     console.error("[books/source-covers POST] Error:", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });

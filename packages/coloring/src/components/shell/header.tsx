@@ -10,6 +10,7 @@ import { Dropdown, type DropdownItem } from "../ui/dropdown";
 import { COLORING_BASE } from "./nav-config";
 import { useColoringAuth } from "../../hooks/coloring-auth";
 import { useJobCounts, runningJobCount } from "../../data/use-job-counts";
+import { GenerationQueueDrawer } from "./generation-queue-drawer";
 
 export interface HeaderCrumb {
   label: string;
@@ -137,6 +138,8 @@ export function Header({ pageTitle, crumbs, theme, onToggleTheme, onOpenNav }: H
           </Badge>
         </div>
       )}
+
+      <GenerationQueueDrawer />
 
       <Dropdown
         align="end"
