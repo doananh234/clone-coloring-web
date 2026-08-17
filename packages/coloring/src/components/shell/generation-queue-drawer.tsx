@@ -7,7 +7,12 @@ import { Badge } from "../ui/badge";
 import { COLORING_BASE } from "./nav-config";
 import { resolveImg } from "../../data/img";
 import { useGenerationJobs } from "../../data/use-generation-jobs";
-import type { GenerationJob } from "../../data/generation-jobs";
+import { isActiveGenerationJob, type GenerationJob } from "../../data/generation-jobs";
+
+// The drawer is a live monitor, not a history browser: show every active job but
+// cap the finished list so it stays scannable no matter how many have piled up.
+// Older finished jobs are still reachable via the API / auto-pruned after 7 days.
+const DONE_VISIBLE = 12;
 
 const TITLE_SAFE_LABEL: Record<string, string> = { top: "Top", middle: "Middle", bottom: "Bottom" };
 
@@ -46,12 +51,77 @@ function relTime(iso: string): string {
   return `${Math.round(h / 24)} ngày trước`;
 }
 
+/** One job row. Outer is a div (not a button) so the finished-job ✕ can nest a
+ *  real button without invalid button-in-button markup. */
+function JobRow({ job, onOpen, onRemove, busy }: {
+  job: GenerationJob;
+  onOpen: (j: GenerationJob) => void;
+  onRemove?: (id: string) => void;
+  busy?: boolean;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(job)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(job); } }}
+      title="Mở sách"
+      style={{ display: "flex", gap: 10, alignItems: "center", textAlign: "left", padding: 8, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", background: "var(--background)", cursor: "pointer" }}
+    >
+      <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+        {job.resultUrl || job.payload?.sourceImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={resolveImg(job.resultUrl || job.payload?.sourceImageUrl)} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <Icon name="image" size={16} />
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{typeLabel(job)}</div>
+        <div style={{ fontSize: 11.5, color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {job.bookTitle || job.bookId} · {relTime(job.createdAt)}
+        </div>
+        {job.status === "error" && job.error && (
+          <div style={{ fontSize: 11, color: "var(--danger)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.error}</div>
+        )}
+      </div>
+      <div style={{ flexShrink: 0 }}>{statusBadge(job.status)}</div>
+      {onRemove && (
+        <button
+          type="button"
+          className="mo-hbtn"
+          disabled={busy}
+          onClick={(e) => { e.stopPropagation(); onRemove(job.id); }}
+          aria-label="Xóa mục này"
+          title="Xóa khỏi hàng đợi"
+          style={{ flexShrink: 0 }}
+        >
+          <Icon name="x" size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Global header widget: a queue icon with an active-count badge that opens a
  *  right-hand drawer listing background generation jobs (source cover now). */
 export function GenerationQueueDrawer() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { jobs, activeCount, isLoading } = useGenerationJobs();
+  const [busy, setBusy] = useState(false);
+  const { jobs, activeCount, isLoading, remove, clearCompleted } = useGenerationJobs();
+
+  const activeJobs = jobs.filter(isActiveGenerationJob);
+  const doneJobs = jobs.filter((j) => !isActiveGenerationJob(j));
+
+  const onRemove = async (id: string) => {
+    setBusy(true);
+    try { await remove(id); } catch { /* stale row — next poll reconciles */ } finally { setBusy(false); }
+  };
+  const onClearCompleted = async () => {
+    setBusy(true);
+    try { await clearCompleted(); } catch { /* ignore */ } finally { setBusy(false); }
+  };
 
   // Close on Escape.
   useEffect(() => {
@@ -63,7 +133,8 @@ export function GenerationQueueDrawer() {
 
   const goToBook = (j: GenerationJob) => {
     setOpen(false);
-    router.push(`${COLORING_BASE}/books/${j.bookId}`);
+    // Open straight to the "Trang sách" tab where source covers live.
+    router.push(`${COLORING_BASE}/books/${j.bookId}?tab=pages`);
   };
 
   return (
@@ -99,34 +170,45 @@ export function GenerationQueueDrawer() {
                   Chưa có tác vụ nào. Bấm “Gen Cover” ở màn chi tiết sách để tạo — tiến độ sẽ hiện ở đây.
                 </div>
               ) : (
-                jobs.map((j) => (
-                  <button
-                    key={j.id}
-                    type="button"
-                    onClick={() => goToBook(j)}
-                    title="Mở sách"
-                    style={{ display: "flex", gap: 10, alignItems: "center", textAlign: "left", padding: 8, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", background: "var(--background)", cursor: "pointer" }}
-                  >
-                    <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
-                      {j.resultUrl || j.payload?.sourceImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={resolveImg(j.resultUrl || j.payload?.sourceImageUrl)} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      ) : (
-                        <Icon name="image" size={16} />
-                      )}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{typeLabel(j)}</div>
-                      <div style={{ fontSize: 11.5, color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {j.bookTitle || j.bookId} · {relTime(j.createdAt)}
+                <>
+                  {activeJobs.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--muted-foreground)", padding: "2px 2px 0" }}>
+                        Đang chạy · {activeJobs.length}
                       </div>
-                      {j.status === "error" && j.error && (
-                        <div style={{ fontSize: 11, color: "var(--danger)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{j.error}</div>
+                      {activeJobs.map((j) => (
+                        <JobRow key={j.id} job={j} onOpen={goToBook} />
+                      ))}
+                    </>
+                  )}
+
+                  {doneJobs.length > 0 && (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: activeJobs.length > 0 ? "6px 2px 0" : "2px 2px 0" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--muted-foreground)" }}>
+                          Đã xong · {doneJobs.length}
+                        </span>
+                        <button
+                          type="button"
+                          className="mo-textbtn"
+                          disabled={busy}
+                          onClick={onClearCompleted}
+                          style={{ fontSize: 11.5, color: "var(--muted-foreground)", background: "none", border: "none", cursor: "pointer", padding: 2 }}
+                        >
+                          Xóa đã xong
+                        </button>
+                      </div>
+                      {doneJobs.slice(0, DONE_VISIBLE).map((j) => (
+                        <JobRow key={j.id} job={j} onOpen={goToBook} onRemove={onRemove} busy={busy} />
+                      ))}
+                      {doneJobs.length > DONE_VISIBLE && (
+                        <div style={{ fontSize: 11.5, color: "var(--muted-foreground)", textAlign: "center", padding: "4px 0" }}>
+                          … và {doneJobs.length - DONE_VISIBLE} mục cũ hơn (tự dọn sau 7 ngày)
+                        </div>
                       )}
-                    </div>
-                    <div style={{ flexShrink: 0 }}>{statusBadge(j.status)}</div>
-                  </button>
-                ))
+                    </>
+                  )}
+                </>
               )}
             </div>
           </div>

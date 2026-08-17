@@ -31,3 +31,36 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
+
+// Only terminal jobs may be deleted: removing a pending/running row would race
+// the worker (it updates that row on completion) and orphan the queue record.
+const TERMINAL = { status: { in: ["done", "error"] } };
+
+/**
+ * DELETE — remove finished jobs from the queue drawer (history cleanup).
+ *   ?id=<jobId>        delete one finished job
+ *   (no id)            bulk-clear ALL finished jobs (optionally ?bookId=…)
+ * pending/running jobs are never deleted.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id") || undefined;
+    const bookId = searchParams.get("bookId") || undefined;
+
+    if (id) {
+      const res = await prisma.generationJob.deleteMany({ where: { id, ...TERMINAL } });
+      if (res.count === 0)
+        return NextResponse.json({ error: "Chỉ xóa được mục đã xong hoặc lỗi" }, { status: 409 });
+      return NextResponse.json({ success: true, deleted: res.count });
+    }
+
+    const res = await prisma.generationJob.deleteMany({
+      where: { ...TERMINAL, ...(bookId ? { bookId } : {}) },
+    });
+    return NextResponse.json({ success: true, deleted: res.count });
+  } catch (error) {
+    console.error("[generation-jobs DELETE] Error:", error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  }
+}

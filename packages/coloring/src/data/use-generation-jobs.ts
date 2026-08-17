@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { httpGet } from "@vx/core-uikit/api";
+import { httpGet, httpDel } from "@vx/core-uikit/api";
 import { COLORING_API_BASE } from "./config";
 import { type GenerationJob, isActiveGenerationJob } from "./generation-jobs";
 
@@ -38,5 +38,19 @@ export function useGenerationJobs(limit = 30) {
 
   const activeCount = jobs.filter(isActiveGenerationJob).length;
 
-  return { jobs, activeCount, isLoading: q.isLoading, refetch: q.refetch };
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["coloring", "generation-jobs"] });
+
+  /** Delete one finished job (server rejects pending/running). */
+  const remove = async (id: string) => {
+    await httpDel(`${COLORING_API_BASE}/generation-jobs?id=${encodeURIComponent(id)}`);
+    await invalidate();
+  };
+
+  /** Bulk-clear all finished (done/error) jobs. */
+  const clearCompleted = async () => {
+    await httpDel(`${COLORING_API_BASE}/generation-jobs`);
+    await invalidate();
+  };
+
+  return { jobs, activeCount, isLoading: q.isLoading, refetch: q.refetch, remove, clearCompleted };
 }

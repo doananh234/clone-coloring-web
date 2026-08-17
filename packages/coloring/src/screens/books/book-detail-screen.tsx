@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
@@ -159,7 +159,14 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const deleteBook = useDeleteBook(bookId);
   const approveBook = useApproveBook(bookId);
   const { jobId: relatedJobId } = useBookJob(bookId);
-  const [tab, setTab] = useState<"info" | "meta" | "pages" | "select">("info");
+  const searchParams = useSearchParams();
+  // Deep-link support: `?tab=pages` (e.g. from the generation queue drawer) opens
+  // straight to that tab instead of the default "Tổng quan". Read once on mount.
+  const initialTab = ((): "info" | "meta" | "pages" | "select" => {
+    const t = searchParams?.get("tab");
+    return t === "meta" || t === "pages" || t === "select" ? t : "info";
+  })();
+  const [tab, setTab] = useState<"info" | "meta" | "pages" | "select">(initialTab);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
   const [preview, setPreview] = useState<Omit<PreviewModalProps, "open" | "onClose"> | null>(null);

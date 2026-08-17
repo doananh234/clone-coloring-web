@@ -55,6 +55,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       throw err;
     }
 
+    // Retention: opportunistically prune finished jobs older than 7 days so the
+    // GenerationJob table (and the drawer feed) stays bounded without a cron.
+    // Fire-and-forget — never blocks or fails the enqueue response.
+    const cutoff = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    prisma.generationJob
+      .deleteMany({ where: { status: { in: ["done", "error"] }, createdAt: { lt: cutoff } } })
+      .catch((e) => console.error("[source-covers] prune old jobs failed:", e));
+
     return NextResponse.json({ success: true, jobId: job.id, status: "pending" });
   } catch (error) {
     console.error("[books/source-covers POST] Error:", error);
