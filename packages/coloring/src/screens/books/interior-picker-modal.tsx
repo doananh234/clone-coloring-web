@@ -26,6 +26,8 @@ export function InteriorPickerModal({
   const [prompt, setPrompt] = useState("");
   const [showPrompt, setShowPrompt] = useState(false);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
+  // Transient status line (Copy/Xóa/Apply feedback). Cleared after a moment.
+  const [notice, setNotice] = useState("");
 
   // On open (or position change): use the saved per-position edit if present,
   // otherwise prefill from the server's built-in default for that position.
@@ -42,9 +44,34 @@ export function InteriorPickerModal({
     return () => { cancelled = true; };
   }, [open, titleSafe, fetchDefaultPrompt]);
 
-  const onPromptChange = (v: string) => {
-    setPrompt(v);
-    if (titleSafe) window.localStorage.setItem(promptKey(titleSafe), v);
+  // Edits are held in local state only; nothing is persisted until "Apply".
+  const flash = (msg: string) => {
+    setNotice(msg);
+    window.setTimeout(() => setNotice(""), 2200);
+  };
+
+  // Copy Prompt — put the current text on the clipboard.
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      flash("Đã copy prompt vào clipboard");
+    } catch {
+      flash("Không copy được (trình duyệt chặn clipboard)");
+    }
+  };
+
+  // Xóa Prompt — empty the box. Empty text = server default at generation time.
+  const clearPrompt = () => {
+    setPrompt("");
+    flash("Đã xóa prompt (để trống → dùng prompt mặc định khi tạo)");
+  };
+
+  // Apply Prompt — commit the current text as the saved override for this
+  // position (persisted in localStorage, reused next time the dialog opens).
+  const applyPrompt = () => {
+    if (!titleSafe) return;
+    window.localStorage.setItem(promptKey(titleSafe), prompt);
+    flash(`Đã áp dụng & lưu prompt cho vị trí ${titleSafe}`);
   };
 
   const restoreDefault = async () => {
@@ -54,6 +81,7 @@ export function InteriorPickerModal({
       const d = await fetchDefaultPrompt(titleSafe);
       setPrompt(d);
       window.localStorage.removeItem(promptKey(titleSafe));
+      flash("Đã khôi phục prompt mặc định");
     } catch {
       /* keep current text on failure */
     } finally {
@@ -84,19 +112,30 @@ export function InteriorPickerModal({
             <div style={{ padding: "0 10px 10px" }}>
               <textarea
                 value={prompt}
-                onChange={(e) => onPromptChange(e.target.value)}
+                onChange={(e) => setPrompt(e.target.value)}
                 disabled={busy || loadingPrompt}
                 spellCheck={false}
                 placeholder={loadingPrompt ? "Đang tải prompt mặc định…" : "Để trống = dùng prompt mặc định của server"}
                 style={{ width: "100%", minHeight: 160, resize: "vertical", fontFamily: "ui-monospace, monospace", fontSize: 11.5, lineHeight: 1.5, padding: 8, borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)" }}
               />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
-                  Đã lưu tự động cho vị trí {titleSafe ?? ""}. Để trống → prompt mặc định.
+                <span style={{ fontSize: 11, color: notice ? "var(--foreground)" : "var(--muted-foreground)", fontWeight: notice ? 600 : 400 }}>
+                  {notice || `Vị trí ${titleSafe ?? ""}. Bấm "Apply Prompt" để lưu, để trống → prompt mặc định.`}
                 </span>
-                <Button type="button" variant="outline" size="sm" onClick={restoreDefault} disabled={busy || loadingPrompt}>
-                  Khôi phục mặc định
-                </Button>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <Button type="button" variant="outline" size="sm" onClick={copyPrompt} disabled={busy || loadingPrompt || !prompt}>
+                    Copy Prompt
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={clearPrompt} disabled={busy || loadingPrompt || !prompt}>
+                    Xóa Prompt
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={applyPrompt} disabled={busy || loadingPrompt}>
+                    Apply Prompt
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={restoreDefault} disabled={busy || loadingPrompt}>
+                    Khôi phục mặc định
+                  </Button>
+                </div>
               </div>
             </div>
           )}

@@ -15,7 +15,7 @@ type TitleSafePosition = "top" | "middle" | "bottom";
 /**
  * TOP button — dedicated premium square coloring-book cover: faithful source
  * recomposition (source connections are immutable, decoration must yield to the
- * source), an upper ~25-28% typography staging area, sparse OPTIONAL context-
+ * source), an upper ~28-32% typography staging area, sparse OPTIONAL context-
  * aware motifs, borderless, pure B&W. Static (no per-call interpolation).
  */
 const TOP_COVER_PROMPT = `You are a professional coloring-book cover designer specializing in
@@ -30,8 +30,8 @@ The FIRST PROVIDED IMAGE is the PRIMARY SOURCE OF TRUTH.
 This is a RECOMPOSITION task, NOT a redesign task.
 
 The goal is to preserve the original illustration while professionally
-recomposing it into a borderless square cover with natural space for
-future title and subtitle typography.
+recomposing it into a borderless square cover with natural, usable space
+for future TITLE and SUBTITLE typography.
 
 ==================================================
 1. SOURCE ARTWORK LOCK
@@ -43,7 +43,6 @@ The source artwork must remain immediately recognizable as the same
 original illustration.
 
 Preserve the original:
-
 - characters
 - animals
 - objects
@@ -60,15 +59,10 @@ Preserve the original:
 - natural composition
 
 Do NOT redesign the source illustration.
-
 Do NOT reinterpret the source illustration.
-
 Do NOT simplify important source elements.
-
 Do NOT replace original objects with newly invented alternatives.
-
 Do NOT independently redesign individual source elements.
-
 Do NOT change the story, activity, or meaning of the scene.
 
 The source artwork must remain the dominant visual content of the cover.
@@ -81,7 +75,6 @@ Preserve every meaningful visual connection contained in the original
 artwork.
 
 This includes, when present:
-
 - strings
 - ropes
 - cables
@@ -102,7 +95,6 @@ If two original elements are connected by a visible line, pathway, or
 structural relationship, preserve that relationship continuously.
 
 Do NOT:
-
 - delete a source connection
 - shorten a source connection
 - redirect a source connection
@@ -126,7 +118,6 @@ Important source elements create natural exclusion zones around themselves.
 
 Do not place newly generated decorative elements directly on, across,
 inside, or immediately adjacent to:
-
 - meaningful source connections
 - thin structural lines
 - important contours
@@ -155,25 +146,31 @@ Remove the original source border or enclosing frame if one exists.
 Then uniformly scale the COMPLETE source artwork as one intact composition.
 
 Preserve the original aspect ratio.
-
 Do not stretch.
-
 Do not distort.
-
 Do not independently resize source elements.
-
 Do not crop important source content.
-
 Do not unnecessarily compress the source artwork toward the center.
-
 Do not force the artwork into a perfectly centered geometric arrangement.
-
 Do not create artificial symmetry.
 
 Preserve the source composition's natural center of visual gravity.
 
-The artwork should occupy most of the lower portion of the square cover
-while remaining as large as naturally possible.
+The artwork should occupy the main lower-to-middle visual area of the
+square cover while remaining as large as naturally possible.
+
+Create slightly more vertical breathing room between the top edge of the
+canvas and the highest meaningful point of the source artwork.
+
+The top margin should feel intentionally generous and usable for future
+title and subtitle typography.
+
+Do NOT simply shrink the entire source artwork excessively to create this
+space.
+
+Instead, balance the composition so that the source artwork remains large,
+substantial, and visually dominant while the upper negative space becomes
+more useful.
 
 Allow meaningful source elements to extend broadly toward the left and
 right sides when the original composition naturally supports this.
@@ -183,18 +180,17 @@ margins.
 
 Do not shrink the source artwork simply to create excessive empty margins.
 
-The final composition should feel substantial, immersive, and naturally
-balanced.
+The final composition should feel substantial, immersive, naturally
+balanced, and professionally staged for a premium coloring-book cover.
 
 ==================================================
 5. TYPOGRAPHY STAGING AREA
 ==================================================
 
-Reserve approximately the upper 25–28% of the canvas as a flexible
-staging region for future TITLE and SUBTITLE typography.
+Reserve approximately the UPPER 28-32% of the canvas as a flexible staging
+region for future TITLE and SUBTITLE typography.
 
 Do NOT generate:
-
 - text
 - letters
 - words
@@ -205,13 +201,15 @@ Do NOT generate:
 
 The title and subtitle will be added later by an external editor.
 
-The upper area should provide calm, readable negative space for future
-typography.
+The upper area should provide calm, readable, high-quality negative space
+for future typography.
+
+The upper region should generally remain cleaner and less visually complex
+than the main illustration.
 
 However, do NOT create a rigid empty rectangle.
 
 Do NOT create:
-
 - title boxes
 - banners
 - ribbons
@@ -224,8 +222,16 @@ Do NOT create:
 The transition between the typography region and the original artwork
 should feel natural rather than like a hard horizontal boundary.
 
-The title area should be clean enough for typography without making the
-entire upper region unnaturally empty.
+The title area should be clearly usable for typography while still feeling
+like an organic part of the overall illustration.
+
+Do not place important source objects directly against the top edge.
+
+Do not allow decorative elements to visually compete with the future title.
+
+A small number of subtle decorations may exist near the outer portions of
+the upper region, but the central title area should remain predominantly
+clean.
 
 ==================================================
 6. NEGATIVE SPACE IS ALLOWED
@@ -234,17 +240,16 @@ entire upper region unnaturally empty.
 Empty space is a valid design element.
 
 Do NOT attempt to fill every empty region.
-
 Do NOT treat every empty area as an invitation to add decoration.
 
 Preserve large areas of clean white space when they improve composition.
 
 Negative space should remain visible and intentional.
 
-The cover should feel premium and breathable rather than densely filled.
+The cover should feel premium, breathable, calm, and uncluttered rather
+than densely filled.
 
 When uncertain whether an empty region needs decoration:
-
 LEAVE IT EMPTY.
 
 ==================================================
@@ -259,7 +264,6 @@ Decoration is OPTIONAL, not mandatory.
 The decorations must be derived from the actual FIRST PROVIDED IMAGE.
 
 Analyze the source dynamically for:
-
 - environment
 - setting
 - season
@@ -274,13 +278,9 @@ Analyze the source dynamically for:
 Choose decorative motifs that genuinely belong to that visual world.
 
 Do NOT use a fixed decoration vocabulary.
-
 Do NOT automatically add common coloring-book symbols.
-
 Do NOT add decorations merely because they are visually cute.
-
 Do NOT introduce unrelated objects.
-
 Do NOT add decorative motifs from previous examples or previous images.
 
 The decoration vocabulary must adapt to each new source image.
@@ -299,11 +299,8 @@ than all decorative motifs combined.
 Prefer a small number of well-placed motifs over many small motifs.
 
 Do NOT attempt to achieve full-canvas decoration coverage.
-
 Do NOT decorate every quadrant.
-
 Do NOT place a decoration simply to balance another decoration.
-
 Do NOT force decoration into empty areas.
 
 Large clean white regions are desirable.
@@ -316,6 +313,12 @@ fewer decorations.
 
 If a decoration does not clearly improve the composition, do not add it.
 
+The overall decoration density should remain LOW.
+
+The V2.1 composition should feel slightly more decorated than a completely
+minimal cover, but clearly less decorated than a dense pattern or
+wallpaper-like composition.
+
 ==================================================
 9. ORGANIC DECORATION PLACEMENT
 ==================================================
@@ -323,7 +326,6 @@ If a decoration does not clearly improve the composition, do not add it.
 Place decorations only in genuine, safe negative-space pockets.
 
 Use naturally irregular:
-
 - positions
 - spacing
 - scale
@@ -333,7 +335,6 @@ Use naturally irregular:
 Avoid mechanical distribution.
 
 Do NOT create:
-
 - grids
 - rows
 - columns
@@ -356,14 +357,42 @@ The decoration should feel casually and naturally scattered, while still
 being professionally art-directed.
 
 ==================================================
-10. DECORATION MUST YIELD TO THE SOURCE
+10. DISTRIBUTION OF DECORATION
+==================================================
+
+Do not concentrate all decoration only around the upper or side regions.
+
+When the source composition creates suitable negative space below, beside,
+or between major source elements, allow a SMALL NUMBER of contextual
+decorative motifs to appear there as well.
+
+In particular, lower negative-space regions should not automatically be
+left completely empty if a small amount of decoration would improve the
+overall visual balance.
+
+However, lower decoration must remain subtle.
+
+Do NOT fill the lower region.
+Do NOT create a decorative cluster beneath the main subjects.
+Do NOT place decoration simply because the lower area is empty.
+
+Only use lower-area decoration when it naturally belongs to the source's
+visual world and fits safely into the available negative space.
+
+The lower portion should remain substantially cleaner than the main
+illustration.
+
+The purpose is to prevent large lower negative-space regions from feeling
+accidentally unfinished, NOT to increase overall decoration density.
+
+==================================================
+11. DECORATION MUST YIELD TO THE SOURCE
 ==================================================
 
 New decorative elements must NEVER modify, interrupt, replace, or visually
 confuse the original artwork.
 
 Never place decoration:
-
 - on top of important source elements
 - across meaningful source connections
 - at the endpoint of a source connection
@@ -374,20 +403,18 @@ Never place decoration:
 - where it could visually become part of the original illustration
 
 If a decorative element conflicts with the source:
-
 REMOVE THE DECORATIVE ELEMENT.
 
 Do NOT move, shorten, erase, or redraw the source element.
 
 ==================================================
-11. DECORATION STYLE
+12. DECORATION STYLE
 ==================================================
 
 All new decorative motifs must match the original illustration's visual
 language.
 
 Use:
-
 - simple black outlines
 - clean contours
 - white interiors
@@ -398,7 +425,6 @@ New decoration should look as though it naturally belongs to the original
 illustration.
 
 Do not introduce:
-
 - color
 - gray
 - shading
@@ -411,40 +437,34 @@ Do not introduce:
 - highly detailed decorative artwork
 
 ==================================================
-12. BORDERLESS COVER
+13. BORDERLESS COVER
 ==================================================
 
 The final cover must be completely open and borderless.
 
 If the original source contains a:
-
 - border
 - frame
 - rounded rectangle
 - perimeter outline
 - enclosing boundary
-
 remove it completely.
 
 Do NOT replace it with another border.
-
 Do NOT create a new frame.
-
 Do NOT create corner framing.
-
 Do NOT allow decorative motifs to collectively form a border.
 
 The composition should naturally flow toward the canvas edges.
 
 ==================================================
-13. COLORING-BOOK STYLE
+14. COLORING-BOOK STYLE
 ==================================================
 
 The entire final image must remain compatible with a premium
 black-and-white coloring-book aesthetic.
 
 Use:
-
 - pure black line art
 - clean white background
 - crisp outlines
@@ -453,7 +473,6 @@ Use:
 - white interior areas
 
 Do NOT use:
-
 - color
 - grayscale
 - gray fills
@@ -466,26 +485,27 @@ Do NOT use:
 - photographic effects
 
 ==================================================
-14. COMPOSITION PRIORITY
+15. COMPOSITION PRIORITY
 ==================================================
 
 When instructions conflict, follow this priority:
-
 1. Preserve the original artwork.
 2. Preserve all original source relationships and connections.
 3. Preserve original proportions and structure.
 4. Preserve the natural spatial extent of the source artwork.
 5. Keep the source artwork large and visually dominant.
 6. Preserve the source composition's natural visual gravity.
-7. Create useful space for future title and subtitle typography.
+7. Create generous and useful space for future title and subtitle typography.
 8. Preserve intentional negative space.
-9. Add sparse contextual decoration only when genuinely useful.
-10. Maintain visual harmony and professional cover composition.
-11. Remove the original border.
-12. Never generate text.
+9. Maintain a clean central upper title region.
+10. Add sparse contextual decoration only when genuinely useful.
+11. Allow subtle decoration in suitable lower negative-space areas.
+12. Maintain visual harmony and professional cover composition.
+13. Remove the original border.
+14. Never generate text.
 
 ==================================================
-15. FINAL INTERNAL CHECK
+16. FINAL INTERNAL CHECK
 ==================================================
 
 Before producing the final image, verify:
@@ -506,8 +526,14 @@ COMPOSITION:
 - The artwork retains its natural horizontal and vertical presence.
 - The artwork remains large and visually dominant.
 - The composition does not rely on artificial symmetry.
-- The upper region provides useful future title/subtitle space.
+- There is generous usable negative space above the main artwork.
+- The upper region provides approximately 28-32% staging space for future
+  title and subtitle typography.
+- The central portion of the upper region remains clean.
 - The title area is not enclosed by a box or banner.
+- The source artwork does not feel excessively pushed downward.
+- The composition still feels naturally balanced after creating the larger
+  top staging area.
 
 DECORATION:
 - Decoration is sparse.
@@ -516,9 +542,13 @@ DECORATION:
 - Decoration does not use a fixed generic vocabulary.
 - Decoration occupies only suitable negative-space pockets.
 - Large areas of clean white space remain.
+- Some suitable lower negative-space areas may contain a small number of
+  subtle contextual decorations.
+- Lower decoration does not become a cluster.
 - Decoration does not cover, touch, interrupt, or confuse source elements.
 - Decoration does not form a pattern or border.
 - Decoration does not compete with the original artwork.
+- Decoration density remains clearly subordinate to the source artwork.
 
 STYLE:
 - Pure black line art.
@@ -533,8 +563,11 @@ STYLE:
 
 If adding a decoration would require changing, moving, deleting, shortening,
 redirecting, or obscuring any part of the original artwork:
-
 DO NOT ADD THE DECORATION.
+
+If creating more top negative space would require excessively shrinking,
+distorting, cropping, or restructuring the source artwork:
+DO NOT DO SO.
 
 When uncertain, preserve the original artwork and leave the area empty.
 
@@ -613,64 +646,915 @@ Use existing negative space for decoration and typography third.
 Do not redesign the artwork simply to make it look more like a generic book cover.${BW_GUARD}`;
 
 /** BOTTOM button — preserve the source composition + structural connections, keep
- * a usable LOWER title area, sparse decoration, plus the shared B&W guard. */
-const BOTTOM_COVER_PROMPT = `Create a children's book cover illustration based closely on the provided original artwork.
+ * a usable LOWER title area, light contextual decoration. Self-contained
+ * (includes its own B&W / no-text / no-border contract). */
+const BOTTOM_COVER_PROMPT = `You are a professional coloring-book cover designer specializing in
+premium square coloring-book covers, faithful source-artwork
+recomposition, and clean black-and-white line art.
 
-The most important requirement is to preserve the original artwork and composition. Treat the provided image as the structural foundation of the cover, not merely as inspiration.
+Transform the FIRST PROVIDED IMAGE into ONE premium STRICTLY 1:1 square
+coloring-book cover.
 
-PRESERVE THE ORIGINAL ARTWORK:
-- Keep all main characters, objects, props, shapes, patterns, poses, proportions, orientations, and visual relationships faithful to the original.
-- Preserve the original subject scale, relative positions, composition, perspective, and overall framing.
-- Do not automatically center, shrink, enlarge, rearrange, or rebalance the main artwork just to create space for decorations or typography.
-- Preserve the original cropping and allow elements to naturally approach or extend beyond the canvas edges when the original composition does so.
-- Do not invent new major characters, objects, actions, or story elements.
-- Do not redesign or reinterpret the main subject.
+The FIRST PROVIDED IMAGE is the PRIMARY SOURCE OF TRUTH.
 
-PRESERVE STRUCTURAL CONTINUITY:
-- Preserve every original structural element and connection, including ropes, strings, cables, handles, straps, stems, borders, outlines, attachments, supports, and connecting lines.
-- Every line that connects two original objects must remain connected to the correct objects.
-- Never delete, replace, redirect, merge, hide, or reinterpret an original structural line as a decorative element.
-- Do not allow clouds, flowers, stars, hearts, or other decorations to interrupt or attach themselves to original structural elements.
+This is a RECOMPOSITION task, NOT a redesign task.
+
+The goal is to preserve the original illustration while professionally
+recomposing it into a borderless square cover with natural negative space
+for future TITLE and SUBTITLE typography in the BOTTOM portion of the
+cover.
+
+IMPORTANT:
+The future typography area must remain READABLE, but it must NOT become
+an artificially empty or decoration-free region.
+
+The final image should still look like a naturally complete illustrated
+cover even before typography is added.
+
+==================================================
+1. SOURCE ARTWORK LOCK
+==================================================
+
+Treat the entire original illustration as ONE COMPLETE INTACT ARTWORK.
+
+The source artwork must remain immediately recognizable as the same
+original illustration.
+
+Preserve the original:
+- characters
+- animals
+- objects
+- poses
+- expressions
+- proportions
+- relative scale
+- important details
+- visual relationships
+- overlapping relationships
+- structural elements
+- line-art characteristics
+- thematic identity
+- natural composition
+
+Do NOT redesign the source illustration.
+Do NOT reinterpret the source illustration.
+Do NOT simplify important source elements.
+Do NOT replace original objects with newly invented alternatives.
+Do NOT independently redesign individual source elements.
+Do NOT change the story, activity, environment, or meaning of the scene.
+
+The source artwork must remain the dominant visual content of the cover.
+
+==================================================
+2. PRESERVE SOURCE CONNECTIONS
+==================================================
+
+Preserve every meaningful visual connection contained in the original
+artwork.
+
+This includes, when present:
+- strings
+- ropes
+- cables
+- wires
+- stems
+- branches
+- paths
+- tracks
+- handles
+- supports
+- limbs
+- object attachments
+- continuous outlines
+- structural lines
+- other connected visual elements
+
+If two original elements are connected by a visible line, pathway, or
+structural relationship, preserve that relationship continuously.
+
+Do NOT:
+- delete a source connection
+- shorten a source connection
+- redirect a source connection
+- disconnect connected source elements
+- attach a source connection to a newly generated object
+- replace a source connection with decoration
+- reinterpret a source connection as part of a decorative motif
+
+The original source connections are immutable.
+
+If a decorative element would conflict with a source connection:
+REMOVE THE DECORATION.
+
+Never modify the source to accommodate decoration.
+
+==================================================
+3. SOURCE EXCLUSION ZONES
+==================================================
+
+Important source elements create natural exclusion zones around
+themselves.
+
+Do not place newly generated decorative elements directly on, across,
+inside, or dangerously close to:
+- meaningful source connections
+- thin structural lines
+- important contours
+- object attachments
+- overlapping source relationships
+- important character details
+- important object boundaries
+
+Do not allow newly generated decoration to visually merge with an
+original source element.
+
+Do not create ambiguity about whether a line or object belongs to the
+original illustration or to the new decoration.
+
+When a region is structurally important to the source artwork, leave it
+alone.
+
+SOURCE FIDELITY ALWAYS HAS PRIORITY OVER DECORATION.
+
+==================================================
+4. RECOMPOSE THE COMPLETE SOURCE ARTWORK
+==================================================
+
+Remove the original source border or enclosing frame if one exists.
+
+Then uniformly scale and reposition the COMPLETE source artwork as one
+intact composition.
+
+Preserve the original aspect ratio.
+Do not stretch.
+Do not distort.
+Do not independently resize source elements.
+Do not independently reposition source elements.
+Do not crop important source content.
+Do not unnecessarily compress the source artwork toward the center.
+Do not force the artwork into a perfectly centered geometric arrangement.
+Do not create artificial symmetry.
+
+Preserve the source composition's natural center of visual gravity.
+
+For this BOTTOM COVER layout, place the main source artwork predominantly
+within the UPPER and UPPER-MIDDLE portions of the square canvas.
+
+The source artwork should remain LARGE, SUBSTANTIAL, and VISUALLY
+DOMINANT.
+
+Do NOT shrink the artwork excessively merely to create bottom typography
+space.
+
+Do NOT create the appearance of a small illustration floating above a
+large blank page.
+
+Use the available width naturally.
+
+Allow meaningful source elements to extend broadly toward the left and
+right sides when the original composition naturally supports this.
+
+Do not pull peripheral source elements inward merely to create equal
+margins.
+
+Do not force the artwork away from the canvas edges if broader spatial
+presence is natural to the source.
+
+The final placement should feel like a professionally recomposed cover,
+not a centered sticker placed above an empty area.
+
+==================================================
+5. BOTTOM TYPOGRAPHY STAGING REGION
+==================================================
+
+Create useful natural negative space within approximately the lower
+25-28% of the canvas for future TITLE and SUBTITLE typography.
+
+This percentage describes the approximate typography opportunity region.
+It does NOT define a rigid empty horizontal strip.
+
+Do NOT generate:
+- text
+- letters
+- words
+- numbers
+- pseudo-text
+- placeholder text
+- typography
+
+The TITLE and SUBTITLE will be added later by an external editor.
+
+The strongest typography opportunity should generally exist around the
+LOWER-CENTRAL portion of the cover.
+
+Provide enough calm negative space for:
+- a large future TITLE
+- a smaller future SUBTITLE
+- comfortable breathing room
+
+However:
+THE TYPOGRAPHY REGION IS NOT A DECORATION-FREE ZONE.
+
+The typography region must remain READABLE, not EMPTY.
+
+Do NOT clear the entire lower-central region of all visual activity.
+Do NOT create an obvious blank rectangle.
+Do NOT create an obvious blank horizontal band.
+Do NOT create an artificially sterilized area whose shape reveals exactly
+where future typography will be placed.
+
+The viewer should NOT be able to identify the future typography area
+solely because decoration suddenly disappears there.
+
+==================================================
+6. TYPOGRAPHY SPACE SHOULD EMERGE NATURALLY
+==================================================
+
+Typography space should EMERGE FROM THE COMPOSITION.
+
+Do not manufacture typography space by removing all nearby visual
+activity.
+
+Instead, create usable typography space through:
+- natural spacing
+- controlled decoration density
+- irregular negative-space pockets
+- visual breathing room
+- thoughtful separation between motifs
+
+Think of the future typography as something that will later be layered
+into naturally existing negative space.
+
+Do NOT treat typography as something requiring a completely empty box.
+
+The final illustration should look visually complete and natural even
+before typography is added.
+
+If the title and subtitle were never added, the bottom portion should
+still feel intentionally composed rather than obviously unfinished.
+
+==================================================
+7. DECORATION MAY ENTER THE TYPOGRAPHY REGION
+==================================================
+
+Small, sparse, contextual decorative motifs MAY appear inside the broader
+future TITLE and SUBTITLE region.
+
+Do NOT visibly route decorations around the typography region.
+Do NOT create a decoration-free hole in the composition.
+
+Decoration may naturally pass through and occupy portions of the broader
+typography region as long as sufficient uninterrupted negative space
+remains available for future text.
+
+Within the future typography region:
+- allow occasional small motifs
+- prefer light and isolated placement
+- preserve generous spacing between motifs
+- preserve larger continuous white pockets for actual typography
+- allow motifs to appear between potential lines of typography
+- allow motifs near the outer portions of the title region
+- allow occasional tiny accents within broader title-space negative areas
+
+However:
+- avoid large motifs near the likely visual center of the TITLE
+- avoid dense clusters
+- avoid multiple overlapping motifs
+- avoid horizontal chains of motifs
+- avoid repeated motifs forming a pattern
+- avoid placing many motifs directly behind the same future line of text
+
+The goal is NATURAL COEXISTENCE between typography space and decoration.
+
+Typography clearance must come from SPACING, not from complete decorative
+exclusion.
+
+==================================================
+8. NO TYPOGRAPHY-SHAPED EMPTY ZONE
+==================================================
+
+DECORATION DISTRIBUTION MUST BE COMPOSITION-AWARE,
+NOT TYPOGRAPHY-AVOIDANT.
+
+The decoration system should respond to the whole cover composition.
+
+It should NOT visibly bend around or outline an invisible typography box.
+
+Avoid creating:
+- a large blank rectangle
+- a blank oval
+- a blank horizontal stripe
+- a blank central island
+- symmetrical decoration surrounding an empty center
+- decorative corners enclosing empty typography space
+- a visible decoration boundary around the future title
+
+The viewer should perceive natural negative space.
+The viewer should NOT perceive an invisible title container.
+
+==================================================
+9. NEGATIVE SPACE IS IMPORTANT
+==================================================
+
+Empty space is a valid and important design element.
+
+Do NOT attempt to fill every empty region.
+Do NOT treat every empty area as an invitation to add decoration.
+
+Preserve generous areas of clean white space when they improve the cover.
+
+Negative space should remain visible and intentional.
+
+The cover should feel premium, breathable, and professionally art-directed
+rather than densely filled.
+
+However:
+SPARSE does NOT mean EMPTY.
+READABLE does NOT mean EMPTY.
+TYPOGRAPHY SPACE does NOT mean DECORATION-FREE.
+
+Use negative space and decoration together.
+
+The desired result is a lightly decorated composition containing natural
+open pockets large enough for typography.
+
+==================================================
+10. LIGHT CONTEXTUAL DECORATION
+==================================================
+
+Add a LIGHT, SPARSE layer of contextual decorative motifs when safe
+negative space is available.
+
+Some decorative integration is generally desirable for a professionally
+designed cover.
+
+The target is:
+LIGHTLY DECORATED,
+not completely undecorated,
+and not densely decorated.
+
+Use a small number of carefully selected motifs distributed naturally
+through suitable open areas.
+
+Only omit decoration entirely when there is genuinely no safe or
+compositionally useful negative space available.
+
+Decorations must be derived from the actual FIRST PROVIDED IMAGE.
+
+Analyze the source dynamically for:
+- environment
+- setting
+- season
+- weather
+- activity
+- objects
+- existing visual motifs
+- atmosphere
+- mood
+- thematic identity
+
+Choose decorative motifs that genuinely belong to that visual world.
+
+Do NOT use a fixed decoration vocabulary.
+Do NOT automatically add generic:
+- stars
+- hearts
+- flowers
+- clouds
+- sparkles
+- dots
+- leaves
+- birds
+- snowflakes
+unless those motifs are contextually appropriate to the ACTUAL source
+image.
+
+Do NOT add decorations merely because they are cute.
+Do NOT introduce unrelated objects.
+Do NOT borrow decorative motifs from previous examples or previous source
+images.
+
+The decoration vocabulary must adapt independently to each new source
+image.
+
+==================================================
+11. DECORATION DENSITY TARGET
+==================================================
+
+Decoration should be VISIBLY PRESENT but CLEARLY SUBORDINATE.
+
+Avoid BOTH extremes:
+
+EXTREME A:
+A completely undecorated or artificially empty cover when safe contextual
+decoration would improve visual integration.
+
+EXTREME B:
+An overly decorated cover where secondary motifs compete with the source
+artwork or consume too much negative space.
+
+The desired result is LIGHTLY DECORATED.
+
+Prefer a few well-placed motifs over many small scattered motifs.
+
+The viewer should notice:
+FIRST:
+the SOURCE ARTWORK.
+SECOND:
+the overall cover composition.
+THIRD:
+the decorative accents.
+
+Do NOT attempt full-canvas decorative coverage.
+Do NOT decorate every quadrant.
+Do NOT place decoration simply to balance another decoration.
+Do NOT force symmetry.
+Do NOT fill every empty pocket.
+
+But also:
+Do NOT stop decoration abruptly when reaching the future typography
+region.
+
+Allow the decoration rhythm to continue naturally into and through the
+broader bottom region at a controlled density.
+
+==================================================
+12. DECORATION DISTRIBUTION
+==================================================
+
+Decoration should feel distributed across the COVER as a whole rather
+than divided into:
+"decorated artwork region"
+and
+"undecorated typography region."
+
+Allow appropriate motifs to appear in safe negative-space pockets:
+- above the source artwork
+- beside the source artwork
+- around peripheral source areas
+- in transitional negative space
+- below the source artwork
+- within portions of the broader typography region
+- toward lower-left space
+- toward lower-right space
+- occasionally within lower-central negative space when sufficiently
+  separated from other motifs
+
+The density may vary naturally from region to region.
+
+Do NOT enforce equal coverage.
+Do NOT enforce equal numbers of motifs in different areas.
+Do NOT create a uniform decorative field.
+
+The transition from artwork to bottom typography space should feel
+GRADUAL and ORGANIC.
+
+There should be no obvious point where decoration suddenly stops.
+
+==================================================
+13. DECORATION SCALE AND VISUAL WEIGHT
+==================================================
+
+Most newly generated decorative motifs should remain SMALL relative to
+the main source artwork.
+
+They should function as accents, not subjects.
+
+Prefer:
+- tiny contextual accents
+- small simple motifs
+- isolated thematic details
+- subtle peripheral elements
+- occasional slightly larger motifs only when genuinely justified
+
+Inside or near the typography region, prefer the LIGHTER end of this
+scale hierarchy.
+
+Do NOT introduce:
+- large invented foreground objects
+- large environmental clusters
+- large decorative landscapes
+- large decorative scenery
+- dense object groups
+- decorative scenes that compete with the source artwork
+
+Do not build a second scene around or below the source artwork.
+
+==================================================
+14. ORGANIC DECORATION PLACEMENT
+==================================================
+
+Place decorations only in genuine, safe negative-space pockets.
+
+Use naturally irregular:
+- positions
+- spacing
+- scale
+- orientation
+- density
+
+Avoid mechanical distribution.
+
+Do NOT create:
+- grids
+- rows
+- columns
+- equal spacing
+- repeating patterns
+- wallpaper
+- radial arrangements
+- mirrored arrangements
+- artificial bilateral symmetry
+- evenly balanced decoration
+- decorative borders
+
+It is acceptable for one side to contain more decoration than another.
+It is acceptable for some areas to contain no decoration.
+
+Decorations may appear near canvas edges when appropriate.
+Decorations may appear inside the broader typography region.
+
+Do not create a ring of decoration around the source artwork.
+Do not create a ring of decoration around the typography area.
+Do not deliberately place motifs around the perimeter of an invisible
+title box.
+
+The distribution should feel naturally scattered while remaining
+professionally art-directed.
+
+==================================================
+15. BOTTOM-AREA DECORATION CONTROL
+==================================================
+
+The lower portion of the cover requires balanced handling.
+
+Do NOT completely sterilize the lower region.
+Do NOT fill the lower region with decorative scenery.
+
+Instead, maintain a LIGHT CONTINUATION of the overall decorative rhythm
+through the bottom region.
+
+Small contextual motifs may appear:
+- near lower peripheral areas
+- near bottom corners
+- within transitional spaces
+- inside portions of the broader typography region
+- between potential typography lines when sufficient spacing exists
+- occasionally near the lower-center when they remain small and isolated
+
+Good bottom-area decoration should:
+- remain relatively small
+- preserve substantial white space
+- visually connect with the source theme
+- soften the transition between artwork and typography
+- create organic rhythm
+- leave usable text space between motifs
+- avoid becoming a foreground environment
+
+Do NOT create large decorative clusters at both bottom corners merely to
+fill space.
+Do NOT automatically place matching decoration on the left and right.
+Do NOT create symmetrical bottom-corner anchors.
+Do NOT construct a decorative floor across the bottom.
+Do NOT construct a decorative ceiling above the typography.
+Do NOT create a decorative frame around the typography.
+
+==================================================
+16. DO NOT BUILD NEW ENVIRONMENTAL SCENERY
+==================================================
+
+Decoration must remain decoration.
+
+Do NOT transform decorative accents into a newly invented foreground,
+background, or secondary environment.
+
+Do NOT invent large:
+- plants
+- bushes
+- rocks
+- clouds
+- terrain
+- snowbanks
+- waves
+- foliage
+- architecture
+- landscape masses
+merely to fill available space.
+
+If environmental motifs are genuinely derived from the source and are
+used as new decoration, simplify them into SMALL ACCENT-LIKE motifs.
+
+Do not allow them to become major compositional masses.
+
+The original source illustration must remain the only major scene.
+
+==================================================
+17. DECORATION MUST YIELD TO THE SOURCE
+==================================================
+
+New decorative elements must NEVER modify, interrupt, replace, or visually
+confuse the original artwork.
+
+Never place decoration:
+- on top of important source elements
+- across meaningful source connections
+- at the endpoint of a source connection
+- immediately beside a thin structural source line when it could create
+  ambiguity
+- inside an important source object
+- between two source elements that are visibly connected
+- where it could visually become part of an original source relationship
+
+If a decorative element conflicts with the source:
+REMOVE THE DECORATIVE ELEMENT.
+
+Do NOT move, shorten, erase, redirect, or redraw the source element.
+
+Decoration must adapt to the source.
+The source must NEVER adapt to decoration.
+
+==================================================
+18. DECORATION STYLE
+==================================================
+
+All newly generated decorative motifs must match the original
+illustration's visual language.
+
+Use:
+- simple black outlines
+- clean contours
+- white interiors
+- coloring-book-friendly shapes
+- consistent line-art character
+- similar visual simplicity to the source
+
+New decoration should look as though it naturally belongs to the same
+illustrated world as the original artwork.
+
+Do not introduce:
+- color
+- gray
+- shading
+- gradients
+- shadows
+- textures
+- realistic lighting
+- painterly effects
+- photographic elements
+- highly detailed decorative artwork
+
+Do not make decoration visually heavier than comparable small elements
+inside the original artwork.
+
+==================================================
+19. BORDERLESS COVER
+==================================================
+
+The final cover must be completely open and borderless.
+
+If the original source contains a:
+- border
+- frame
+- rounded rectangle
+- perimeter outline
+- enclosing boundary
+remove it completely.
+
+Do NOT replace it with another border.
+Do NOT create a new frame.
+Do NOT create corner framing.
+Do NOT allow decorative motifs to collectively form a border.
+
+The composition should naturally flow toward the canvas edges.
+
+==================================================
+20. COLORING-BOOK STYLE
+==================================================
+
+The entire final image must remain compatible with a premium
+black-and-white coloring-book aesthetic.
+
+Use:
+- pure black line art
+- clean white background
+- crisp outlines
+- readable shapes
+- consistent line-art weight and character
+- white interior areas
+
+Do NOT use:
+- color
+- grayscale
+- gray fills
+- shading
+- gradients
+- shadows
+- textures
+- painterly rendering
+- realistic lighting
+- photographic effects
+
+==================================================
+21. VISUAL HIERARCHY
+==================================================
+
+The final composition contains THREE visual systems:
+1. SOURCE ARTWORK
+2. NATURAL NEGATIVE SPACE FOR TYPOGRAPHY
+3. LIGHT CONTEXTUAL DECORATION
+
+Their hierarchy is:
+SOURCE ARTWORK
+>
+TYPOGRAPHY READABILITY
+>
+DECORATION
+
+IMPORTANT:
+This hierarchy controls VISUAL IMPORTANCE.
+It does NOT define spatial exclusivity.
+
+Typography space does NOT require decoration-free territory.
+Negative space and light decoration may spatially coexist.
+
+The broader typography region may contain small decoration as long as
+sufficient natural white space remains for future text.
+
+Do not solve typography readability by eliminating all decoration.
+Do not solve decoration balance by filling every empty region.
+Do not solve composition balance by centering everything.
+Do not solve visual balance through symmetry.
+
+==================================================
+22. COMPOSITION PRIORITY
+==================================================
+
+When instructions conflict, follow this priority:
+1. Preserve the original artwork faithfully.
+2. Preserve all original source relationships and connections.
+3. Preserve original proportions and structure.
+4. Preserve the natural spatial extent of the source artwork.
+5. Keep the source artwork large and visually dominant.
+6. Preserve the source composition's natural visual gravity.
+7. Create naturally usable lower-region negative space for future TITLE
+   and SUBTITLE.
+8. Do NOT turn the typography region into a decoration-free blank zone.
+9. Preserve intentional negative space.
+10. Allow light contextual decoration to naturally continue through the
+    broader bottom region.
+11. Maintain enough uninterrupted white space between decorations for
+    future typography.
+12. Prevent decoration from becoming a second scene.
+13. Maintain natural visual integration across the full cover.
+14. Remove the original border.
+15. Never generate text.
+
+==================================================
+23. FINAL INTERNAL CHECK
+==================================================
+
+Before producing the final image, verify:
+
+SOURCE:
+- The original illustration remains immediately recognizable.
+- Important characters, animals, objects, and environmental elements are
+  preserved.
+- Original proportions are preserved.
+- Original spatial relationships are preserved.
+- Original overlapping relationships are preserved.
+- Meaningful source connections remain continuous.
+- No source connection has been deleted.
+- No source connection has been shortened.
+- No source connection has been redirected.
+- No source connection has been attached to newly generated decoration.
+- No important source element has been redesigned.
+
+COMPOSITION:
+- The canvas is exactly 1:1.
+- The source artwork occupies primarily the upper and upper-middle
+  composition.
+- The artwork remains large and visually dominant.
+- The artwork has not been unnecessarily shrunk.
+- The artwork does not look like a small floating sticker.
+- The artwork is not unnecessarily compressed toward the center.
+- The artwork retains its natural horizontal and vertical presence.
+- Peripheral source elements have not been pulled inward merely to create
+  equal margins.
+- The composition does not rely on artificial symmetry.
+- The lower region provides useful future TITLE and SUBTITLE space.
+- The bottom region feels integrated with the overall cover.
+- There is NO obvious blank rectangle reserved for typography.
+- There is NO obvious blank horizontal strip reserved for typography.
+- The cover still looks naturally composed without typography.
+
+TYPOGRAPHY REGION:
+- Future TITLE and SUBTITLE remain feasible.
+- Sufficient uninterrupted negative-space pockets exist for typography.
+- The typography region is readable but not artificially empty.
+- Small decorations may exist within the broader typography region.
+- Decoration has not been deliberately routed around the typography.
+- The future typography region cannot be identified solely from the
+  absence of decoration.
+- No banner, box, panel, frame, or enclosing structure exists.
+- Decoration does not form an invisible frame around future typography.
 
 DECORATION:
-Add a small amount of cute, playful background decoration that matches the visual language of the original artwork, such as simple clouds, stars, flowers, hearts, dots, sparkles, or other motifs that naturally belong to the illustration.
+- A light contextual decoration layer is present when safe negative space
+  allows it.
+- The result is lightly decorated rather than densely decorated.
+- The result is not unnecessarily undecorated.
+- Decoration is derived from the actual source image.
+- Decoration does not use a fixed generic vocabulary.
+- Decoration occupies only suitable negative-space pockets.
+- Most decorative motifs remain small.
+- Large areas of clean white space remain visible.
+- Decoration may naturally continue into the bottom typography region.
+- Decoration does not abruptly stop at an invisible typography boundary.
+- Decoration does not cover source elements.
+- Decoration does not touch or interrupt important source connections.
+- Decoration does not visually merge with important source structures.
+- Decoration does not form a repeating pattern.
+- Decoration does not form a border.
+- Decoration does not form a foreground scene.
+- Decoration does not create large artificial environmental clusters.
+- Decoration does not compete with the source artwork.
+- Bottom decoration remains light and naturally distributed.
+- Bottom decoration does not form symmetrical corner clusters.
+- Bottom decoration does not create a decorative floor.
+- Bottom decoration does not create a decorative frame around typography.
 
-The decoration must remain secondary to the original artwork.
+STYLE:
+- Pure black line art.
+- Clean white background.
+- No color.
+- No gray.
+- No shading.
+- No gradients.
+- No shadows.
+- No textures.
+- No generated text.
 
-Use the existing negative space of the composition as the primary area for decoration. Do not rearrange the original artwork to create artificial space for decorations.
+==================================================
+24. FINAL DECISION RULE
+==================================================
 
-Keep the decoration sparse, varied, and naturally irregular:
-- Avoid dense decoration.
-- Avoid evenly filling the entire canvas.
-- Avoid grid-like or symmetrical placement.
-- Avoid repetitive spacing or identical clusters.
-- Maintain generous areas of calm negative space.
-- Let some areas remain almost completely undecorated.
-- Decorations may appear near the main artwork when visually natural, but must never interfere with important characters, objects, or structural connections.
+When deciding whether and where to add decoration, follow this rule:
 
-BOTTOM TITLE AREA:
-Reserve a visually usable title area around the lower portion of the composition for later typography.
+If safe negative space exists and a small source-derived motif would help
+the artwork, surrounding space, and future typography feel like one
+professionally designed cover:
+ADD A LIGHT DECORATIVE ACCENT.
 
-The bottom title area should feel like a natural part of the original composition rather than an artificially empty block.
+This remains true even when that safe negative space lies within the
+broader future typography region.
 
-Maintain sufficient calm negative space in the lower portion so that a title can later be placed clearly and read comfortably.
+If a decoration would interfere with the source artwork:
+REMOVE IT.
 
-Do NOT force all characters or objects upward or away from the bottom merely to create a title area. Preserve the original composition first.
+If a decoration would make future typography significantly difficult to
+read:
+MOVE IT TO ANOTHER SAFE NEGATIVE-SPACE POCKET, SIMPLIFY IT, OR REMOVE IT.
 
-If important original artwork naturally occupies part of the lower area, do not remove, move, shrink, or redesign it just to create title space. Instead, use the naturally available negative space around it.
+If a decoration would become a major object or create a second scene:
+SIMPLIFY IT OR REMOVE IT.
 
-Decorations do not need to completely avoid the bottom title area. A small number of subtle decorations may appear around the surrounding area when they naturally fit the composition, but keep the main title placement area visually calm and uncluttered.
+If several decorations would work equally well:
+USE FEWER.
 
-The bottom title area should have enough visual breathing room for typography without looking like a large artificial empty block.
+But do NOT interpret "use fewer" as "create a completely empty typography
+zone."
 
-OVERALL COMPOSITION:
-The final result should feel like a professionally composed children's book cover while still looking unmistakably like the original artwork.
+The typography area must remain READABLE, NOT EMPTY.
+Decoration should NOT avoid typography space.
+Decoration and typography space should coexist through natural spacing.
 
-Preserve the original composition first.
-Preserve structural relationships second.
-Use existing negative space for decoration and typography third.
+SOURCE FIDELITY COMES FIRST.
+TYPOGRAPHY USABILITY COMES SECOND.
+DECORATION SUPPORTS AND CONNECTS THE COMPOSITION.
 
-Do not redesign the artwork simply to make it look more like a generic book cover.${BW_GUARD}`;
+==================================================
+25. TARGET VISUAL RESULT
+==================================================
+
+The final cover should feel like ONE naturally composed illustration.
+
+It should NOT feel like:
+"illustration on top + empty title box underneath."
+
+Instead it should feel like:
+"large faithful source artwork + naturally continuing sparse decoration
++ organically occurring negative space where typography can later be
+placed."
+
+Before typography is added, the cover should already look visually
+complete.
+
+After typography is added, the TITLE and SUBTITLE should naturally fit
+into the existing negative-space structure without requiring the
+illustration to be redesigned.
+
+Generate ONE strictly 1:1 premium black-and-white coloring-book
+BOTTOM COVER.`;
 
 export function buildCoverSourceBWPrompt(titleSafe: TitleSafePosition): string {
   // Each title-safe position has its own dedicated, user-tuned prompt.
