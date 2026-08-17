@@ -96,24 +96,33 @@ export function ColoringStylePickerModal({ open, onClose, onSelect, referenceThu
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(11,13,12,.55)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: isMobile ? 8 : 24 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--surface, #fff)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", width: "min(1100px, 96vw)", height: isMobile ? "min(94vh, 760px)" : "min(760px, 90vh)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-          {selected && (
-            <button type="button" onClick={() => setSelected(null)} aria-label="Quay lại" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", color: "var(--foreground)" }}><Icon name="arrow-left" size={20} /></button>
-          )}
-          {referenceThumb && (
-            <span title="Trang đang tô" style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={referenceThumb} alt="Trang đang tô" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", border: "1px solid var(--border)", background: "#fff" }} />
-            </span>
-          )}
-          <div style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>{selected ? selected.name : "Chọn coloring style"}</div>
+        {/* header — on mobile the search drops to its own row so the title never
+            collides with it; on desktop everything stays on one row. */}
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 10 : 12, padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: 1 }}>
+            {selected && (
+              <button type="button" onClick={() => setSelected(null)} aria-label="Quay lại" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", color: "var(--foreground)", flexShrink: 0 }}><Icon name="arrow-left" size={20} /></button>
+            )}
+            {referenceThumb && (
+              <span title="Trang đang tô" style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={referenceThumb} alt="Trang đang tô" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", border: "1px solid var(--border)", background: "#fff" }} />
+              </span>
+            )}
+            <div style={{ fontWeight: 700, fontSize: 16, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selected ? selected.name : "Chọn coloring style"}</div>
+            {/* Mobile: close stays on the title row. Desktop: close is the last item after search. */}
+            {isMobile && (
+              <button type="button" onClick={onClose} aria-label="Đóng" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", color: "var(--muted-foreground)", flexShrink: 0 }}><Icon name="x" size={20} /></button>
+            )}
+          </div>
           {!selected && (
-            <div style={{ width: isMobile ? 130 : 240, flexShrink: 0 }}>
+            <div style={{ width: isMobile ? "100%" : 240, flexShrink: 0 }}>
               <input placeholder="Tìm style…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", fontSize: 13, background: "var(--neutral-100)" }} />
             </div>
           )}
-          <button type="button" onClick={onClose} aria-label="Đóng" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", color: "var(--muted-foreground)" }}><Icon name="x" size={20} /></button>
+          {!isMobile && (
+            <button type="button" onClick={onClose} aria-label="Đóng" style={{ background: "none", border: "none", cursor: "pointer", display: "flex", color: "var(--muted-foreground)", flexShrink: 0 }}><Icon name="x" size={20} /></button>
+          )}
         </div>
 
         {/* body */}

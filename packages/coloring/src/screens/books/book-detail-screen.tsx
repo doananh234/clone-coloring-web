@@ -334,8 +334,8 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
 
       {/* header row */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 24, letterSpacing: "-0.02em" }}>{b.title}</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", minWidth: 0, maxWidth: "100%" }}>
+          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "clamp(18px, 5vw, 24px)", letterSpacing: "-0.02em", minWidth: 0, maxWidth: "100%", overflowWrap: "anywhere", wordBreak: "break-word" }}>{b.title}</h1>
           {b.isPublic ? <Badge tone="success" dot>Đã duyệt</Badge> : <Badge tone="neutral">Nháp</Badge>}
           {b.isPremium && <Badge tone="carbon">Premium</Badge>}
           {edited && <Badge tone="warning">Đã sửa · local</Badge>}

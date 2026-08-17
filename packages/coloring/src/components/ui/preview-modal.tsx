@@ -53,7 +53,7 @@ export function PreviewModal({ open, onClose, title, imageSrc, imageNode, badges
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", width: "min(880px, 100%)", height: "min(90vh, 860px)", overflow: "hidden", display: "flex", flexDirection: "column", animation: "mo-dd-in var(--dur-med) var(--ease-out)" }}
+        style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", width: "min(880px, 100%)", height: "min(90dvh, 860px)", overflow: "hidden", display: "flex", flexDirection: "column", animation: "mo-dd-in var(--dur-med) var(--ease-out)" }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -111,7 +111,7 @@ export function PreviewModal({ open, onClose, title, imageSrc, imageNode, badges
 
         {/* FOOTER: actions as one full-width row under both columns */}
         {actions && (
-          <div style={{ flexShrink: 0, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "14px 18px", borderTop: "1px solid var(--border)", background: "var(--card)" }}>{actions}</div>
+          <div style={{ flexShrink: 0, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "14px 18px", paddingBottom: "calc(18px + env(safe-area-inset-bottom))", borderTop: "1px solid var(--border)", background: "var(--card)" }}>{actions}</div>
         )}
       </div>
 
