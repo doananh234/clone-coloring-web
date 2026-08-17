@@ -3,6 +3,7 @@ import { prisma } from "@vx/db";
 import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { cloneQueue } from "@/lib/queue/clone-queue";
 import { enqueueCloneJob } from "@vx/clone-core/queue-enqueue";
+import { withQueueTimeout, isQueueTimeout, queueUnavailableResponse } from "@/lib/queue/queue-timeout";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,16 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   });
 
   if (confirm) {
-    await enqueueCloneJob(cloneQueue, jobId);
+    // Bound the enqueue so a down/unreachable Redis returns a clear 503 instead
+    // of hanging the request forever (maxRetriesPerRequest:null queues commands
+    // indefinitely). The row is already status=queued, so the reconciler will
+    // re-enqueue it once the queue is back — mirrors the /start route.
+    try {
+      await withQueueTimeout(enqueueCloneJob(cloneQueue, jobId));
+    } catch (err) {
+      if (isQueueTimeout(err)) return queueUnavailableResponse({ jobId, confirmed: confirm });
+      throw err;
+    }
   }
 
   return NextResponse.json({ ok: true, confirmed: confirm });
