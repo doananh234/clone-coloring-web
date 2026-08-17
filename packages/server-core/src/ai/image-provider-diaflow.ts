@@ -10,12 +10,25 @@
  *
  * Config:
  *   DIAFLOW_API_URL   — Base URL (default: https://api.diaflow.io)
- *   DIAFLOW_TOKEN     — Bearer token (required)
+ *   DIAFLOW_TOKENS    — Comma-separated Bearer token pool (rotates on credit
+ *                       exhaustion). Falls back to single DIAFLOW_TOKEN.
  *   DIAFLOW_POLL_INTERVAL — Seconds between polls (default: 3)
  *   DIAFLOW_POLL_TIMEOUT  — Max seconds to wait (default: 300)
+ *
+ * Key rotation: every logical operation runs inside withDiaflowKeyRotation() —
+ * on an out-of-credit response the active token is cooled down (shared via
+ * Redis) and the whole operation is retried with the next token in the pool.
+ * See diaflow-key-rotation.ts.
  */
 
 import { getLangfuse } from "../langfuse";
+import {
+  DiaflowCreditExhaustedError,
+  detectCreditExhaustion,
+  getScopeTokens,
+  withDiaflowKeyRotation,
+  type DiaflowScope,
+} from "./diaflow-key-rotation";
 import type {
   ColorizeOptions,
   GeneratedImage,
@@ -70,15 +83,17 @@ const MAX_RETRIES = 3;
 
 /**
  * Diaflow scopes — the one-shot clone flow lives on a separate Diaflow
- * account / interface and needs its own Bearer token. Existing image/text/
- * vision calls keep using the default scope.
+ * account / interface and needs its own Bearer token pool. Existing image/
+ * text/vision calls keep using the default scope.
  *
- *   default scope  → DIAFLOW_TOKEN          + DIAFLOW_API_URL
- *   "one-shot"     → DIAFLOW_ONE_SHOT_TOKEN + DIAFLOW_ONE_SHOT_API_URL
- *                    (falls back to DIAFLOW_TOKEN / DIAFLOW_API_URL if unset)
+ *   default scope  → DIAFLOW_TOKENS          + DIAFLOW_API_URL
+ *   "one-shot"     → DIAFLOW_ONE_SHOT_TOKENS + DIAFLOW_ONE_SHOT_API_URL
+ *                    (falls back to DIAFLOW_TOKENS / DIAFLOW_API_URL if unset)
+ *
+ * Token resolution/rotation is handled by diaflow-key-rotation.ts; getConfig
+ * only returns the URL + timing for a scope. The active token is passed into
+ * the network functions by withDiaflowKeyRotation().
  */
-type DiaflowScope = "default" | "one-shot";
-
 function getConfig(scope: DiaflowScope = "default") {
   const isOneShot = scope === "one-shot";
 
@@ -87,10 +102,6 @@ function getConfig(scope: DiaflowScope = "default") {
     process.env.DIAFLOW_API_URL ||
     "https://api.diaflow.io"
   ).replace(/\/$/, "");
-
-  const token =
-    (isOneShot ? process.env.DIAFLOW_ONE_SHOT_TOKEN : undefined) ||
-    process.env.DIAFLOW_TOKEN;
 
   // Timing differs by scope. The one-shot clone flow can take 30-40+ minutes
   // per PDF, so we sleep an initial fixed delay before the first poll —
@@ -107,12 +118,7 @@ function getConfig(scope: DiaflowScope = "default") {
     ? Number(process.env.DIAFLOW_ONE_SHOT_POLL_TIMEOUT) || 3600
     : Number(process.env.DIAFLOW_POLL_TIMEOUT) || 300;
 
-  if (!token) {
-    const envName = isOneShot ? "DIAFLOW_ONE_SHOT_TOKEN (or DIAFLOW_TOKEN)" : "DIAFLOW_TOKEN";
-    throw new Error(`Diaflow not configured. Set ${envName} in .env.local`);
-  }
-
-  return { apiUrl, token, initialDelay, pollInterval, pollTimeout };
+  return { apiUrl, initialDelay, pollInterval, pollTimeout };
 }
 
 function authHeaders(token: string): Record<string, string> {
@@ -135,6 +141,12 @@ async function createSession(payload: DiaflowPayload, token: string, apiUrl: str
 
   if (!res.ok) {
     const err = await res.text();
+    if (detectCreditExhaustion(res.status, err)) {
+      throw new DiaflowCreditExhaustedError(
+        `Diaflow session creation out of credit (${res.status}): ${err}`,
+        token,
+      );
+    }
     throw new Error(`Diaflow session creation failed (${res.status}): ${err}`);
   }
 
@@ -161,6 +173,12 @@ async function pollOnce(sessionId: string, token: string, apiUrl: string): Promi
 
     if (!res.ok) {
       const err = await res.text();
+      if (detectCreditExhaustion(res.status, err)) {
+        throw new DiaflowCreditExhaustedError(
+          `Diaflow poll out of credit (${res.status}): ${err}`,
+          token,
+        );
+      }
       throw new Error(`Diaflow poll error (${res.status}): ${err}`);
     }
 
@@ -221,8 +239,12 @@ function extractFromOutput(result: Record<string, unknown>): DiaflowExtracted {
   return extracted;
 }
 
-async function runDiaflow(payload: DiaflowPayload): Promise<DiaflowResult> {
-  const { sessionId, result } = await runDiaflowRaw(payload);
+async function runDiaflow(
+  payload: DiaflowPayload,
+  token: string,
+  scope: DiaflowScope = "default",
+): Promise<DiaflowResult> {
+  const { sessionId, result } = await runDiaflowRaw(payload, scope, token);
   return { sessionId, extracted: extractFromOutput(result) };
 }
 
@@ -234,7 +256,8 @@ async function runDiaflow(payload: DiaflowPayload): Promise<DiaflowResult> {
  */
 async function runDiaflowRaw(
   payload: DiaflowPayload,
-  scope: DiaflowScope = "default",
+  scope: DiaflowScope,
+  token: string,
   options?: { returnPartialOnFailure?: boolean },
 ): Promise<{
   sessionId: string;
@@ -242,7 +265,7 @@ async function runDiaflowRaw(
   failed?: boolean;
   failureError?: string;
 }> {
-  const { apiUrl, token, initialDelay, pollInterval, pollTimeout } = getConfig(scope);
+  const { apiUrl, initialDelay, pollInterval, pollTimeout } = getConfig(scope);
 
   const sessionId = await createSession(payload, token, apiUrl);
 
@@ -317,8 +340,8 @@ async function fetchAsBase64(url: string): Promise<{ data: string; mimeType: str
  *
  * Flow: POST /uploads (get presigned URL + key) → PUT raw bytes to presigned URL → return key
  */
-async function uploadImage(imageUrl: string): Promise<string> {
-  return uploadAsset(imageUrl, "png", "image/png");
+async function uploadImage(imageUrl: string, token: string): Promise<string> {
+  return uploadAsset(imageUrl, "png", "image/png", "default", token);
 }
 
 /**
@@ -329,9 +352,10 @@ async function uploadAsset(
   sourceUrl: string,
   extension: string,
   fallbackContentType: string,
-  scope: DiaflowScope = "default",
+  scope: DiaflowScope,
+  token: string,
 ): Promise<string> {
-  const { apiUrl, token } = getConfig(scope);
+  const { apiUrl } = getConfig(scope);
 
   let fileBytes: Buffer;
   let contentType = fallbackContentType;
@@ -356,6 +380,12 @@ async function uploadAsset(
 
   if (!presignRes.ok) {
     const err = await presignRes.text();
+    if (detectCreditExhaustion(presignRes.status, err)) {
+      throw new DiaflowCreditExhaustedError(
+        `Diaflow upload presign out of credit (${presignRes.status}): ${err}`,
+        token,
+      );
+    }
     throw new Error(`Diaflow upload presign failed (${presignRes.status}): ${err}`);
   }
 
@@ -418,30 +448,36 @@ export async function diaflowCloneOneShot(
   options?: DiaflowLLMOptions,
 ): Promise<{ sessionId: string; pages: DiaflowCloneOneShotPage[] }> {
   // The one-shot clone flow lives on a separate Diaflow account / interface
-  // and uses its own credentials (DIAFLOW_ONE_SHOT_TOKEN / _API_URL).
-  const pdfKey = await uploadAsset(pdfUrl, "pdf", "application/pdf", "one-shot");
-
-  // Real payload shape for the clone flow (verified via Diaflow web client):
-  //   POST /api/v1/interfaces/app/process   { "file": ["<uploadKey>"] }
-  // brand_info (name of the selected brand workspace) is added when present so
-  // the Diaflow flow can tailor output per brand; omitted otherwise to keep the
-  // legacy payload unchanged.
+  // and uses its own credential pool (DIAFLOW_ONE_SHOT_TOKENS / _API_URL).
+  // The whole upload+process op runs under one token so a mid-op key rotation
+  // re-uploads with the new account (uploads are account-scoped).
   const brandInfo = options?.brandInfo?.trim();
-  const payload: DiaflowPayload = {
-    file: [pdfKey],
-    ...(brandInfo ? { brand_info: brandInfo } : {}),
-  };
-
-  // Salvage partial success: an internal loop iteration failing marks the
-  // overall flow as Failed, but loop-output-N.output still lists every
-  // successful iteration. Opt into partial-return so we can save those pages
-  // instead of tossing the entire session.
-  const { sessionId, result, failed, failureError } = await runDiaflowRaw(
-    payload,
+  const { sessionId, result, failed, failureError } = await withDiaflowKeyRotation(
     "one-shot",
-    { returnPartialOnFailure: true },
+    async (token) => {
+      const pdfKey = await uploadAsset(pdfUrl, "pdf", "application/pdf", "one-shot", token);
+
+      // Real payload shape for the clone flow (verified via Diaflow web client):
+      //   POST /api/v1/interfaces/app/process   { "file": ["<uploadKey>"] }
+      // brand_info (name of the selected brand workspace) is added when present
+      // so the Diaflow flow can tailor output per brand; omitted otherwise to
+      // keep the legacy payload unchanged.
+      const payload: DiaflowPayload = {
+        file: [pdfKey],
+        ...(brandInfo ? { brand_info: brandInfo } : {}),
+      };
+
+      // Salvage partial success: an internal loop iteration failing marks the
+      // overall flow as Failed, but loop-output-N.output still lists every
+      // successful iteration. Opt into partial-return so we can save those pages
+      // instead of tossing the entire session.
+      const raw = await runDiaflowRaw(payload, "one-shot", token, {
+        returnPartialOnFailure: true,
+      });
+      logDiaflowToLangfuse("cloneOneShot", pdfKey, undefined, options);
+      return raw;
+    },
   );
-  logDiaflowToLangfuse("cloneOneShot", pdfKey, undefined, options);
 
   // The one-shot flow uses a DIFFERENT response schema than the other Diaflow
   // flows: no `result.output` wrapper — the top level is a node-map keyed by
@@ -748,8 +784,27 @@ export async function diaflowRecheckOneShotSession(
   pages: DiaflowCloneOneShotPage[];
   parseError?: string;
 }> {
-  const { apiUrl, token } = getConfig("one-shot");
-  const status = await pollOnce(sessionId, token, apiUrl);
+  const { apiUrl } = getConfig("one-shot");
+
+  // A session belongs to whichever account/token created it, but we don't
+  // persist that mapping. Try each token in the one-shot pool until one can
+  // read the session (others return 404 / auth errors and are skipped).
+  const tokens = getScopeTokens("one-shot");
+  let status: DiaflowResponse | null = null;
+  let lastError: unknown = null;
+  for (const token of tokens) {
+    try {
+      status = await pollOnce(sessionId, token, apiUrl);
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  if (!status) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Diaflow recheck: no token in pool could read session ${sessionId}`);
+  }
   const raw = status.result;
   console.log(
     `[Diaflow recheck] session=${sessionId} status=${status.status} raw:`,
@@ -899,22 +954,24 @@ export const diaflowImageProvider: ImageProviderInterface = {
     prompt: string,
     options: ImageGenerationOptions = {},
   ): Promise<GeneratedImage> {
-    const { extracted } = await runDiaflow({ flow: "image", request: prompt });
+    return withDiaflowKeyRotation("default", async (token) => {
+      const { extracted } = await runDiaflow({ flow: "image", request: prompt }, token);
 
-    if (!extracted.image) {
-      throw new Error("Diaflow returned no image in result");
-    }
+      if (!extracted.image) {
+        throw new Error("Diaflow returned no image in result");
+      }
 
-    const imageUrl = toCdnUrl(extracted.image);
-    const { data, mimeType } = await fetchAsBase64(imageUrl);
+      const imageUrl = toCdnUrl(extracted.image);
+      const { data, mimeType } = await fetchAsBase64(imageUrl);
 
-    const image: GeneratedImage = {
-      base64: data,
-      dataUrl: `data:${mimeType};base64,${data}`,
-    };
+      const image: GeneratedImage = {
+        base64: data,
+        dataUrl: `data:${mimeType};base64,${data}`,
+      };
 
-    logDiaflowToLangfuse("generateImage", prompt, image.usage, options);
-    return image;
+      logDiaflowToLangfuse("generateImage", prompt, image.usage, options);
+      return image;
+    });
   },
 
   async editImage(
@@ -924,41 +981,47 @@ export const diaflowImageProvider: ImageProviderInterface = {
   ): Promise<GeneratedImage> {
     const { referenceImageUrls, imageLabel, flow } = options;
 
-    // Upload images, then embed remote paths in the request string
-    const characterPath = await uploadImage(imageUrl);
-    const imageLines: string[] = [`${imageLabel || "source image"}: ${characterPath}`];
-    if (referenceImageUrls?.length) {
-      for (const refUrl of referenceImageUrls) {
-        const refPath = await uploadImage(refUrl);
-        imageLines.push(`reference image: ${refPath}`);
+    return withDiaflowKeyRotation("default", async (token) => {
+      // Upload images, then embed remote paths in the request string. Upload +
+      // process share `token` so a rotation re-uploads to the new account.
+      const characterPath = await uploadImage(imageUrl, token);
+      const imageLines: string[] = [`${imageLabel || "source image"}: ${characterPath}`];
+      if (referenceImageUrls?.length) {
+        for (const refUrl of referenceImageUrls) {
+          const refPath = await uploadImage(refUrl, token);
+          imageLines.push(`reference image: ${refPath}`);
+        }
       }
-    }
 
-    // Cover generation (gpt_image flow) places the prompt FIRST and the input
-    // image(s) at the END of the request; the default image flow keeps the
-    // image(s) first, then the prompt.
-    const parts =
-      flow === "gpt_image" ? [prompt, ...imageLines] : [...imageLines, prompt];
+      // Cover generation (gpt_image flow) places the prompt FIRST and the input
+      // image(s) at the END of the request; the default image flow keeps the
+      // image(s) first, then the prompt.
+      const parts =
+        flow === "gpt_image" ? [prompt, ...imageLines] : [...imageLines, prompt];
 
-    // flow defaults to "image"; cover generation passes "gpt_image" to route
-    // through Diaflow's GPT-image flow. Response parsing is flow-agnostic —
-    // extractFromOutput keys off output_type === "image", not the flow name.
-    const { extracted } = await runDiaflow({ flow: flow ?? "image", request: parts.join("\n") });
+      // flow defaults to "image"; cover generation passes "gpt_image" to route
+      // through Diaflow's GPT-image flow. Response parsing is flow-agnostic —
+      // extractFromOutput keys off output_type === "image", not the flow name.
+      const { extracted } = await runDiaflow(
+        { flow: flow ?? "image", request: parts.join("\n") },
+        token,
+      );
 
-    if (!extracted.image) {
-      throw new Error("Diaflow returned no image in result");
-    }
+      if (!extracted.image) {
+        throw new Error("Diaflow returned no image in result");
+      }
 
-    const cdnUrl = toCdnUrl(extracted.image);
-    const { data, mimeType } = await fetchAsBase64(cdnUrl);
+      const cdnUrl = toCdnUrl(extracted.image);
+      const { data, mimeType } = await fetchAsBase64(cdnUrl);
 
-    const image: GeneratedImage = {
-      base64: data,
-      dataUrl: `data:${mimeType};base64,${data}`,
-    };
+      const image: GeneratedImage = {
+        base64: data,
+        dataUrl: `data:${mimeType};base64,${data}`,
+      };
 
-    logDiaflowToLangfuse("editImage", prompt, image.usage, options);
-    return image;
+      logDiaflowToLangfuse("editImage", prompt, image.usage, options);
+      return image;
+    });
   },
 };
 
@@ -975,14 +1038,16 @@ export async function diaflowTextPrompt(
 ): Promise<string> {
   const fullPrompt = options?.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
 
-  const { extracted } = await runDiaflow({ flow: "text", request: fullPrompt });
+  return withDiaflowKeyRotation("default", async (token) => {
+    const { extracted } = await runDiaflow({ flow: "text", request: fullPrompt }, token);
 
-  if (!extracted.content) {
-    throw new Error("Diaflow returned no content in result");
-  }
+    if (!extracted.content) {
+      throw new Error("Diaflow returned no content in result");
+    }
 
-  logDiaflowToLangfuse("textPrompt", prompt, undefined, options);
-  return extracted.content;
+    logDiaflowToLangfuse("textPrompt", prompt, undefined, options);
+    return extracted.content;
+  });
 }
 
 async function visionAnalyzeInternal(
@@ -992,21 +1057,24 @@ async function visionAnalyzeInternal(
 ): Promise<{ content: string; sessionId: string }> {
   const basePrompt = options?.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
 
-  // Upload image(s), embed remote paths in request string
-  const urls = Array.isArray(imageUrl) ? imageUrl : [imageUrl];
-  const imageParts: string[] = [];
-  for (const url of urls) {
-    const imagePath = await uploadImage(url);
-    imageParts.push(`image: ${imagePath}`);
-  }
-  const request = `${imageParts.join("\n")}\n${basePrompt}`;
-  const { sessionId, extracted } = await runDiaflow({ flow: "text", request });
+  return withDiaflowKeyRotation("default", async (token) => {
+    // Upload image(s), embed remote paths in request string. Upload + process
+    // share `token` so a rotation re-uploads to the new account.
+    const urls = Array.isArray(imageUrl) ? imageUrl : [imageUrl];
+    const imageParts: string[] = [];
+    for (const url of urls) {
+      const imagePath = await uploadImage(url, token);
+      imageParts.push(`image: ${imagePath}`);
+    }
+    const request = `${imageParts.join("\n")}\n${basePrompt}`;
+    const { sessionId, extracted } = await runDiaflow({ flow: "text", request }, token);
 
-  if (!extracted.content) {
-    throw new Error(`Diaflow returned no content in result (session: ${sessionId})`);
-  }
+    if (!extracted.content) {
+      throw new Error(`Diaflow returned no content in result (session: ${sessionId})`);
+    }
 
-  return { content: extracted.content, sessionId };
+    return { content: extracted.content, sessionId };
+  });
 }
 
 export async function diaflowVisionAnalyze(
