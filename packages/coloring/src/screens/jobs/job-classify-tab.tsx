@@ -52,10 +52,8 @@ export function JobClassifyTab({ job }: { job: CloneJobDetail }) {
     }
   };
 
-  const ordered = [...rows].sort((a, b) => {
-    const rank = (r: Row) => (r.excluded ? 9 : TYPES.indexOf(r.pageType));
-    return rank(a) - rank(b) || a.pageNumber - b.pageNumber;
-  });
+  // Sắp xếp tuần tự theo số trang (đầu → cuối); trang excluded vẫn nằm đúng vị trí.
+  const ordered = [...rows].sort((a, b) => a.pageNumber - b.pageNumber);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

@@ -96,10 +96,12 @@ export function PreviewModal({ open, onClose, title, imageSrc, imageNode, badges
           {imageNode ? (
             <div style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)" }}>{imageNode}</div>
           ) : (
-            <div style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)", aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
+            // Ảnh tự co để luôn vừa khung modal (không ép aspect-ratio → không tràn/scroll).
+            // maxHeight bám theo viewport nên fit trọn trên cả web lẫn mobile.
+            <div style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)", maxHeight: "100%", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)", background: "var(--neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
               {imageSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={imageSrc} alt={typeof title === "string" ? title : "preview"} onClick={() => setZoom(true)} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff", cursor: "zoom-in" }} />
+                <img src={imageSrc} alt={typeof title === "string" ? title : "preview"} onClick={() => setZoom(true)} style={{ maxWidth: "100%", maxHeight: "min(72vh, 700px)", width: "auto", height: "auto", objectFit: "contain", background: "#fff", cursor: "zoom-in" }} />
               ) : (
                 <Icon name="image" size={30} />
               )}
