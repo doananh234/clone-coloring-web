@@ -42,11 +42,20 @@ export function ExportLinkButton({ bookId, exportInfo }: { bookId: string; expor
     }
   };
 
-  const copy = () => {
+  const copy = async () => {
     if (!fullUrl) return;
-    navigator.clipboard?.writeText(fullUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (!navigator.clipboard) {
+      setErr("Trình duyệt không hỗ trợ copy — hãy copy thủ công");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      setErr(null);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setErr("Không copy được — hãy copy thủ công");
+    }
   };
 
   if (active) {
