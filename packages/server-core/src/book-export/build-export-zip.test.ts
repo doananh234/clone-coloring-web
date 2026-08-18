@@ -52,6 +52,18 @@ describe("collectExportPlan", () => {
     expect(cover.entries.map((e) => e.url)).toEqual(["/assets/src/a.png"]);
   });
 
+  it("cover fallback skips an excluded first source page", () => {
+    const plan = collectExportPlan({
+      ...baseInput,
+      cloneJobPages: [
+        { imageUrl: "/assets/src/excluded.png", excluded: true },
+        { imageUrl: "/assets/src/first-included.png" },
+      ],
+    });
+    const cover = plan.folders.find((f) => f.path === "Main book/Book cover")!;
+    expect(cover.entries.map((e) => e.url)).toEqual(["/assets/src/first-included.png"]);
+  });
+
   it("omits Main book folders when there is no source clone job", () => {
     const plan = collectExportPlan({ ...baseInput, cloneJobPages: null, cloneJobId: undefined });
     expect(plan.folders.some((f) => f.path.startsWith("Main book/"))).toBe(false);
@@ -95,5 +107,25 @@ describe("buildExportZip", () => {
     const zip = await JSZip.loadAsync(buf);
     expect(zip.file("Clone book/Book interior/page-001.png")).not.toBeNull();
     expect(zip.file("Clone book/Book interior/page-002.png")).toBeNull(); // 404 skipped
+  });
+
+  it("detects jpeg magic bytes and names the file .jpg", async () => {
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, arrayBuffer: async () => jpeg.buffer } as unknown as Response)),
+    );
+    const plan = collectExportPlan({
+      ...baseInput,
+      bookData: {},
+      coverUrl: null,
+      summaryPages: [],
+      cloneJobPages: null,
+      cloneJobId: undefined,
+      coloringPages: [{ url: "/assets/b/int-1.png" }],
+    });
+    const zip = await JSZip.loadAsync(await buildExportZip(plan));
+    expect(zip.file("Clone book/Book interior/page-001.jpg")).not.toBeNull();
+    expect(zip.file("Clone book/Book interior/page-001.png")).toBeNull();
   });
 });

@@ -53,7 +53,7 @@ export function collectExportPlan(input: ExportInput): ExportPlan {
     const jobPages = input.cloneJobPages;
     const included = jobPages.filter((p) => !p.excluded);
     let coverPages = included.filter((p) => p.pageType === "cover");
-    if (coverPages.length === 0 && jobPages[0]) coverPages = [jobPages[0]];
+    if (coverPages.length === 0 && included[0]) coverPages = [included[0]];
     const introPages = included.filter((p) => p.pageType === "interiorIntro");
     const coverSet = new Set(coverPages);
     const introSet = new Set(introPages);
