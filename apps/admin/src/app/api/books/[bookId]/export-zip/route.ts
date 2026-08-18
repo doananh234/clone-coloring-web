@@ -47,6 +47,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     const cached = data.export as { url?: string; hash?: string; filename?: string } | undefined;
     if (cached?.hash === plan.hash && cached.url) {
       return NextResponse.json({
+        success: true,
         cached: true,
         url: cached.url,
         filename: cached.filename ?? plan.filename,
@@ -59,8 +60,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
       where: { bookId, type: "book-export", status: { in: ["pending", "running"] } },
       orderBy: { createdAt: "desc" },
     });
-    if (inflight) {
+    if (inflight && (inflight.payload as { hash?: string } | null)?.hash === plan.hash) {
       return NextResponse.json({
+        success: true,
         cached: false,
         jobId: inflight.id,
         status: inflight.status,
@@ -86,13 +88,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
       throw err;
     }
 
-    // Opportunistic retention prune (mirror source-covers pattern).
-    const cutoff = new Date(Date.now() - 7 * 24 * 3600 * 1000);
-    prisma.generationJob
-      .deleteMany({ where: { status: { in: ["done", "error"] }, createdAt: { lt: cutoff } } })
-      .catch((e) => console.error("[books/export-zip] prune old jobs failed:", e));
-
-    return NextResponse.json({ cached: false, jobId: job.id, status: "pending" });
+    return NextResponse.json({ success: true, cached: false, jobId: job.id, status: "pending" });
   } catch (error) {
     console.error("[books/export-zip POST] Error:", error);
     return NextResponse.json(
