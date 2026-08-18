@@ -22,12 +22,13 @@ import { BookInformationTab } from "./book-info-tab";
 import { BookOriginalSection } from "./book-original-section";
 import { PageBatchSelect } from "./page-batch-select";
 import { resolveImg, thumbImg } from "../../data/img";
-import { COLORING_WRITE_ENABLED, COLORING_API_BASE } from "../../data/config";
+import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { parsePageScene, hasSceneDetail, type ParsedScene } from "../../data/page-scene";
 import type { BookDetail, BookColoringPage, CoverCandidate } from "../../data/types";
 import { deriveBookPageLabel, bookPageTone, type BookPageTone } from "../../data/book-page-label";
 import { SourceCoverSection } from "./source-cover-section";
 import type { SourceCover } from "../../data/source-covers";
+import { ExportLinkButton } from "./export-link-button";
 
 const mono = { fontFamily: "var(--font-mono)" as const };
 const cap = { fontSize: 11, fontWeight: 600 as const, color: "var(--muted-foreground)", textTransform: "uppercase" as const, letterSpacing: "var(--tracking-caps)" };
@@ -233,6 +234,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const coverCandidates = (b.data?.coverCandidates ?? []) as CoverCandidate[];
   const selectedCoverCandidateId = typeof b.data?.selectedCoverCandidateId === "string" ? b.data.selectedCoverCandidateId : undefined;
   const sourceCovers = (b.data?.sourceCovers ?? []) as SourceCover[];
+  const exportInfo = (b.data?.export ?? undefined) as { url?: string; hash?: string; builtAt?: string; filename?: string } | undefined;
   // "Trang sách" tab: colorized pages get their OWN "Colored" section (colored
   // result), while the Interior section still lists EVERY page as B&W line-art.
   // Keep each page's ORIGINAL index (for labels + preview prev/next via openPageAt).
@@ -384,10 +386,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
           {resolveImg(b.pdfUrl) && (
             <Button variant="outline" size="sm" onClick={() => window.open(resolveImg(b.pdfUrl)!, "_blank", "noopener")}><Icon name="download" size={16} /> Tải PDF</Button>
           )}
-          <Button variant="outline" size="sm" title="Xuất ảnh sách (Main + Clone, cover + interior) ra file ZIP các PNG lẻ"
-            onClick={() => window.open(`${COLORING_API_BASE}/books/${bookId}/export-zip`, "_blank")}>
-            <Icon name="download" size={16} /> Export ZIP
-          </Button>
+          <ExportLinkButton bookId={bookId} exportInfo={exportInfo} />
           <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED || busy} title={COLORING_WRITE_ENABLED ? undefined : "Cần bật ghi thật (staging)"}
             onClick={async () => { setBusy(true); setMsg(null); try { await genSubtitle(); setMsg({ ok: "Đã sinh phụ đề" }); } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); } finally { setBusy(false); } }}>
             <Icon name="sparkles" size={16} /> Sinh phụ đề AI
