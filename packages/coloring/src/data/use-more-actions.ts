@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { httpPost } from "@vx/core-uikit/api";
 import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
 import { uploadImageFile } from "./use-upload-image";
+import { resolveImg } from "./img";
 
 const LOCAL = "Chỉ chạy ở chế độ ghi thật (staging).";
 const guard = () => {
@@ -30,15 +31,17 @@ export function useStyleFromImage(kind: "art-styles" | "coloring-styles") {
   };
 }
 
-/** Test a style: art-styles/test-generate or coloring-styles/test-colorize. Returns preview dataUrl. */
+/** Test a style: art-styles/test-generate or coloring-styles/test-colorize.
+ *  Returns an absolute preview URL (endpoints now upload to R2 and return a
+ *  `url`; `dataUrl`/`previewUrl` kept as fallbacks for older responses). */
 export function useStyleTest(kind: "art-styles" | "coloring-styles") {
   return {
     enabled: COLORING_WRITE_ENABLED,
     test: async (payload: { prompt?: string; generationDirective?: string; imageUrl?: string; colorizationDirective?: string; referenceImageUrls?: string[] }): Promise<string> => {
       guard();
       const path = kind === "art-styles" ? "test-generate" : "test-colorize";
-      const res = await httpPost<{ dataUrl?: string; previewUrl?: string }>(`${COLORING_API_BASE}/${kind}/${path}`, payload);
-      return res.dataUrl || res.previewUrl || "";
+      const res = await httpPost<{ url?: string; dataUrl?: string; previewUrl?: string }>(`${COLORING_API_BASE}/${kind}/${path}`, payload);
+      return resolveImg(res.url || res.previewUrl) || res.dataUrl || "";
     },
   };
 }
