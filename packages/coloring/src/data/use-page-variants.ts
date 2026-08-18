@@ -3,10 +3,35 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { httpPost, httpPatch, httpDel } from "@vx/core-uikit/api";
 import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
+import type { BookDetail } from "./types";
 
 const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (staging).";
 
 export interface RegenAddOpts { count: number; source: "A" | "B"; changePercent: number }
+
+/**
+ * Pure optimistic patch for variant selection. Mirrors the chosen variant into
+ * the target page (selectedVariantId + url/coloredUrl) exactly like the server
+ * does, so the cache can be updated instantly without a full-book refetch.
+ * Returns the same reference when nothing changes (no page/variant match).
+ */
+export function applyVariantSelection(
+  book: BookDetail | undefined,
+  pageId: string,
+  variantId: string,
+): BookDetail | undefined {
+  if (!book?.coloringPages) return book;
+  return {
+    ...book,
+    coloringPages: book.coloringPages.map((p) => {
+      if (p.id !== pageId) return p;
+      const v = p.variants?.find((vv) => vv.id === variantId);
+      return v
+        ? { ...p, selectedVariantId: variantId, url: v.url, coloredUrl: v.coloredUrl }
+        : { ...p, selectedVariantId: variantId };
+    }),
+  };
+}
 
 /** D4b: non-destructive per-page variant actions (regen-add / select / delete). */
 export function usePageVariants(bookId: string) {
@@ -24,8 +49,20 @@ export function usePageVariants(bookId: string) {
     },
     select: async (pageId: string, variantId: string) => {
       guard();
-      await httpPatch(`${base}/${encodeURIComponent(pageId)}/variants`, { variantId });
-      inval();
+      // Optimistic update: the chosen variant is already in the cached book, so
+      // mirror it into the page (url/coloredUrl + selectedVariantId) exactly like
+      // the server does — the UI flips instantly instead of re-downloading the
+      // whole book (~130KB) on every variant click. Roll back if the PATCH fails.
+      const key = ["coloring", "book", bookId];
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<BookDetail>(key);
+      qc.setQueryData<BookDetail>(key, (old) => applyVariantSelection(old, pageId, variantId));
+      try {
+        await httpPatch(`${base}/${encodeURIComponent(pageId)}/variants`, { variantId });
+      } catch (e) {
+        if (prev) qc.setQueryData(key, prev);
+        throw e;
+      }
     },
     remove: async (pageId: string, variantId: string) => {
       guard();
