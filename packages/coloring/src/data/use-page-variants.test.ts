@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyVariantSelection } from "./use-page-variants";
+import { applyVariantSelection, applyVariantRemoval } from "./use-page-variants";
 import type { BookDetail } from "./types";
 
 function book(): BookDetail {
@@ -57,5 +57,30 @@ describe("applyVariantSelection", () => {
     const b = { id: "b1", title: "T" } as unknown as BookDetail;
     expect(applyVariantSelection(b, "p1", "v1")).toBe(b);
     expect(applyVariantSelection(undefined, "p1", "v1")).toBeUndefined();
+  });
+});
+
+describe("applyVariantRemoval", () => {
+  it("removes a non-selected variant from the page", () => {
+    const next = applyVariantRemoval(book(), "p1", "v1")!;
+    const p1 = next.coloringPages!.find((p) => p.id === "p1")!;
+    expect(p1.variants!.map((v) => v.id)).toEqual(["v0", "v2"]);
+    expect(p1.selectedVariantId).toBe("v0"); // pointer untouched
+  });
+
+  it("returns null when removing the currently selected variant (needs refetch)", () => {
+    // p1.selectedVariantId === "v0"
+    expect(applyVariantRemoval(book(), "p1", "v0")).toBeNull();
+  });
+
+  it("leaves other pages untouched", () => {
+    const src = book();
+    const next = applyVariantRemoval(src, "p1", "v2")!;
+    expect(next.coloringPages!.find((p) => p.id === "p2")).toBe(src.coloringPages![1]);
+  });
+
+  it("returns null when there are no coloringPages / no book", () => {
+    expect(applyVariantRemoval({ id: "b1", title: "T" } as unknown as BookDetail, "p1", "v1")).toBeNull();
+    expect(applyVariantRemoval(undefined, "p1", "v1")).toBeNull();
   });
 });
