@@ -8443,6 +8443,7 @@ __metadata:
     "@aws-sdk/s3-request-presigner": "npm:^3.1053.0"
     "@vx/tsconfig": "workspace:*"
     ioredis: "npm:^5.4.0"
+    jszip: "npm:^3.10.1"
     langfuse: "npm:^3.38.20"
     sharp: "npm:^0.34.5"
     typescript: "npm:^5.8.0"
