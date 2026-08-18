@@ -21,6 +21,7 @@ function typeLabel(j: GenerationJob): string {
     const pos = j.payload?.titleSafe ? ` (${TITLE_SAFE_LABEL[j.payload.titleSafe] ?? j.payload.titleSafe})` : "";
     return `Source Cover${pos}`;
   }
+  if (j.type === "book-export") return "Xuất ZIP";
   return j.type;
 }
 
@@ -69,7 +70,9 @@ function JobRow({ job, onOpen, onRemove, busy }: {
       style={{ display: "flex", gap: 10, alignItems: "center", textAlign: "left", padding: 8, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", background: "var(--background)", cursor: "pointer" }}
     >
       <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
-        {job.resultUrl || job.payload?.sourceImageUrl ? (
+        {job.type === "book-export" ? (
+          <Icon name="download" size={16} />
+        ) : job.resultUrl || job.payload?.sourceImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={resolveImg(job.resultUrl || job.payload?.sourceImageUrl)} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
@@ -83,6 +86,21 @@ function JobRow({ job, onOpen, onRemove, busy }: {
         </div>
         {job.status === "error" && job.error && (
           <div style={{ fontSize: 11, color: "var(--danger)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.error}</div>
+        )}
+        {job.type === "book-export" && job.status === "done" && job.resultUrl && (
+          <button
+            type="button"
+            className="mo-textbtn"
+            onClick={(e) => {
+              e.stopPropagation();
+              const full = resolveImg(job.resultUrl);
+              if (full) navigator.clipboard?.writeText(full);
+            }}
+            style={{ alignSelf: "flex-start", fontSize: 11.5, color: "var(--volt-600)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            title="Copy link tải ZIP"
+          >
+            <Icon name="copy" size={12} /> Copy link
+          </button>
         )}
       </div>
       <div style={{ flexShrink: 0 }}>{statusBadge(job.status)}</div>

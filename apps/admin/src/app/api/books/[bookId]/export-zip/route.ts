@@ -1,129 +1,99 @@
+// apps/admin/src/app/api/books/[bookId]/export-zip/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
-import JSZip from "jszip";
-import { resolveR2Url } from "@vx/server-core/r2";
+import { collectExportPlan, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
+import { enqueueGenerationJob } from "@/lib/queue/generation-queue";
+import { withQueueTimeout, isQueueTimeout, queueUnavailableResponse } from "@/lib/queue/queue-timeout";
+
+type RouteParams = { params: Promise<{ bookId: string }> };
 
 /**
- * Export a book's images as a ZIP of individual PNG/JPG files (NOT a merged PDF —
- * kept separate so each page can be processed on its own). Each book gets 3 folders
- * (Book cover / Book intro / Book interior):
+ * POST — compute the export plan hash for this book and either:
+ *   1. Return the cached ZIP link immediately (book.data.export.hash matches), or
+ *   2. Return the id of an already-running book-export job (dedup in-flight), or
+ *   3. Create a new book-export GenerationJob, enqueue it, and return { jobId }.
  *
- *   Main book/  (ORIGINAL source images = imageUrl, split by pageType)
- *     Book cover/     ← source pages pageType="cover" (fallback: first source page)
- *     Book intro/     ← source pages pageType="interiorIntro"
- *     Book interior/  ← source pages pageType="interior"/unclassified  (excluded pages skipped)
- *   Clone book/  (this Book)
- *     Book cover/            ← ALL cover candidates (data.coverCandidates[]; fallback coverUrl)
- *     Book intro/            ← summaryPages[].url (B&W)
- *     Book interior/         ← coloringPages[].url (B&W — colorized / pushed-to-cover pages stay here)
- *     Book colored/          ← coloringPages[].coloredUrl (interior pages that were colorized)
- *     Source cover/          ← data.sourceCovers[].url (on-demand B&W covers from interiors)
- *     Source cover colored/  ← data.sourceCovers[].coloredUrl (colorized source covers)
- *
- * "Main book" = the ORIGINAL source it was cloned from (the source CloneJob);
- * "Clone book" = this Book record (the AI-generated clone/reproduction).
+ * There is NO synchronous GET export anymore. The heavy ZIP build runs in the
+ * background worker; the operator polls /api/generation-jobs for status and
+ * downloads via the cached R2 link once the job is done.
  */
-
-type ImageEntry = { url: string; name: string };
-
-/** Fetch an R2 image and return its bytes + detected extension (png/jpg). */
-async function fetchImage(url: string): Promise<{ bytes: Uint8Array; ext: string } | null> {
-  const full = resolveR2Url(url);
-  if (!full || !full.startsWith("http")) return null;
+export async function POST(_req: NextRequest, { params }: RouteParams) {
   try {
-    const res = await fetch(full);
-    if (!res.ok) return null;
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.byteLength === 0) return null;
-    const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-    return { bytes, ext: isJpeg ? "jpg" : "png" };
-  } catch {
-    return null;
+    const { bookId } = await params;
+
+    // Load book + its source CloneJob (needed for the export plan hash).
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
+
+    const data = (book.data as Record<string, unknown> | null) ?? {};
+    const cloneJobId = typeof data.cloneJobId === "string" ? data.cloneJobId : undefined;
+    const cloneJob = cloneJobId
+      ? await prisma.cloneJob.findUnique({ where: { id: cloneJobId } })
+      : null;
+
+    const input: ExportInput = {
+      bookTitle: book.title,
+      bookData: data,
+      coverUrl: book.coverUrl,
+      summaryPages: (book.summaryPages as ExportPageLike[] | null) ?? [],
+      coloringPages: (book.coloringPages as ExportPageLike[] | null) ?? [],
+      cloneJobPages: (cloneJob?.pages as ExportPageLike[] | null) ?? null,
+      cloneJobId,
+    };
+
+    const plan = collectExportPlan(input);
+
+    // 1. Cache hit — content hash matches the stored export link; return it now.
+    const cached = data.export as { url?: string; hash?: string; filename?: string } | undefined;
+    if (cached?.hash === plan.hash && cached.url) {
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        url: cached.url,
+        filename: cached.filename ?? plan.filename,
+        hash: plan.hash,
+      });
+    }
+
+    // 2. Dedup — a job for this book is already pending or running; reuse it.
+    const inflight = await prisma.generationJob.findFirst({
+      where: { bookId, type: "book-export", status: { in: ["pending", "running"] } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (inflight && (inflight.payload as { hash?: string } | null)?.hash === plan.hash) {
+      return NextResponse.json({
+        success: true,
+        cached: false,
+        jobId: inflight.id,
+        status: inflight.status,
+        message: "Export job already in progress",
+      });
+    }
+
+    // 3. Create + enqueue a new book-export job.
+    const job = await prisma.generationJob.create({
+      data: {
+        type: "book-export",
+        status: "pending",
+        bookId,
+        bookTitle: book.title,
+        payload: { hash: plan.hash, filename: plan.filename },
+      },
+    });
+
+    try {
+      await withQueueTimeout(enqueueGenerationJob(job.id));
+    } catch (err) {
+      if (isQueueTimeout(err)) return queueUnavailableResponse({ jobId: job.id });
+      throw err;
+    }
+
+    return NextResponse.json({ success: true, cached: false, jobId: job.id, status: "pending" });
+  } catch (error) {
+    console.error("[books/export-zip POST] Error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    );
   }
-}
-
-/** Add a list of images into a zip folder as page-001.<ext>, page-002.<ext>… */
-async function addFolder(zip: JSZip, folderPath: string, entries: ImageEntry[]): Promise<number> {
-  let added = 0;
-  await Promise.all(
-    entries.map(async (e) => {
-      const img = await fetchImage(e.url);
-      if (!img) return;
-      zip.file(`${folderPath}/${e.name}.${img.ext}`, img.bytes);
-      added++;
-    }),
-  );
-  return added;
-}
-
-function slug(s: string): string {
-  return (s || "book").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "book";
-}
-
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ bookId: string }> }) {
-  const { bookId } = await params;
-  const book = await prisma.book.findUnique({ where: { id: bookId } });
-  if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
-
-  type Page = { url?: string; coloredUrl?: string; imageUrl?: string; pageType?: string; excluded?: boolean };
-  const data = (book.data as Record<string, unknown> | null) ?? {};
-  const pad = (i: number) => `page-${String(i + 1).padStart(3, "0")}`;
-  const toEntries = (arr: Page[], key: "imageUrl" | "url" | "coloredUrl"): ImageEntry[] =>
-    arr.map((p, i) => ({ url: p[key] || "", name: pad(i) })).filter((e) => e.url);
-
-  const zip = new JSZip();
-
-  // --- Main book = the ORIGINAL source (source CloneJob), original imageUrl,
-  //     split into cover / intro / interior by pageType (excluded pages skipped). ---
-  const cloneJobId = typeof data.cloneJobId === "string" ? data.cloneJobId : undefined;
-  const job = cloneJobId ? await prisma.cloneJob.findUnique({ where: { id: cloneJobId } }) : null;
-  if (job) {
-    const jobPages = (job.pages as Page[] | null) ?? [];
-    const included = jobPages.filter((p) => !p.excluded);
-    // cover = pageType "cover"; fallback to the first source page if none classified.
-    let coverPages = included.filter((p) => p.pageType === "cover");
-    if (coverPages.length === 0 && jobPages[0]) coverPages = [jobPages[0]];
-    const introPages = included.filter((p) => p.pageType === "interiorIntro");
-    const coverSet = new Set(coverPages);
-    const introSet = new Set(introPages);
-    // interior = everything else (pageType "interior" or unclassified), no overlap.
-    const interiorPages = included.filter((p) => !coverSet.has(p) && !introSet.has(p));
-    await addFolder(zip, "Main book/Book cover", toEntries(coverPages, "imageUrl"));
-    await addFolder(zip, "Main book/Book intro", toEntries(introPages, "imageUrl"));
-    await addFolder(zip, "Main book/Book interior", toEntries(interiorPages, "imageUrl"));
-  }
-
-  // --- Clone book = this Book, exported as B&W line-art (never the colored result;
-  //     colorized / pushed-to-cover pages still appear in interior as B&W). ---
-  const coverCandidates = (data.coverCandidates as { url?: string }[] | null) ?? [];
-  const cloneCover: ImageEntry[] =
-    coverCandidates.length > 0
-      ? coverCandidates
-          .map((c, i) => ({ url: c.url || "", name: `cover-${String(i + 1).padStart(2, "0")}` }))
-          .filter((e) => e.url)
-      : book.coverUrl
-        ? [{ url: book.coverUrl, name: "cover" }]
-        : [];
-  const summaryPages = (book.summaryPages as Page[] | null) ?? [];
-  const coloringPages = (book.coloringPages as Page[] | null) ?? [];
-  const sourceCovers = (data.sourceCovers as Page[] | null) ?? [];
-  await addFolder(zip, "Clone book/Book cover", cloneCover);
-  await addFolder(zip, "Clone book/Book intro", toEntries(summaryPages, "url"));
-  await addFolder(zip, "Clone book/Book interior", toEntries(coloringPages, "url"));
-  // Colorized interior pages (only those that actually have a colored render).
-  await addFolder(zip, "Clone book/Book colored", toEntries(coloringPages, "coloredUrl"));
-  // On-demand source covers (B&W) + their colorized versions.
-  await addFolder(zip, "Clone book/Source cover", toEntries(sourceCovers, "url"));
-  await addFolder(zip, "Clone book/Source cover colored", toEntries(sourceCovers, "coloredUrl"));
-
-  const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
-  const filename = `${slug(book.title)}-export.zip`;
-  return new NextResponse(new Uint8Array(buffer), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Content-Length": String(buffer.length),
-    },
-  });
 }

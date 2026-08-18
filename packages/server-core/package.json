@@ -23,6 +23,7 @@
     "./ai/art-style-types": "./src/ai/art-style-types.ts",
     "./ai/coloring-style-types": "./src/ai/coloring-style-types.ts",
     "./r2": "./src/r2.ts",
+    "./book-export": "./src/book-export/build-export-zip.ts",
     "./pdf-renderer": "./src/pdf-renderer.ts",
     "./langfuse": "./src/langfuse.ts",
     "./text-overlay": "./src/text-overlay/index.ts",
@@ -32,6 +33,7 @@
     "@aws-sdk/client-s3": "^3.1045.0",
     "@aws-sdk/s3-request-presigner": "^3.1053.0",
     "ioredis": "^5.4.0",
+    "jszip": "^3.10.1",
     "langfuse": "^3.38.20"
   },
   "scripts": {
