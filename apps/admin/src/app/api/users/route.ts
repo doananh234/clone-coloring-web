@@ -11,6 +11,8 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
+        // Never ship the password hash or the heavy `data` blob to the client.
+        omit: { passwordHash: true, data: true },
       }),
       prisma.user.count(),
     ]);

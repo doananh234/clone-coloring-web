@@ -14,7 +14,7 @@ import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { useBook } from "../../data/use-book";
 import { useEntityList } from "../../data/use-entity-list";
 import { useColorizeBook } from "../../data/use-colorize";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 
 export function ColorizeScreen({ bookId }: { bookId: string }) {
   const router = useRouter();
@@ -40,7 +40,7 @@ export function ColorizeScreen({ bookId }: { bookId: string }) {
   }
 
   const pages = (book.coloringPages ?? []).map((p) => ({ id: p.id, url: p.url }));
-  const styleItems = styles.map((s) => ({ id: s.id, name: s.name, image: resolveImg(s.thumbnailUrl || s.referenceImageUrl || undefined) }));
+  const styleItems = styles.map((s) => ({ id: s.id, name: s.name, image: thumbImg(s.thumbnailUrl || s.referenceImageUrl || undefined, 400) }));
   // Coloring style auto-extracted from the source cover at create-book time.
   const sourceStyleId = (book.data?.coloringStyleId as string) || "";
   const sourceStyleExists = Boolean(sourceStyleId) && styleItems.some((s) => s.id === sourceStyleId);

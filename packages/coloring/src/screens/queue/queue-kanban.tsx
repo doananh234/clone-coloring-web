@@ -4,7 +4,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDrop
 import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "../../components/ui/badge";
 import { Icon } from "../../lib/icon";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import { QUEUE_COLUMNS, type QueueStatus } from "../../data/use-queue-status";
 import type { BookRow } from "../../data/types";
 
@@ -15,7 +15,7 @@ function statusOf(b: BookRow): QueueStatus {
 
 function Card({ book, assignee, onOpen }: { book: BookRow; assignee?: string; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: book.id });
-  const cover = resolveImg(book.coverUrl || book.squareThumbnailUrl || book.thumbnailUrl);
+  const cover = thumbImg(book.coverUrl || book.squareThumbnailUrl || book.thumbnailUrl, 400);
   return (
     <div
       ref={setNodeRef}

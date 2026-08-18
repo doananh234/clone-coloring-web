@@ -5,7 +5,7 @@ import { ApiError } from "@vx/core-uikit/api";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Icon } from "../../lib/icon";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import { useColoringStyleVariantActions } from "../../data/use-coloring-style-variant-actions";
 import { useStyleUsages } from "../../data/use-style-usages";
 import { groupUsagesByVariant } from "../../data/group-style-usages";
@@ -105,7 +105,7 @@ export function ColorVariantsSection({ variants, styleId }: { variants: unknown;
           const p = v.colorPalette ?? {};
           const primary = (p.primaryColors ?? []).filter(Boolean);
           const accent = (p.accentColors ?? []).filter(Boolean);
-          const img = resolveImg(v.thumbnailUrl);
+          const img = thumbImg(v.thumbnailUrl, 300);
           const meta = [`#${idx + 1}`, p.backgroundTone, p.warmth, p.saturation].filter(Boolean).join(" · ");
           const deletable = canDelete && !!v.id;
           return (

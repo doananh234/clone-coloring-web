@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { memo, useCallback, useDeferredValue, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Card } from "../../components/ui/card";
@@ -11,7 +11,6 @@ import { LoadingRows, EmptyState, ErrorState } from "../../components/ui/states"
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useEntityList } from "../../data/use-entity-list";
 import { useEntityBulkDelete } from "../../data/use-entity-bulk-delete";
-import { resolveImg } from "../../data/img";
 import type { EntityListItem } from "../../data/types";
 
 export interface EntityCard {
@@ -46,6 +45,83 @@ export interface EntityListScreenProps {
   tabs?: { key: string; label: string; match: (it: EntityListItem) => boolean }[];
 }
 
+/**
+ * Single grid card. Memoized so toggling one selection or typing in search
+ * doesn't re-render (and re-decode the image of) every other card — the whole
+ * point of the perf pass on the hub screens.
+ */
+const EntityCardView = memo(function EntityCardView({
+  card,
+  selectable,
+  largeImage,
+  isSelected,
+  onOpen,
+  onToggle,
+}: {
+  card: EntityCard;
+  selectable?: boolean;
+  largeImage?: boolean;
+  isSelected: boolean;
+  onOpen: (id: string) => void;
+  onToggle: (id: string) => void;
+}) {
+  const c = card;
+  return (
+    <div className="mo-bookcard"
+      onClick={() => onOpen(c.id)}
+      style={{ position: "relative", ...(selectable && isSelected ? { outline: "2px solid var(--volt-600)", outlineOffset: 2 } : {}) }}>
+      {selectable && (
+        <label onClick={(e) => e.stopPropagation()} title="Chọn để xoá"
+          style={{ position: "absolute", top: 8, left: 8, zIndex: 2, width: 26, height: 26, borderRadius: 7, background: "rgba(255,255,255,.92)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <input type="checkbox" checked={isSelected} onChange={() => onToggle(c.id)} style={{ cursor: "pointer", width: 15, height: 15 }} />
+        </label>
+      )}
+      {largeImage ? (
+        <>
+          <div style={{ aspectRatio: "1 / 1", borderRadius: c.round === false ? "var(--radius-md)" : 99, background: "var(--neutral-100)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
+            {c.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={c.image} alt={c.name} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <Icon name="image" size={28} />
+            )}
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+          {c.desc && <div style={{ fontSize: 12, color: "var(--muted-foreground)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.desc}</div>}
+        </>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ width: 44, height: 44, borderRadius: c.round === false ? "var(--radius-md)" : 99, background: "var(--neutral-100)", border: "1px solid var(--border)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", flexShrink: 0, overflow: "hidden" }}>
+            {c.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={c.image} alt={c.name} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <Icon name="image" size={18} />
+            )}
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+            {c.desc && <div style={{ fontSize: 12, color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.desc}</div>}
+          </div>
+        </div>
+      )}
+      {c.meta && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>{c.meta}</div>}
+      {c.swatches && c.swatches.length > 0 && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {c.swatches.map((col, i) => (
+            <span key={i} title={col} style={{ width: 16, height: 16, borderRadius: 4, background: col, border: "1px solid var(--border)" }} />
+          ))}
+        </div>
+      )}
+      {c.badges && c.badges.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {c.badges.map((bd, i) => <Badge tone={bd.tone} key={i}>{bd.text}</Badge>)}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export function EntityListScreen({ title, subtitle, path, kind, toCard, action, emptyText, largeImage, selectable, deleteKind, tabs }: EntityListScreenProps) {
   const router = useRouter();
   const { items, total, isLoading, isError } = useEntityList(path);
@@ -55,8 +131,9 @@ export function EntityListScreen({ title, subtitle, path, kind, toCard, action, 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const toggle = (id: string) =>
-    setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggle = useCallback((id: string) =>
+    setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }), []);
+  const openEntity = useCallback((id: string) => router.push(`${B}/entity/${kind}/${id}`), [router, kind]);
   const clearSel = () => { setSelected(new Set()); setErr(null); };
   const removeSelected = async () => {
     if (selected.size === 0) return;
@@ -67,17 +144,32 @@ export function EntityListScreen({ title, subtitle, path, kind, toCard, action, 
     finally { setBusy(false); }
   };
 
-  const ql = q.trim().toLowerCase();
-  // Search the full loaded list (useEntityList fetches all rows) across name +
-  // description + tags — not just the card name.
-  const matches = (it: EntityListItem) =>
-    it.name.toLowerCase().includes(ql) ||
-    (it.description ?? "").toLowerCase().includes(ql) ||
-    (it.tags ?? []).some((t) => t.toLowerCase().includes(ql));
-  const searched = items.filter((it) => !ql || matches(it));
-  const activeMatch = tabs?.find((t) => t.key === tab)?.match ?? (() => true);
-  const cards = searched.filter(activeMatch).map(toCard);
-  const tabCounts = tabs?.map((t) => searched.filter(t.match).length) ?? [];
+  // Defer filtering so typing stays responsive on large lists — the input
+  // updates immediately while the (heavier) filter/map runs against the
+  // deferred value. Memoized so we don't re-filter/re-map on unrelated renders
+  // (selection toggles, bulk-delete state, etc.).
+  const deferredQ = useDeferredValue(q);
+  const ql = deferredQ.trim().toLowerCase();
+
+  const searched = useMemo(() => {
+    if (!ql) return items;
+    return items.filter(
+      (it) =>
+        it.name.toLowerCase().includes(ql) ||
+        (it.description ?? "").toLowerCase().includes(ql) ||
+        (it.tags ?? []).some((t) => t.toLowerCase().includes(ql)),
+    );
+  }, [items, ql]);
+
+  const cards = useMemo(() => {
+    const match = tabs?.find((t) => t.key === tab)?.match ?? (() => true);
+    return searched.filter(match).map(toCard);
+  }, [searched, tabs, tab, toCard]);
+
+  const tabCounts = useMemo(
+    () => tabs?.map((t) => searched.filter(t.match).length) ?? [],
+    [tabs, searched],
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -133,58 +225,15 @@ export function EntityListScreen({ title, subtitle, path, kind, toCard, action, 
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill,minmax(${largeImage ? 260 : 240}px,1fr))`, gap: 16 }}>
           {cards.map((c) => (
-            <div key={c.id} className="mo-bookcard"
-              onClick={() => router.push(`${B}/entity/${kind}/${c.id}`)}
-              style={{ position: "relative", ...(selectable && selected.has(c.id) ? { outline: "2px solid var(--volt-600)", outlineOffset: 2 } : {}) }}>
-              {selectable && (
-                <label onClick={(e) => e.stopPropagation()} title="Chọn để xoá"
-                  style={{ position: "absolute", top: 8, left: 8, zIndex: 2, width: 26, height: 26, borderRadius: 7, background: "rgba(255,255,255,.92)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                  <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} style={{ cursor: "pointer", width: 15, height: 15 }} />
-                </label>
-              )}
-              {largeImage ? (
-                <>
-                  <div style={{ aspectRatio: "1 / 1", borderRadius: c.round === false ? "var(--radius-md)" : 99, background: "var(--neutral-100)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
-                    {c.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={c.image} alt={c.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      <Icon name="image" size={28} />
-                    )}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                  {c.desc && <div style={{ fontSize: 12, color: "var(--muted-foreground)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.desc}</div>}
-                </>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ width: 44, height: 44, borderRadius: c.round === false ? "var(--radius-md)" : 99, background: "var(--neutral-100)", border: "1px solid var(--border)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", flexShrink: 0, overflow: "hidden" }}>
-                    {c.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={c.image} alt={c.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      <Icon name="image" size={18} />
-                    )}
-                  </span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                    {c.desc && <div style={{ fontSize: 12, color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.desc}</div>}
-                  </div>
-                </div>
-              )}
-              {c.meta && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>{c.meta}</div>}
-              {c.swatches && c.swatches.length > 0 && (
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  {c.swatches.map((col, i) => (
-                    <span key={i} title={col} style={{ width: 16, height: 16, borderRadius: 4, background: col, border: "1px solid var(--border)" }} />
-                  ))}
-                </div>
-              )}
-              {c.badges && c.badges.length > 0 && (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {c.badges.map((bd, i) => <Badge tone={bd.tone} key={i}>{bd.text}</Badge>)}
-                </div>
-              )}
-            </div>
+            <EntityCardView
+              key={c.id}
+              card={c}
+              selectable={selectable}
+              largeImage={largeImage}
+              isSelected={selected.has(c.id)}
+              onOpen={openEntity}
+              onToggle={toggle}
+            />
           ))}
         </div>
       )}

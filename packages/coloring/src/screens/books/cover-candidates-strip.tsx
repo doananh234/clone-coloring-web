@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Icon } from "../../lib/icon";
 import { useCoverCandidates } from "../../data/use-cover-candidates";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import type { CoverCandidate } from "../../data/types";
 
 /** D4c: manage a book's cover candidates — select (mirror coverUrl) and delete
@@ -43,7 +43,7 @@ export function CoverCandidatesStrip({
               <div title="Xem trước" onClick={() => onPreview?.(c.url, isSel ? "Bìa (đang chọn)" : `Cover · ${label}`)}
                 style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", overflow: "hidden", border: `${isSel ? 2 : 1}px solid ${isSel ? "var(--volt-600)" : "var(--border)"}`, boxShadow: isSel ? "var(--shadow-glow)" : undefined, background: "#fff", cursor: "pointer" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={resolveImg(c.url)} alt={label} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={thumbImg(c.url, 400)} alt={label} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 <span style={{ position: "absolute", left: 4, bottom: 4, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(11,13,12,.6)", padding: "0 4px", borderRadius: 4 }}>{label}</span>
                 {isSel && <span style={{ position: "absolute", right: 4, top: 4, background: "var(--volt-500)", color: "var(--carbon-950)", borderRadius: 99, width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="check" size={10} /></span>}
                 {!isSel && (

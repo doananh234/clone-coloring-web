@@ -7,7 +7,7 @@ import { Button } from "../../components/ui/button";
 import { Icon } from "../../lib/icon";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useRegenerateMissing } from "../../data/use-more-actions";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import type { EntityListItem } from "../../data/types";
 import type { BadgeTone } from "../../components/ui/badge";
 
@@ -48,7 +48,7 @@ function extractMeta(r: EntityListItem): string | undefined {
 
 const characterCard = (r: EntityListItem): EntityCard => ({
   id: r.id,
-  image: resolveImg(r.referenceImageUrl || r.referenceImages?.[0]),
+  image: thumbImg(r.referenceImageUrl || r.referenceImages?.[0], 400),
   name: r.name,
   desc: r.role || r.type || undefined,
   meta: extractMeta(r),
@@ -56,7 +56,7 @@ const characterCard = (r: EntityListItem): EntityCard => ({
 });
 const locationCard = (r: EntityListItem): EntityCard => ({
   id: r.id,
-  image: resolveImg(r.referenceImageUrl || r.referenceImages?.[0]),
+  image: thumbImg(r.referenceImageUrl || r.referenceImages?.[0], 400),
   name: r.name,
   desc: trunc(r.description),
   meta: extractMeta(r),
@@ -64,7 +64,7 @@ const locationCard = (r: EntityListItem): EntityCard => ({
 });
 const brandCard = (r: EntityListItem): EntityCard => ({
   id: r.id,
-  image: resolveImg(r.logoUrl),
+  image: thumbImg(r.logoUrl, 400),
   name: r.displayName || r.name,
   desc: trunc(r.description),
   round: false,
@@ -72,14 +72,14 @@ const brandCard = (r: EntityListItem): EntityCard => ({
 });
 const categoryCard = (r: EntityListItem): EntityCard => ({
   id: r.id,
-  image: resolveImg(r.thumbnailUrl),
+  image: thumbImg(r.thumbnailUrl, 400),
   name: r.name,
   desc: trunc(r.description),
   round: false,
 });
 const styleCard = (r: EntityListItem): EntityCard => ({
   id: r.id,
-  image: resolveImg(r.thumbnailUrl || r.referenceImages?.[0]),
+  image: thumbImg(r.thumbnailUrl || r.referenceImages?.[0], 400),
   name: r.name,
   desc: trunc(r.description),
   round: false,

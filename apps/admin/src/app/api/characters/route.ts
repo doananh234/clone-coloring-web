@@ -1,12 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
+import { listEntity } from "@/lib/list-query";
 
-export async function GET() {
+// List projection: drops heavy JSON (visualDna, characterPrompt, data). The
+// card only needs the image + name + role/type + tags.
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  type: true,
+  role: true,
+  tags: true,
+  referenceImageUrl: true,
+  sourceBookId: true,
+  createdAt: true,
+} as const;
+
+export async function GET(req: NextRequest) {
   try {
-    const characters = await prisma.character.findMany({
-      orderBy: { name: "asc" },
-    });
-    return NextResponse.json({ data: characters });
+    return await listEntity(
+      req,
+      {
+        findMany: (a) => prisma.character.findMany(a),
+        count: (a) => prisma.character.count(a),
+      },
+      { select: LIST_SELECT, searchFields: ["name"] },
+    );
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

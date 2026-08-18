@@ -78,13 +78,18 @@ export async function GET(req: NextRequest) {
     }
 
     const contentType = upstream.headers.get("content-type") ?? "image/png";
-    const body = Buffer.from(await upstream.arrayBuffer());
+    // Stream the upstream body straight through instead of buffering the whole
+    // image into server memory (concurrent proxied requests otherwise each hold
+    // a full image in RAM on the small prod host). Forward the upstream cache
+    // header when present so downstream/CDN caching is preserved.
+    const cacheControl =
+      upstream.headers.get("cache-control") ?? "public, max-age=3600, immutable";
 
-    return new NextResponse(body, {
+    return new NextResponse(upstream.body, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=3600, immutable",
+        "Cache-Control": cacheControl,
         "Access-Control-Allow-Origin": "*",
       },
     });

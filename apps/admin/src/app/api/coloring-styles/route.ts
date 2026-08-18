@@ -2,13 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import { normalizeTags } from "@vx/coloring/data/tags";
+import { listEntity } from "@/lib/list-query";
 
-export async function GET() {
+// List projection. `variants` stays (the card derives swatches + "N màu" count
+// from it) and `data` stays (the manual/clone tabs read data.source). Heavy
+// descriptor JSON (medium, colorPalette, shadingAndLighting, fillBehavior,
+// overallFeel, colorizationDirective) is dropped — fetched by the [id] route.
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  description: true,
+  thumbnailUrl: true,
+  referenceImages: true,
+  variants: true,
+  tags: true,
+  data: true,
+  sourceBookId: true,
+  createdAt: true,
+} as const;
+
+export async function GET(req: NextRequest) {
   try {
-    const coloringStyles = await prisma.coloringStyle.findMany({
-      orderBy: { name: "asc" },
-    });
-    return NextResponse.json({ data: coloringStyles });
+    return await listEntity(
+      req,
+      {
+        findMany: (a) => prisma.coloringStyle.findMany(a),
+        count: (a) => prisma.coloringStyle.count(a),
+      },
+      { select: LIST_SELECT, searchFields: ["name", "description"] },
+    );
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

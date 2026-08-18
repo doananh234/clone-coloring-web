@@ -14,10 +14,10 @@ import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { useCreateEntity } from "../../data/use-create-entity";
 import { useEntityList } from "../../data/use-entity-list";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 
 function toStyleItems(list: { id: string; name: string; thumbnailUrl?: string | null; referenceImageUrl?: string | null }[]): StylePickerItem[] {
-  return list.map((s) => ({ id: s.id, name: s.name, image: resolveImg(s.thumbnailUrl || s.referenceImageUrl || undefined) }));
+  return list.map((s) => ({ id: s.id, name: s.name, image: thumbImg(s.thumbnailUrl || s.referenceImageUrl || undefined, 400) }));
 }
 
 const CATEGORIES = ["Animals", "Fantasy", "Vehicles", "Nature", "Holidays"];

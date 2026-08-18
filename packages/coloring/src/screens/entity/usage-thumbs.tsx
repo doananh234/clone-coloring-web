@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import type { StyleUsage } from "../../data/group-style-usages";
 
 const CAP = 12;
@@ -25,7 +25,7 @@ export function UsageThumbs({ usages }: { usages: StyleUsage[] }) {
           style={{ padding: 0, border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden", background: "#fff", cursor: "pointer", aspectRatio: "1 / 1" }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={resolveImg(u.coloredUrl) ?? ""} alt={u.bookTitle} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={thumbImg(u.coloredUrl, 300) ?? ""} alt={u.bookTitle} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </button>
       ))}
       {overflow > 0 && (

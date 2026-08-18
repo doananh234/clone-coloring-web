@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Icon } from "../../lib/icon";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import { useSourceCovers } from "../../data/use-source-covers";
 import type { SourceCover, TitleSafePosition } from "../../data/source-covers";
 import type { BookColoringPage } from "../../data/types";
@@ -62,7 +62,7 @@ export function SourceCoverSection({
           {sourceCovers.map((s) => (
             <div key={s.id} onClick={() => onOpen(s)} style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", background: "#fff", cursor: "pointer" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={resolveImg(s.url)} alt="source cover" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={thumbImg(s.url, 400)} alt="source cover" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <span style={{ position: "absolute", left: 4, top: 4, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(11,13,12,.6)", padding: "1px 5px", borderRadius: 4 }}>{LABEL[s.titleSafe]}</span>
             </div>
           ))}

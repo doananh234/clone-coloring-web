@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
 import type { TitleSafePosition } from "../../data/source-covers";
 
@@ -184,7 +184,7 @@ export function InteriorPickerModal({
                 style={{ position: "relative", padding: 0, border: isSel ? "2px solid var(--accent, #4f46e5)" : "1px solid var(--border)", borderRadius: "var(--radius-sm)", overflow: "hidden", cursor: "pointer", background: "#fff", aspectRatio: "1 / 1", outline: isSel ? "2px solid color-mix(in srgb, var(--accent, #4f46e5) 30%, transparent)" : "none" }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={resolveImg(p.url)} alt={`Trang ${i + 1}`} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={thumbImg(p.url, 400)} alt={`Trang ${i + 1}`} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 {/* Checkbox indicator (top-left) */}
                 <span style={{ position: "absolute", top: 6, left: 6, width: 20, height: 20, borderRadius: 5, border: "1px solid rgba(11,13,12,.35)", background: isSel ? "var(--accent, #4f46e5)" : "rgba(255,255,255,.85)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>
                   {isSel ? order : ""}

@@ -9,7 +9,7 @@ import { Tabs } from "../../components/ui/tabs";
 import { LoadingRows, EmptyState, ErrorState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useBooks } from "../../data/use-books";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import type { BookRow } from "../../data/types";
 
 type Tab = "all" | "live" | "hidden";
@@ -72,7 +72,7 @@ export function EtsyScreen() {
               </thead>
               <tbody>
                 {rows.map((b: BookRow) => {
-                  const cover = resolveImg(b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl);
+                  const cover = thumbImg(b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl, 400);
                   const price = b.etsyListing?.priceSuggestionUsd;
                   return (
                     <tr key={b.id} className="mo-row" style={{ cursor: "pointer" }} onClick={() => router.push(`${B}/books/${b.id}`)}>
@@ -81,7 +81,7 @@ export function EtsyScreen() {
                           <span style={{ width: 44, height: 44, borderRadius: 6, overflow: "hidden", background: "var(--neutral-100)", border: "1px solid var(--border)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)" }}>
                             {cover ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={cover} alt={b.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              <img src={cover} alt={b.title} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                             ) : (
                               <Icon name="image" size={14} />
                             )}

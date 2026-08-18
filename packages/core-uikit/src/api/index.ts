@@ -7,6 +7,9 @@ const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1000,
       gcTime: 30 * 60 * 1000,
       refetchOnWindowFocus: false,
+      // A failed/slow query otherwise retries 3× before surfacing an error,
+      // making transient hiccups feel ~3× slower. One retry is enough.
+      retry: 1,
     },
   },
 });

@@ -16,7 +16,7 @@ import { useBooks } from "../../data/use-books";
 import { useOperators, useBookAssign } from "../../data/use-book-assign";
 import { useColoringAuth } from "../../hooks/coloring-auth";
 import { applyBookPatch } from "../../data/local-books";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import type { BookRow } from "../../data/types";
 
 /** Delay before a search keystroke triggers an API fetch. */
@@ -24,7 +24,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 
 function BookCard({ book, onOpen, checked, onToggle, assigneeName }: { book: BookRow; onOpen: () => void; checked: boolean; onToggle: () => void; assigneeName?: string }) {
   // Show the actual cover (branded, with title) — fall back to the clean thumbnail.
-  const cover = resolveImg(book.coverUrl || book.squareThumbnailUrl || book.thumbnailUrl);
+  const cover = thumbImg(book.coverUrl || book.squareThumbnailUrl || book.thumbnailUrl, 500);
   const pages = book.specifications?.pages;
   const meta = [book.category, pages ? `${pages} trang` : null, book.price].filter(Boolean).join(" · ");
   return (

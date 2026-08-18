@@ -9,7 +9,7 @@ import { EmptyState } from "../../components/ui/states";
 import { usePageActions } from "../../data/use-page-actions";
 import { usePageVariants, type RegenAddOpts } from "../../data/use-page-variants";
 import { runBatchRegen } from "../../data/run-batch-regen";
-import { resolveImg } from "../../data/img";
+import { thumbImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
 
 const mono = { fontFamily: "var(--font-mono)" as const };
@@ -32,7 +32,7 @@ function SelectableThumb({
 }) {
   // Batch-select shows the B&W line-art (never the colored result) — you pick
   // pages to regen the line-art, so a colorized page must not appear coloured here.
-  const src = resolveImg(page.url);
+  const src = thumbImg(page.url, 400);
   const border =
     state === "err"
       ? "2px solid var(--danger)"

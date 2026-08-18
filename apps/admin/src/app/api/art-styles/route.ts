@@ -2,13 +2,33 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import { normalizeTags } from "@vx/coloring/data/tags";
+import { listEntity } from "@/lib/list-query";
 
-export async function GET() {
+// List projection: only what the hub card needs (name/description/thumb/tags).
+// Heavy descriptor JSON (lineWork, composition, formAndShape, moodAndAtmosphere,
+// patternAndTexture, technical, generationDirective, data) is fetched by the
+// [id] detail route, not here.
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  description: true,
+  thumbnailUrl: true,
+  referenceImages: true,
+  tags: true,
+  sourceBookId: true,
+  createdAt: true,
+} as const;
+
+export async function GET(req: NextRequest) {
   try {
-    const artStyles = await prisma.artStyle.findMany({
-      orderBy: { name: "asc" },
-    });
-    return NextResponse.json({ data: artStyles });
+    return await listEntity(
+      req,
+      {
+        findMany: (a) => prisma.artStyle.findMany(a),
+        count: (a) => prisma.artStyle.count(a),
+      },
+      { select: LIST_SELECT, searchFields: ["name", "description"] },
+    );
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

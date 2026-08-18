@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { Children, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
@@ -21,7 +21,7 @@ import { CoverCandidatesStrip } from "./cover-candidates-strip";
 import { BookInformationTab } from "./book-info-tab";
 import { BookOriginalSection } from "./book-original-section";
 import { PageBatchSelect } from "./page-batch-select";
-import { resolveImg } from "../../data/img";
+import { resolveImg, thumbImg } from "../../data/img";
 import { COLORING_WRITE_ENABLED, COLORING_API_BASE } from "../../data/config";
 import { parsePageScene, hasSceneDetail, type ParsedScene } from "../../data/page-scene";
 import type { BookDetail, BookColoringPage, CoverCandidate } from "../../data/types";
@@ -51,12 +51,14 @@ function AttrRow({ label, children, last }: { label: string; children: ReactNode
 }
 
 function Thumb({ src, caption, badge, onClick }: { src?: string; caption: string; badge?: string; onClick?: () => void }) {
+  // Thumb is always a small 1:1 grid cell — request a resized variant.
+  const thumbSrc = thumbImg(src, 400);
   return (
     <div style={{ cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
       <div className="mo-bookthumb" style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: "var(--neutral-100)", border: "1px solid var(--border)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
-        {src ? (
+        {thumbSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt={caption} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={thumbSrc} alt={caption} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <Icon name="image" size={20} />
         )}
@@ -118,7 +120,7 @@ function AnalyzePanel({ scene }: { scene: ParsedScene }) {
 }
 
 function PageThumb({ page, displayNumber, tone, onClick }: { page: BookColoringPage; displayNumber: string; tone: BookPageTone; onClick?: () => void }) {
-  const src = resolveImg(page.coloredUrl || page.url);
+  const src = thumbImg(page.coloredUrl || page.url, 400);
   const t = TONE_STYLE[tone];
   return (
     <div onClick={onClick} className="mo-bookthumb" style={{ cursor: onClick ? "pointer" : "default", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: t.bg ?? "var(--neutral-100)", border: `1px solid ${t.border}`, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
@@ -134,8 +136,18 @@ function PageThumb({ page, displayNumber, tone, onClick }: { page: BookColoringP
   );
 }
 
+const PAGE_SECTION_INITIAL = 24;
+const PAGE_SECTION_STEP = 24;
+
 function PageSection({ tone, count, children, label }: { tone: BookPageTone; count: number; children: ReactNode; label?: string }) {
   const t = TONE_STYLE[tone];
+  // Cap how many thumbs actually mount: a 100+ page book otherwise puts hundreds
+  // of image nodes in the DOM at once (heavy paint/layout, scroll jank). We keep
+  // the full element list but mount only the first N, revealing more on demand.
+  const all = Children.toArray(children);
+  const [visible, setVisible] = useState(PAGE_SECTION_INITIAL);
+  const shown = all.slice(0, visible);
+  const remaining = all.length - shown.length;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -144,8 +156,15 @@ function PageSection({ tone, count, children, label }: { tone: BookPageTone; cou
         <span style={{ ...mono, fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{count}</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
-        {children}
+        {shown}
       </div>
+      {remaining > 0 && (
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <Button variant="outline" size="sm" onClick={() => setVisible((v) => v + PAGE_SECTION_STEP)}>
+            Hiện thêm {Math.min(remaining, PAGE_SECTION_STEP)} (còn {remaining})
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
