@@ -1,4 +1,4 @@
-export type GenerationJobType = "source-cover";
+export type GenerationJobType = "source-cover" | "book-export";
 export type GenerationJobStatus = "pending" | "running" | "done" | "error";
 
 /** A background image-generation job (mirrors the GenerationJob DB row). */
@@ -13,6 +13,7 @@ export interface GenerationJob {
     titleSafe?: "top" | "middle" | "bottom";
     prompt?: string;
     sourceImageUrl?: string;
+    hash?: string;
   } | null;
   resultUrl?: string | null;
   resultId?: string | null;
