@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { prisma } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import { generateCoverSourceBW } from "@vx/server-core/ai";
+import { collectExportPlan, buildExportZip, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
 
 type Page = { id?: string; url?: string };
 type TitleSafe = "top" | "middle" | "bottom";
@@ -38,6 +39,8 @@ export async function processGenerationJob(generationJobId: string): Promise<voi
   try {
     if (job.type === "source-cover") {
       await runSourceCover(job.id, job.bookId, job.payload as unknown as SourceCoverPayload);
+    } else if (job.type === "book-export") {
+      await runBookExport(job.id, job.bookId);
     } else {
       throw new Error(`Unknown generation job type: ${job.type}`);
     }
@@ -100,5 +103,54 @@ async function runSourceCover(genJobId: string, bookId: string, payload: SourceC
   await prisma.generationJob.update({
     where: { id: genJobId },
     data: { status: "done", resultUrl: url, resultId: scId },
+  });
+}
+
+/** Build the book's export ZIP, upload to R2, and cache the link on the book. */
+async function runBookExport(genJobId: string, bookId: string): Promise<void> {
+  const book = await prisma.book.findUnique({ where: { id: bookId } });
+  if (!book) throw new Error("Book not found");
+
+  const data = (book.data as Record<string, unknown> | null) ?? {};
+  const cloneJobId = typeof data.cloneJobId === "string" ? data.cloneJobId : undefined;
+  const cloneJob = cloneJobId ? await prisma.cloneJob.findUnique({ where: { id: cloneJobId } }) : null;
+
+  const input: ExportInput = {
+    bookTitle: book.title,
+    bookData: data,
+    coverUrl: book.coverUrl,
+    summaryPages: (book.summaryPages as ExportPageLike[] | null) ?? [],
+    coloringPages: (book.coloringPages as ExportPageLike[] | null) ?? [],
+    cloneJobPages: (cloneJob?.pages as ExportPageLike[] | null) ?? null,
+    cloneJobId,
+  };
+
+  const plan = collectExportPlan(input);
+  const buffer = await buildExportZip(plan); // heavy: many R2 fetches + deflate
+
+  const r2Config = getR2Config();
+  const { url } = await uploadToR2({
+    client: createR2Client(r2Config),
+    config: r2Config,
+    key: `assets/${bookId}/exports/${plan.filename}`,
+    body: buffer,
+    contentType: "application/zip",
+  });
+
+  const builtAt = new Date().toISOString();
+  // Read-modify-write book.data in a short transaction (mirror runSourceCover)
+  // so a concurrent write to book.data can't clobber the cached export link.
+  await prisma.$transaction(async (tx) => {
+    const fresh = await tx.book.findUnique({ where: { id: bookId } });
+    const d = (fresh?.data as Record<string, unknown> | null) ?? {};
+    await tx.book.update({
+      where: { id: bookId },
+      data: { data: { ...d, export: { url, hash: plan.hash, builtAt, filename: plan.filename } } as never },
+    });
+  });
+
+  await prisma.generationJob.update({
+    where: { id: genJobId },
+    data: { status: "done", resultUrl: url, resultId: plan.hash },
   });
 }
