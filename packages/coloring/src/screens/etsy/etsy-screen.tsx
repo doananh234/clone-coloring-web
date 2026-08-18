@@ -26,16 +26,20 @@ const th = {
 };
 const td = { padding: 12, borderBottom: "1px solid var(--border)" };
 const mono = { fontFamily: "var(--font-mono)" };
+const ETSY_PAGE = 24;
 
 export function EtsyScreen() {
   const router = useRouter();
   // Books carry full coloringPages arrays (heavy ~10MB/60), so keep the page modest.
   const { books, isLoading, isError } = useBooks(1, 60);
   const [tab, setTab] = useState<Tab>("all");
+  const [visible, setVisible] = useState(ETSY_PAGE);
 
   const listed = books.filter((b) => b.etsyListing);
   const rows =
     tab === "all" ? listed : tab === "live" ? listed.filter((b) => b.isPublic) : listed.filter((b) => !b.isPublic);
+  const shown = rows.slice(0, visible);
+  const remaining = rows.length - shown.length;
 
   const tabs = [
     { key: "all" as Tab, label: "Tất cả", count: listed.length },
@@ -50,7 +54,7 @@ export function EtsyScreen() {
         <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted-foreground)" }}>Sách đã có nội dung listing cho Etsy</p>
       </div>
 
-      {!isLoading && !isError && listed.length > 0 && <Tabs<Tab> items={tabs} value={tab} onChange={setTab} />}
+      {!isLoading && !isError && listed.length > 0 && <Tabs<Tab> items={tabs} value={tab} onChange={(t) => { setTab(t); setVisible(ETSY_PAGE); }} />}
 
       <Card>
         {isLoading ? (
@@ -71,7 +75,7 @@ export function EtsyScreen() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((b: BookRow) => {
+                {shown.map((b: BookRow) => {
                   const cover = thumbImg(b.coverUrl || b.squareThumbnailUrl || b.thumbnailUrl, 400);
                   const price = b.etsyListing?.priceSuggestionUsd;
                   return (
@@ -103,6 +107,17 @@ export function EtsyScreen() {
                 })}
               </tbody>
             </table>
+            {remaining > 0 && (
+              <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+                <button
+                  type="button"
+                  onClick={() => setVisible((v) => v + ETSY_PAGE)}
+                  style={{ padding: "6px 14px", fontSize: 13, fontWeight: 600, color: "var(--muted-foreground)", background: "transparent", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}
+                >
+                  Hiện thêm {Math.min(remaining, ETSY_PAGE)} (còn {remaining})
+                </button>
+              </div>
+            )}
           </div>
         )}
       </Card>

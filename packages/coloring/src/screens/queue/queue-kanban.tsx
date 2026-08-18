@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "../../components/ui/badge";
@@ -53,8 +54,16 @@ function Card({ book, assignee, onOpen }: { book: BookRow; assignee?: string; on
   );
 }
 
+const COLUMN_INITIAL = 20;
+const COLUMN_STEP = 20;
+
 function Column({ col, books, assigneeName, onOpen }: { col: { key: QueueStatus; label: string }; books: BookRow[]; assigneeName: (b: BookRow) => string | undefined; onOpen: (id: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key });
+  // Only mount the first N cards per column so a large queue doesn't put
+  // hundreds of card nodes in the DOM at once; reveal more on demand.
+  const [visible, setVisible] = useState(COLUMN_INITIAL);
+  const shown = books.slice(0, visible);
+  const remaining = books.length - shown.length;
   return (
     <div style={{ flex: "1 1 240px", minWidth: 240, display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--muted-foreground)" }}>
@@ -64,8 +73,17 @@ function Column({ col, books, assigneeName, onOpen }: { col: { key: QueueStatus;
         ref={setNodeRef}
         style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 120, padding: 8, borderRadius: "var(--radius-md)", background: isOver ? "var(--neutral-100)" : "transparent", border: `1px dashed ${isOver ? "var(--volt-600)" : "var(--border)"}` }}
       >
-        {books.map((b) => <Card key={b.id} book={b} assignee={assigneeName(b)} onOpen={() => onOpen(b.id)} />)}
+        {shown.map((b) => <Card key={b.id} book={b} assignee={assigneeName(b)} onOpen={() => onOpen(b.id)} />)}
         {books.length === 0 && <div style={{ fontSize: 12, color: "var(--muted-foreground)", textAlign: "center", padding: "16px 0" }}>Trống</div>}
+        {remaining > 0 && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => v + COLUMN_STEP)}
+            style={{ marginTop: 4, padding: "6px 8px", fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)", background: "transparent", border: "1px dashed var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}
+          >
+            Hiện thêm {Math.min(remaining, COLUMN_STEP)} (còn {remaining})
+          </button>
+        )}
       </div>
     </div>
   );
