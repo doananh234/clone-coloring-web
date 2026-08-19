@@ -79,8 +79,8 @@ export async function uploadToR2(params: {
       Key: key,
       Body: body,
       ContentType: ct,
-      ...(cacheControl ? { CacheControl: cacheControl } : {}),
-      ...(contentDisposition ? { ContentDisposition: contentDisposition } : {}),
+      ...(cacheControl !== undefined ? { CacheControl: cacheControl } : {}),
+      ...(contentDisposition !== undefined ? { ContentDisposition: contentDisposition } : {}),
     }),
   );
 

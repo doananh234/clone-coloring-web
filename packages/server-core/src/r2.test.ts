@@ -42,4 +42,13 @@ describe("uploadToR2", () => {
     expect(cmd.input.CacheControl).toBeUndefined();
     expect(cmd.input.ContentDisposition).toBeUndefined();
   });
+
+  it("includes only the provided optional header (independent conditionals)", async () => {
+    const send = vi.fn().mockResolvedValue({});
+    const client = { send } as unknown as import("@aws-sdk/client-s3").S3Client;
+    await uploadToR2({ client, config, key: "assets/b1/x.zip", body: Buffer.from("x"), cacheControl: "no-cache" });
+    const cmd = send.mock.calls[0][0] as { input: Record<string, unknown> };
+    expect(cmd.input.CacheControl).toBe("no-cache");
+    expect(cmd.input.ContentDisposition).toBeUndefined();
+  });
 });
