@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { httpPost, httpPut } from "@vx/core-uikit/api";
 import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
 import type { CoverDoc } from "../lib/cover-doc";
+import type { BookDetail } from "./types";
 
 const LOCAL = "Chỉ chạy ở chế độ ghi thật (bật NEXT_PUBLIC_COLORING_WRITE=1, upstream staging).";
 
@@ -26,7 +27,11 @@ export function useSaveCover(bookId: string) {
       if (!up?.url) throw new Error("Upload ảnh bìa thất bại.");
       const coverUrl = `${up.url}?v=${Date.now()}`;
       await httpPut(`${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}`, { coverUrl });
-      qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
+      // We know the new coverUrl — patch it into the cache directly instead of
+      // refetching the whole book (~130KB) just to reflect one column.
+      qc.setQueryData<BookDetail>(["coloring", "book", bookId], (old) =>
+        old ? { ...old, coverUrl } : old,
+      );
       return coverUrl;
     },
     saveLayout: async (doc: CoverDoc): Promise<void> => {
