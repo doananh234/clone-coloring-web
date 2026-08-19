@@ -166,9 +166,17 @@ is a no-op). Gated in `deploy.sh` behind `RUN_REGEN_VARIANT_MIGRATION=1` (like
 
 ### Cleanup
 
-- Delete `packages/coloring/src/data/use-page-variants.ts` and
-  `packages/coloring/src/data/page-variants.ts` (and their tests) — the migration
-  uses the new pure module, not these helpers.
+- Delete `packages/coloring/src/data/use-page-variants.ts` (the React hook +
+  `applyVariantSelection`/`applyVariantRemoval`) — replaced by
+  `use-page-additional.ts`. Its only consumers are `page-actions-row.tsx` and
+  `page-batch-select.tsx`, both updated by this work.
+- **Keep `packages/coloring/src/data/page-variants.ts`.** It is still imported by
+  the clone **reproduce** flow (`reproduce/helpers.ts` + `reproduce/route.ts` use
+  `mirrorUrlToSelectedVariant`), which is out of scope. After migration no page has
+  a selected variant, so `mirrorUrlToSelectedVariant` is a safe no-op there. The
+  helpers this file exports that the deleted variant routes used
+  (`ensureOriginalVariant`/`addVariants`/`selectVariant`/`deleteVariant`) become
+  unused; leave them in place (dead but harmless — do not gold-plate the cleanup).
 - Keep `PageVariant`, `BookColoringPage.variants?`, `selectedVariantId?` in
   `types.ts` (optional; harmless for reading any un-migrated data) but stop writing
   them.
