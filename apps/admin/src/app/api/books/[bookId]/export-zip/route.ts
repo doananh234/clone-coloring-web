@@ -1,7 +1,7 @@
 // apps/admin/src/app/api/books/[bookId]/export-zip/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
-import { collectExportPlan, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
+import { collectExportPlan, stableExportUrl, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
 import { enqueueGenerationJob } from "@/lib/queue/generation-queue";
 import { withQueueTimeout, isQueueTimeout, queueUnavailableResponse } from "@/lib/queue/queue-timeout";
 
@@ -43,9 +43,12 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
 
     const plan = collectExportPlan(input);
 
-    // 1. Cache hit — content hash matches the stored export link; return it now.
+    // 1. Cache hit — content hash matches AND the stored url is the current
+    //    stable key. The url check auto-migrates a book still holding an
+    //    old hash-named url from the previous version: same content but
+    //    old-format url → treated as a miss → one rebuild writes the stable key.
     const cached = data.export as { url?: string; hash?: string; filename?: string } | undefined;
-    if (cached?.hash === plan.hash && cached.url) {
+    if (cached?.hash === plan.hash && cached.url === stableExportUrl(bookId)) {
       return NextResponse.json({
         success: true,
         cached: true,
