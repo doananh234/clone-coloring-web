@@ -41,7 +41,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const body = (await req.json().catch(() => ({}))) as { url?: string; fromPageId?: string };
     if (!body.url) return NextResponse.json({ error: "url required" }, { status: 400 });
 
-    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    // readState() only reads coverUrl + data — select them so cover-candidate
+    // writes don't load the heavy coloringPages/summaryPages arrays.
+    const book = await prisma.book.findUnique({ where: { id: bookId }, select: { coverUrl: true, data: true } });
     if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
     const { curData, state: state0 } = readState(book);
 
@@ -73,7 +75,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     const body = (await req.json().catch(() => ({}))) as { candidateId?: string };
     if (!body.candidateId) return NextResponse.json({ error: "candidateId required" }, { status: 400 });
 
-    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    // readState() only reads coverUrl + data — select them so cover-candidate
+    // writes don't load the heavy coloringPages/summaryPages arrays.
+    const book = await prisma.book.findUnique({ where: { id: bookId }, select: { coverUrl: true, data: true } });
     if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
     const { curData, state } = readState(book);
 

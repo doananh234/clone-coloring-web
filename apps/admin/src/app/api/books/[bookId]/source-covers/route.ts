@@ -77,7 +77,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     const { scId, isPublic } = (await req.json().catch(() => ({}))) as { scId?: string; isPublic?: boolean };
     if (!scId) return NextResponse.json({ error: "scId required" }, { status: 400 });
 
-    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    // Only the `data` JSON is needed here — select it so the toggle doesn't load
+    // the heavy coloringPages/summaryPages arrays on every source-cover PATCH.
+    const book = await prisma.book.findUnique({ where: { id: bookId }, select: { data: true } });
     if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
 
     const data = (book.data as Record<string, unknown> | null) ?? {};
