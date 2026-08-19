@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
@@ -89,9 +89,15 @@ export function JobsScreen() {
   // Local drafts only show on the "all" tab, first page (not a real server status).
   const allJobs = tab === "all" && page === 1 ? [...local, ...jobs] : jobs;
 
-  const ql = q.trim().toLowerCase();
-  const rows = allJobs.filter(
-    (j) => !ql || `${j.name} ${j.brand ?? ""} ${j.id}`.toLowerCase().includes(ql),
+  // Defer the query so typing stays responsive; memoize the filter so it only
+  // reruns when the jobs or the (deferred) query actually change.
+  const ql = useDeferredValue(q).trim().toLowerCase();
+  const rows = useMemo(
+    () =>
+      allJobs.filter(
+        (j) => !ql || `${j.name} ${j.brand ?? ""} ${j.id}`.toLowerCase().includes(ql),
+      ),
+    [allJobs, ql],
   );
 
   const tabs = STATUS_TABS.map((t) => ({ key: t.key, label: t.label, count: countFor(t, counts) }));
