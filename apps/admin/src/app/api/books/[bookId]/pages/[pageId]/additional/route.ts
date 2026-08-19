@@ -48,6 +48,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         trace: { caller: "books/page-additional", entityType: "book", entityId: bookId },
       });
       const base64 = img.base64 || img.dataUrl?.split(",")[1] || "";
+      if (!base64) throw new Error("editImage returned no image data");
       const newId = crypto.randomUUID();
       const key = `assets/${bookId}/pages/${newId}.png`;
       const { url } = await uploadToR2({ client: r2Client, config: r2Config, key, body: Buffer.from(base64, "base64"), contentType: "image/png" });
