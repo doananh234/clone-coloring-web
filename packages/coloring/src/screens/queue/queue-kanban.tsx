@@ -5,7 +5,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDrop
 import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "../../components/ui/badge";
 import { Icon } from "../../lib/icon";
-import { thumbImg } from "../../data/img";
+import { thumbImg, resolveImg } from "../../data/img";
 import { QUEUE_COLUMNS, type QueueStatus } from "../../data/use-queue-status";
 import type { BookRow } from "../../data/types";
 
@@ -16,6 +16,7 @@ function statusOf(b: BookRow): QueueStatus {
 
 function Card({ book, assignee, onOpen }: { book: BookRow; assignee?: string; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: book.id });
+  const [copied, setCopied] = useState(false);
   const cover = thumbImg(book.coverUrl || book.squareThumbnailUrl || book.thumbnailUrl, 400);
   return (
     <div
@@ -24,6 +25,7 @@ function Card({ book, assignee, onOpen }: { book: BookRow; assignee?: string; on
       {...attributes}
       onClick={onOpen}
       style={{
+        position: "relative",
         transform: CSS.Translate.toString(transform),
         opacity: isDragging ? 0.4 : 1,
         cursor: "grab",
@@ -50,6 +52,45 @@ function Card({ book, assignee, onOpen }: { book: BookRow; assignee?: string; on
           {assignee && <Badge tone="carbon">◍ {assignee}</Badge>}
         </div>
       </div>
+      {book.exportUrl && (
+        <button
+          type="button"
+          // Stop the pointer-down from reaching the card's drag listeners, and
+          // the click from reaching the card's onClick (which opens the book).
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            const full = resolveImg(book.exportUrl);
+            if (!full || !navigator.clipboard) return;
+            navigator.clipboard
+              .writeText(full)
+              .then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1200);
+              })
+              .catch(() => {});
+          }}
+          title="Copy link ZIP"
+          aria-label="Copy link ZIP"
+          style={{
+            position: "absolute",
+            top: 6,
+            right: 6,
+            width: 24,
+            height: 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 6,
+            border: "1px solid var(--border)",
+            background: "var(--background)",
+            cursor: "pointer",
+            color: copied ? "var(--success)" : "var(--muted-foreground)",
+          }}
+        >
+          <Icon name={copied ? "check" : "copy"} size={13} />
+        </button>
+      )}
     </div>
   );
 }
