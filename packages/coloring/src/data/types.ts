@@ -122,6 +122,8 @@ export interface BookRow {
   etsyListing?: EtsyListingInfo | null;
   createdAt?: string;
   specifications?: { pages?: number } | null;
+  /** Stable download URL of the book's export ZIP (from data.export.url), or null. */
+  exportUrl?: string | null;
 }
 
 /** Generic entity list item (characters, locations, art/coloring styles). */

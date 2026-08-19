@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
       ...b,
       niche: (b.data as { niche?: unknown } | null)?.niche ?? null,
       queueStatus: (b.data as { queueStatus?: unknown } | null)?.queueStatus ?? "todo",
+      exportUrl: (b.data as { export?: { url?: string } } | null)?.export?.url ?? null,
     }));
     return NextResponse.json({
       data,
