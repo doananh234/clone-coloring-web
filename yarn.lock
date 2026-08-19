@@ -8471,6 +8471,7 @@ __metadata:
   dependencies:
     "@types/node": "npm:^20.0.0"
     "@vx/clone-core": "workspace:*"
+    "@vx/coloring": "workspace:*"
     "@vx/db": "workspace:*"
     "@vx/server-core": "workspace:*"
     bullmq: "npm:^5.7.0"

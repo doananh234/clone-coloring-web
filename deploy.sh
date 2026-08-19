@@ -163,6 +163,20 @@ else
     echo "[3c] Skipping book-approved backfill (set RUN_BOOK_APPROVED_BACKFILL=1 to run once)."
 fi
 
+# 3d. ONE-TIME migration: convert legacy regen variants → additional interior
+#     pages. Gated behind RUN_REGEN_VARIANT_MIGRATION (idempotent, but must not
+#     run on every deploy). Run once:  RUN_REGEN_VARIANT_MIGRATION=1 ./deploy.sh
+if [ "${RUN_REGEN_VARIANT_MIGRATION:-0}" = "1" ]; then
+    echo "[3d] One-time migration: regen variants → additional interior pages..."
+    ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && \
+        docker compose ${COMPOSE_FILES} run --rm --no-deps \
+            -e DATABASE_URL=postgresql://postgres:postgres@postgres:5432/coloring \
+            -e DIRECT_URL=postgresql://postgres:postgres@postgres:5432/coloring \
+            worker sh -c 'cd /app/apps/worker && node --import tsx src/scripts/backfill-regen-variants-to-pages.ts'"
+else
+    echo "[3d] Skipping regen-variant migration (set RUN_REGEN_VARIANT_MIGRATION=1 to run once)."
+fi
+
 # 4. Start app containers.
 echo "[4/5] Starting admin + worker..."
 ssh ${SSH_OPTS} ${SERVER} "cd ${REMOTE_DIR} && docker compose ${COMPOSE_FILES} up -d"
