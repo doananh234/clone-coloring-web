@@ -67,8 +67,10 @@ export async function uploadToR2(params: {
   key: string;
   body: Buffer;
   contentType?: string;
+  cacheControl?: string;
+  contentDisposition?: string;
 }): Promise<{ key: string; url: string }> {
-  const { client, config, key, body, contentType } = params;
+  const { client, config, key, body, contentType, cacheControl, contentDisposition } = params;
   const ct = contentType || guessContentType(key);
 
   await client.send(
@@ -77,6 +79,8 @@ export async function uploadToR2(params: {
       Key: key,
       Body: body,
       ContentType: ct,
+      ...(cacheControl !== undefined ? { CacheControl: cacheControl } : {}),
+      ...(contentDisposition !== undefined ? { ContentDisposition: contentDisposition } : {}),
     }),
   );
 

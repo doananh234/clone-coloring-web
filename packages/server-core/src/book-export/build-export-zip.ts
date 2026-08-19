@@ -87,7 +87,18 @@ export function collectExportPlan(input: ExportInput): ExportPlan {
     .digest("hex")
     .slice(0, 16);
 
-  return { folders, hash, filename: `${slug(input.bookTitle)}-${hash}.zip` };
+  return { folders, hash, filename: `${slug(input.bookTitle)}.zip` };
+}
+
+/**
+ * The single, stable R2 path a book's export ZIP always lives at. Fixed per
+ * book (independent of the title) so a copied download link keeps working after
+ * a re-export overwrites the object. The worker uploads to this key and the API
+ * route compares the cached url against it — both derive from here so they can
+ * never drift.
+ */
+export function stableExportUrl(bookId: string): string {
+  return `/assets/${bookId}/exports/export.zip`;
 }
 
 /** Fetch an R2 image and return its bytes + detected extension (png/jpg). */

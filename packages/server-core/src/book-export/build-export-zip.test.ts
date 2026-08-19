@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import JSZip from "jszip";
-import { collectExportPlan, buildExportZip, type ExportInput } from "./build-export-zip";
+import { collectExportPlan, buildExportZip, stableExportUrl, type ExportInput } from "./build-export-zip";
 
 const baseInput: ExportInput = {
   bookTitle: "Cute Farm",
@@ -40,7 +40,7 @@ describe("collectExportPlan", () => {
     expect(byPath["Clone book/Source cover"].map((e) => e.url)).toEqual(["/assets/b/sc-1.png"]);
     expect(byPath["Clone book/Source cover colored"].map((e) => e.url)).toEqual(["/assets/b/sc-1-c.png"]);
 
-    expect(plan.filename).toBe(`cute-farm-${plan.hash}.zip`);
+    expect(plan.filename).toBe("cute-farm.zip");
   });
 
   it("falls back to the first source page as cover when none is classified", () => {
@@ -127,5 +127,11 @@ describe("buildExportZip", () => {
     const zip = await JSZip.loadAsync(await buildExportZip(plan));
     expect(zip.file("Clone book/Book interior/page-001.jpg")).not.toBeNull();
     expect(zip.file("Clone book/Book interior/page-001.png")).toBeNull();
+  });
+});
+
+describe("stableExportUrl", () => {
+  it("returns a fixed per-book path independent of title", () => {
+    expect(stableExportUrl("abc123")).toBe("/assets/abc123/exports/export.zip");
   });
 });
