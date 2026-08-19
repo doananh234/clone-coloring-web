@@ -13,6 +13,7 @@
     "backfill:cover": "node --env-file=.env --import tsx src/scripts/backfill-cover-from-thumbnail.ts",
     "backfill:niche": "node --env-file=.env --import tsx src/scripts/backfill-book-niche.ts",
     "backfill:book-approved": "node --env-file=.env --import tsx src/scripts/backfill-book-approved.ts",
+    "backfill:regen-variants": "node --import tsx src/scripts/backfill-regen-variants-to-pages.ts",
     "dedupe:styles": "node --env-file=.env --import tsx src/scripts/dedupe-coloring-styles.ts",
     "reset:stashed": "node --env-file=.env --import tsx src/scripts/reset-stashed-jobs.ts",
     "test": "vitest run",
@@ -20,6 +21,7 @@
   },
   "dependencies": {
     "@vx/clone-core": "workspace:*",
+    "@vx/coloring": "workspace:*",
     "@vx/db": "workspace:*",
     "@vx/server-core": "workspace:*",
     "bullmq": "^5.7.0",
