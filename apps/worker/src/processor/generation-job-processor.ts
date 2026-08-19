@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { prisma } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import { generateCoverSourceBW } from "@vx/server-core/ai";
-import { collectExportPlan, buildExportZip, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
+import { collectExportPlan, buildExportZip, stableExportUrl, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
 
 type Page = { id?: string; url?: string };
 type TitleSafe = "top" | "middle" | "bottom";
@@ -129,12 +129,19 @@ async function runBookExport(genJobId: string, bookId: string): Promise<void> {
   const buffer = await buildExportZip(plan); // heavy: many R2 fetches + deflate
 
   const r2Config = getR2Config();
+  // Fixed per-book key so a copied link stays valid across re-exports; the
+  // object is overwritten each time. Content-Disposition gives the download a
+  // title-based name despite the fixed key; Cache-Control makes the CDN
+  // revalidate after an overwrite instead of serving the stale ZIP.
+  const key = stableExportUrl(bookId).replace(/^\//, "");
   const { url } = await uploadToR2({
     client: createR2Client(r2Config),
     config: r2Config,
-    key: `assets/${bookId}/exports/${plan.filename}`,
+    key,
     body: buffer,
     contentType: "application/zip",
+    cacheControl: "no-cache",
+    contentDisposition: `attachment; filename="${plan.filename}"`,
   });
 
   const builtAt = new Date().toISOString();
