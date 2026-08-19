@@ -5,12 +5,11 @@ import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { ColoringStylePickerModal, type StyleSelection } from "../../components/ui/coloring-style-picker-modal";
 import { usePageActions } from "../../data/use-page-actions";
-import { usePageVariants, type RegenAddOpts } from "../../data/use-page-variants";
+import { usePageAdditional, type RegenAddOpts } from "../../data/use-page-additional";
 import { useCoverCandidates } from "../../data/use-cover-candidates";
 import { useSourceCovers } from "../../data/use-source-covers";
 import { resolveImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
-import type { PageVariant } from "../../data/types";
 
 interface Candidate {
   url: string;
@@ -38,7 +37,7 @@ export function PageActionsRow({
 }) {
   const cloneJobId = typeof bookData?.cloneJobId === "string" ? bookData.cloneJobId : undefined;
   const actions = usePageActions(bookId, cloneJobId);
-  const variants = usePageVariants(bookId);
+  const additional = usePageAdditional(bookId);
   const coverCandidates = useCoverCandidates(bookId);
   const sourceCovers = useSourceCovers(bookId);
   const isSC = variant === "sourceCover" && !!sourceCover;
@@ -148,7 +147,7 @@ export function PageActionsRow({
         )}
         {!isSC && (
           <Button variant="outline" size="sm" disabled={disabled || busy !== null}
-            title="Sinh thêm biến thể (không ghi đè) — chọn nguồn A/B" onClick={() => setRegenOpen((v) => !v)}>
+            title="Sinh thêm trang interior (không ghi đè) — chọn nguồn A/B" onClick={() => setRegenOpen((v) => !v)}>
             <Icon name="sparkles" size={15} /> Regen Thêm
           </Button>
         )}
@@ -194,39 +193,9 @@ export function PageActionsRow({
               style={{ width: 56, padding: "4px 8px", fontFamily: "var(--font-mono)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)" }} />
           </label>
           <Button size="sm" disabled={disabled || busy !== null}
-            onClick={run("regenadd", () => variants.regenAdd(page.id, regenOpts), () => setRegenOpen(false))}>
-            {busy === "regenadd" ? "Đang sinh…" : `Sinh ${regenOpts.count} bản`}
+            onClick={run("regenadd", () => additional.regenAddPages(page.id, regenOpts), () => setRegenOpen(false))}>
+            {busy === "regenadd" ? "Đang sinh…" : `Sinh ${regenOpts.count} trang`}
           </Button>
-        </div>
-      )}
-
-      {!isSC && page.variants && page.variants.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: ".04em" }}>Biến thể · {page.variants.length}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(88px,1fr))", gap: 8 }}>
-            {page.variants.map((v: PageVariant) => {
-              const isSel = v.id === page.selectedVariantId;
-              const label = v.origin === "original" ? "Gốc" : `Regen ${v.source ?? ""}`.trim();
-              return (
-                <div key={v.id} style={{ position: "relative" }}>
-                  <div onClick={disabled || isSel ? undefined : run("selvar", () => variants.select(page.id, v.id))}
-                    style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", overflow: "hidden", border: `${isSel ? 2 : 1}px solid ${isSel ? "var(--volt-600)" : "var(--border)"}`, boxShadow: isSel ? "var(--shadow-glow)" : undefined, background: "#fff", cursor: disabled || isSel ? "default" : "pointer" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={resolveImg(v.coloredUrl || v.url)} alt={label} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  </div>
-                  <span style={{ position: "absolute", left: 4, bottom: 4, fontSize: 9, fontWeight: 700, color: "#fff", background: "rgba(11,13,12,.6)", padding: "0 4px", borderRadius: 4 }}>{label}</span>
-                  {isSel && <span style={{ position: "absolute", right: 4, top: 4, background: "var(--volt-500)", color: "var(--carbon-950)", borderRadius: 99, width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="check" size={10} /></span>}
-                  {!isSel && v.origin !== "original" && (
-                    <button type="button" title="Xoá biến thể" disabled={disabled || busy !== null}
-                      onClick={run("delvar", () => variants.remove(page.id, v.id))}
-                      style={{ position: "absolute", right: 4, top: 4, background: "rgba(11,13,12,.6)", color: "#fff", border: "none", borderRadius: 99, width: 16, height: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Icon name="x" size={10} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
         </div>
       )}
 

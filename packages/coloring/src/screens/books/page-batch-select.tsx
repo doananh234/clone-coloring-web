@@ -7,7 +7,7 @@ import { Button } from "../../components/ui/button";
 import { Progress } from "../../components/ui/progress";
 import { EmptyState } from "../../components/ui/states";
 import { usePageActions } from "../../data/use-page-actions";
-import { usePageVariants, type RegenAddOpts } from "../../data/use-page-variants";
+import { usePageAdditional, type RegenAddOpts } from "../../data/use-page-additional";
 import { runBatchRegen } from "../../data/run-batch-regen";
 import { thumbImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
@@ -124,7 +124,7 @@ export function PageBatchSelect({
 }) {
   const qc = useQueryClient();
   const actions = usePageActions(bookId, cloneJobId);
-  const variants = usePageVariants(bookId);
+  const additional = usePageAdditional(bookId);
   const [addOpts, setAddOpts] = useState<RegenAddOpts>({ count: 1, source: "A", changePercent: 30 });
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [running, setRunning] = useState(false);
@@ -180,7 +180,7 @@ export function PageBatchSelect({
   const runAdd = async () => {
     const indices = [...selected].sort((a, b) => a - b);
     if (indices.length === 0) return;
-    if (!window.confirm(`Regen Thêm ${addOpts.count} bản cho ${indices.length} trang đã chọn? Thêm biến thể (KHÔNG ghi đè), tốn phí AI.`)) return;
+    if (!window.confirm(`Sinh thêm ${addOpts.count} trang interior mới từ ${indices.length} trang đã chọn? Các trang mới sẽ nằm ở cuối, KHÔNG ghi đè. Tốn phí AI.`)) return;
 
     setRunning(true);
     setSummary(null);
@@ -189,7 +189,7 @@ export function PageBatchSelect({
 
     const res = await runBatchRegen(
       indices,
-      async (i) => { setCurrent(i); await variants.regenAdd(pages[i].id, addOpts); },
+      async (i) => { setCurrent(i); await additional.regenAddPages(pages[i].id, addOpts); },
       (done, index, ok) => {
         setProgress({ done, total: indices.length });
         setResults((prev) => new Map(prev).set(index, ok ? "ok" : "err"));
