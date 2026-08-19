@@ -38,6 +38,23 @@ describe("planVariantMigration", () => {
     expect(out.additional).toEqual([]);
   });
 
+  it("leaves url as-is when there is no original variant, still converts regens", () => {
+    const page: BookColoringPage = {
+      id: "p2",
+      url: "/only-regen.png",
+      sourcePageNumber: 8,
+      variants: [
+        { id: "vA", url: "/only-regen.png", origin: "regen", source: "A", createdAt: "t" },
+      ],
+    };
+    const out = planVariantMigration(page, 0, newId());
+    expect(out.page.url).toBe("/only-regen.png"); // no original → url untouched
+    expect("variants" in out.page).toBe(false);
+    expect("selectedVariantId" in out.page).toBe(false);
+    expect(out.additional).toHaveLength(1);
+    expect(out.additional[0]).toMatchObject({ origin: "additional", parentPageNumber: 8, url: "/only-regen.png" });
+  });
+
   it("restores the page to its original variant and converts regens to additional pages (no dup)", () => {
     const page: BookColoringPage = {
       id: "p1",

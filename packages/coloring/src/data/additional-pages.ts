@@ -55,6 +55,9 @@ export function planVariantMigration(
   const restored: BookColoringPage = { ...page };
   delete restored.variants;
   delete restored.selectedVariantId;
+  // Spec: when a page has regen variants but no "original" variant (rare — the
+  // regen-add flow always seeds an original first), leave the page's url/coloredUrl
+  // as-is; the regen variants still become additional pages.
   if (original) {
     restored.url = original.url;
     if (original.coloredUrl) restored.coloredUrl = original.coloredUrl;
