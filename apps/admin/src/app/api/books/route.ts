@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.book.count({ where }),
     ]);
-    // Surface the denormalized niche as a top-level field for the card badge.
+    // Surface denormalized fields from the data JSON (niche, queueStatus, exportUrl) as top-level fields for the list cards.
     const data = rows.map((b) => ({
       ...b,
       niche: (b.data as { niche?: unknown } | null)?.niche ?? null,

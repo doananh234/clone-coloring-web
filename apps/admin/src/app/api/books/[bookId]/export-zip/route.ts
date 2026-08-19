@@ -9,7 +9,7 @@ type RouteParams = { params: Promise<{ bookId: string }> };
 
 /**
  * POST — compute the export plan hash for this book and either:
- *   1. Return the cached ZIP link immediately (book.data.export.hash matches), or
+ *   1. Return the cached ZIP link immediately (hash matches AND url is the stable key), or
  *   2. Return the id of an already-running book-export job (dedup in-flight), or
  *   3. Create a new book-export GenerationJob, enqueue it, and return { jobId }.
  *
