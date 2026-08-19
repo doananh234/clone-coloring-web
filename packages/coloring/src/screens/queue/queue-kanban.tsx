@@ -98,13 +98,20 @@ function Card({ book, assignee, onOpen }: { book: BookRow; assignee?: string; on
 const COLUMN_INITIAL = 20;
 const COLUMN_STEP = 20;
 
-function Column({ col, books, assigneeName, onOpen }: { col: { key: QueueStatus; label: string }; books: BookRow[]; assigneeName: (b: BookRow) => string | undefined; onOpen: (id: string) => void }) {
+function Column({ col, books, assigneeName, onOpen, surfaceId }: { col: { key: QueueStatus; label: string }; books: BookRow[]; assigneeName: (b: BookRow) => string | undefined; onOpen: (id: string) => void; surfaceId?: string | null }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key });
   // Only mount the first N cards per column so a large queue doesn't put
   // hundreds of card nodes in the DOM at once; reveal more on demand.
   const [visible, setVisible] = useState(COLUMN_INITIAL);
-  const shown = books.slice(0, visible);
-  const remaining = books.length - shown.length;
+  // Surface a just-dropped card at the top of its new column so it stays visible
+  // even when the column already has ≥N cards shown (otherwise it lands past the
+  // render cap and looks "lost" until "Hiện thêm").
+  const ordered =
+    surfaceId && books.some((b) => b.id === surfaceId)
+      ? [books.find((b) => b.id === surfaceId)!, ...books.filter((b) => b.id !== surfaceId)]
+      : books;
+  const shown = ordered.slice(0, visible);
+  const remaining = ordered.length - shown.length;
   return (
     <div style={{ flex: "1 1 240px", minWidth: 240, display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--muted-foreground)" }}>
@@ -138,13 +145,19 @@ export function QueueKanban({ books, onMove, assigneeName, onOpen }: {
   onOpen: (id: string) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // Id of the last card moved between columns — surfaced at the top of its new
+  // column so the render cap never hides a fresh drop.
+  const [movedId, setMovedId] = useState<string | null>(null);
 
   const onDragEnd = (e: DragEndEvent) => {
     const bookId = String(e.active.id);
     const target = e.over?.id ? (String(e.over.id) as QueueStatus) : null;
     if (!target) return;
     const book = books.find((b) => b.id === bookId);
-    if (book && statusOf(book) !== target) onMove(bookId, target);
+    if (book && statusOf(book) !== target) {
+      setMovedId(bookId);
+      onMove(bookId, target);
+    }
   };
 
   return (
@@ -157,6 +170,7 @@ export function QueueKanban({ books, onMove, assigneeName, onOpen }: {
             books={books.filter((b) => statusOf(b) === col.key)}
             assigneeName={assigneeName}
             onOpen={onOpen}
+            surfaceId={movedId}
           />
         ))}
       </div>
