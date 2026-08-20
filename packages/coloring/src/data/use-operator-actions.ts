@@ -26,7 +26,8 @@ export function useOperatorActions() {
     setIsPending(true);
     try {
       const result = await fn();
-      await qc.invalidateQueries({ queryKey: ["operators"] });
+      // Shared query key with both useOperators hooks (aligned to this key).
+      await qc.invalidateQueries({ queryKey: ["coloring", "operators"] });
       return result;
     } finally {
       setIsPending(false);
