@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma, type Prisma } from "@vx/db";
+import { prisma, Prisma } from "@vx/db";
 import { getOperatorFromRequest } from "@/lib/auth/require-operator";
 
 export async function GET(req: NextRequest) {
@@ -14,13 +14,14 @@ export async function GET(req: NextRequest) {
 
   const and: Prisma.BookWhereInput[] = [];
   if (q) {
-    // Title + subtitle are scalar (case-insensitive contains); niche is stored
-    // in data.nicheLower for a case-insensitive JSON substring match.
+    // Title + subtitle + niche are all scalar columns (case-insensitive contains).
+    // `niche` is a denormalized column kept in sync by the book_denorm_perf DB
+    // trigger, so this no longer detoasts data.nicheLower per row.
     and.push({
       OR: [
         { title: { contains: q, mode: "insensitive" } },
         { subtitle: { contains: q, mode: "insensitive" } },
-        { data: { path: ["nicheLower"], string_contains: q.toLowerCase() } },
+        { niche: { contains: q, mode: "insensitive" } },
       ],
     });
   }
@@ -43,12 +44,24 @@ export async function GET(req: NextRequest) {
   // which must only show work that's actually in someone's queue).
   else if (assign === "assigned") and.push({ assignedToId: { not: null } });
 
-  // Temporary "Interior > 40" filter. Interior count is mirrored in the
-  // denormalized data.specifications.pages (a JSON number == coloringPages length),
-  // so we filter server-side without loading the heavy coloringPages array.
+  // Specific-assignee filter (admin queue board person picker) — an indexed
+  // scalar column ([assignedToId, createdAt]), so this replaces the old
+  // "fetch everyone's queue then filter by person client-side".
+  const assignee = (searchParams.get("assignee") || "").trim();
+  if (assignee) and.push({ assignedToId: assignee });
+
+  // Etsy listings screen: only books that have listing content
+  // (book.data.etsyListing present & non-null). Low-traffic screen, so a JSONB
+  // path predicate is acceptable here; denormalize to a scalar if it grows.
+  const etsy = (searchParams.get("etsy") || "").trim();
+  if (etsy === "1") and.push({ data: { path: ["etsyListing"], not: Prisma.AnyNull } });
+
+  // "Interior > 40" filter. `interiorPages` is a denormalized scalar column
+  // (coloringPages length), maintained by the book_denorm_perf DB trigger, so
+  // this is an indexed btree range instead of a JSONB path scan + detoast.
   const interior = (searchParams.get("interior") || "").trim();
   if (interior === "gt40") {
-    and.push({ data: { path: ["specifications", "pages"], gt: 40 } });
+    and.push({ interiorPages: { gt: 40 } });
   }
 
   const where: Prisma.BookWhereInput = and.length ? { AND: and } : {};
