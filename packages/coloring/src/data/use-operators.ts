@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { httpGet } from "@vx/core-uikit/api";
+import { COLORING_API_BASE } from "./config";
 
 export interface OperatorRow {
   id: string;
@@ -17,11 +18,16 @@ interface OperatorsResponse {
   data: OperatorRow[];
 }
 
-/** Admin operator list (GET /api/operators — same-origin, admin-gated). */
+/**
+ * Admin operator list (GET /operators — admin-gated). Shares the query key
+ * `["coloring","operators"]` with the lighter `useOperators` in use-book-assign
+ * so the operator list is fetched ONCE and cached across the operators screen,
+ * the books screen, and the queue board (was two keys = a double fetch).
+ */
 export function useOperators() {
   const query = useQuery({
-    queryKey: ["operators"],
-    queryFn: () => httpGet<OperatorsResponse>("/api/operators"),
+    queryKey: ["coloring", "operators"],
+    queryFn: () => httpGet<OperatorsResponse>(`${COLORING_API_BASE}/operators`),
   });
   return {
     operators: query.data?.data ?? [],
