@@ -55,8 +55,6 @@ if (process.env.NODE_ENV !== "production") {
 export * from "@prisma/client";
 export { Prisma } from "@prisma/client";
 export {
-  bumpCloneJobStatusCount,
-  transitionCloneJobStatus,
   syncCloneJobStatusCounts,
   readCloneJobStatusCounts,
 } from "./clone-status-counts";
