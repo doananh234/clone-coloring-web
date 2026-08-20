@@ -7,25 +7,42 @@ import { COLORING_API_BASE } from "./config";
 import { type GenerationJob, isActiveGenerationJob } from "./generation-jobs";
 
 /**
+ * Poll cadence for the always-mounted queue feed. The drawer lives in the header
+ * on EVERY screen, so an unconditional interval means the whole app refetches the
+ * full job list forever. Instead:
+ *   - idle (nothing active) → don't poll at all. A new job is surfaced by the
+ *     enqueue sites invalidating ["coloring","generation-jobs"] (see
+ *     use-source-covers) / an explicit refetch (see export-link-button).
+ *   - active but drawer closed → gentle 20s so the header badge stays roughly live.
+ *   - active AND drawer open → fast 4s, since the user is watching progress.
+ */
+export function generationPollInterval(opts: { open: boolean; hasActive: boolean }): number | false {
+  if (!opts.hasActive) return false;
+  return opts.open ? 4000 : 20000;
+}
+
+/**
  * Global feed of background generation jobs for the header queue drawer.
  * Polls faster while anything is active, slow when idle. When a job flips to a
  * terminal state we invalidate that book's query so a freshly generated cover
  * shows up without a manual refresh.
+ *
+ * Pass `open` from the drawer so the fast cadence only runs while it's visible.
  */
-export function useGenerationJobs(limit = 30) {
+export function useGenerationJobs(opts: { open?: boolean; limit?: number } = {}) {
+  const { open = false, limit = 30 } = opts;
   const qc = useQueryClient();
   const seenTerminal = useRef<Set<string>>(new Set());
 
   const q = useQuery({
     queryKey: ["coloring", "generation-jobs"],
     queryFn: () => httpGet<{ jobs: GenerationJob[] }>(`${COLORING_API_BASE}/generation-jobs?limit=${limit}`),
-    refetchInterval: (query) => {
-      const jobs = query.state.data?.jobs ?? [];
-      // Fast cadence only while something is actually running; idle drops to 30s
-      // so the header drawer doesn't refetch the full job list every 20s forever.
-      return jobs.some(isActiveGenerationJob) ? 4000 : 30000;
-    },
-    refetchOnWindowFocus: true,
+    refetchInterval: (query) =>
+      generationPollInterval({
+        open,
+        hasActive: (query.state.data?.jobs ?? []).some(isActiveGenerationJob),
+      }),
+    // Inherits the global refetchOnWindowFocus: false — no per-focus refetch churn.
   });
 
   const jobs = q.data?.jobs ?? [];

@@ -14,7 +14,8 @@
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
     "push": "prisma db push",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0"

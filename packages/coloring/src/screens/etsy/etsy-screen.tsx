@@ -30,11 +30,14 @@ const ETSY_PAGE = 24;
 
 export function EtsyScreen() {
   const router = useRouter();
-  // Books carry full coloringPages arrays (heavy ~10MB/60), so keep the page modest.
-  const { books, isLoading, isError } = useBooks(1, 60);
+  // Server-filters to just the Etsy-listed subset (a small set, with coloringPages
+  // omitted), so the client holds the COMPLETE list — tab counts + "Hiện thêm" are
+  // correct instead of capped at the first 60 raw books (the old correctness bug).
+  const { books, isLoading, isError } = useBooks(1, 500, { etsy: "1" });
   const [tab, setTab] = useState<Tab>("all");
   const [visible, setVisible] = useState(ETSY_PAGE);
 
+  // Server already filtered to listed books; this guard is just belt-and-suspenders.
   const listed = books.filter((b) => b.etsyListing);
   const rows =
     tab === "all" ? listed : tab === "live" ? listed.filter((b) => b.isPublic) : listed.filter((b) => !b.isPublic);

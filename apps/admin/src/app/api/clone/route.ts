@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@vx/db";
+import { prisma, readCloneJobStatusCounts } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       ? ({ updatedAt: "desc" } as const)
       : ({ createdAt: "desc" } as const);
 
-    const [rows, grouped] = await Promise.all([
+    const [rows, cached] = await Promise.all([
       prisma.cloneJob.findMany({
         where,
         orderBy,
@@ -42,15 +42,15 @@ export async function GET(req: NextRequest) {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      wantCounts
-        ? prisma.cloneJob.groupBy({ by: ["status"], _count: { _all: true } })
-        : Promise.resolve([] as { status: string; _count: { _all: number } }[]),
+      // Cached, lazily-recomputed counts (≤60s stale) instead of a full groupBy
+      // on every request. See packages/db/src/clone-status-counts.ts.
+      wantCounts ? readCloneJobStatusCounts(prisma) : Promise.resolve(null),
     ]);
 
     const counts: Record<string, number> = { all: 0 };
-    for (const g of grouped) {
-      counts[g.status] = g._count._all;
-      counts.all += g._count._all;
+    if (cached) {
+      counts.all = cached.total;
+      for (const [status, n] of Object.entries(cached.counts)) counts[status] = n;
     }
 
     const jobs = rows.map((row) => {

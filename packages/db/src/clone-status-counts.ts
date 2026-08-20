@@ -3,67 +3,57 @@ import type { PrismaClient } from "@prisma/client";
 /**
  * Cached CloneJob status counts.
  *
- * The counts table is maintained by two paths:
- *   1. Event-driven bumps (`bumpCloneJobStatusCount`) at hot mutation sites —
- *      create, delete, and status transitions in the worker pipeline.
- *   2. Self-heal recompute (`syncCloneJobStatusCounts`) which runs when the
- *      counts table is empty OR older than STALE_TTL_SECONDS. This catches
- *      drift from any mutation site that forgot to bump.
+ * The jobs dashboard shows per-status badge counts across ALL rows. Computing
+ * them with a live `groupBy` on every request is a full-table aggregate. Instead
+ * we keep a tiny `CloneJobStatusCount` table and recompute it lazily:
  *
- * `readCloneJobStatusCounts` returns the counts as a `Record<status, count>`
- * plus the total; callers should not touch the table directly.
+ *   `readCloneJobStatusCounts` returns the cached counts, and self-heals with a
+ *   full recompute (`syncCloneJobStatusCounts`) when the cache is empty OR older
+ *   than STALE_TTL_SECONDS. So the expensive `groupBy` runs at most once per TTL
+ *   (server-wide, lazily), not once per request — and the badges lag by ≤ TTL.
+ *
+ * NOTE: this is deliberately recompute-only (no per-mutation bumps). Event-driven
+ * bumps were removed because they broke the staleness check: a recent bump made
+ * `every(row stale)` false, so the cache never recomputed and drifted. If sub-TTL
+ * freshness is ever needed, add bumps AND track "last full recompute" in a
+ * dedicated marker row (not per-status updatedAt) so staleness stays correct.
  */
 
 const STALE_TTL_SECONDS = 60;
 
-/** Increment/decrement in one atomic upsert. Positive delta creates the row. */
-export async function bumpCloneJobStatusCount(
-  db: PrismaClient,
-  status: string,
-  delta: number,
-): Promise<void> {
-  if (!status || delta === 0) return;
-  try {
-    await db.cloneJobStatusCount.upsert({
-      where: { status },
-      create: { status, count: Math.max(0, delta) },
-      update: { count: { increment: delta } },
-    });
-  } catch (err) {
-    // Non-fatal: bumps drift is corrected by the periodic recompute.
-    console.error("[clone-status-counts] bump failed", { status, delta, err });
-  }
-}
-
-/** Move one job's count from `from` → `to` in a single transaction. */
-export async function transitionCloneJobStatus(
-  db: PrismaClient,
-  from: string | null | undefined,
-  to: string | null | undefined,
-): Promise<void> {
-  if (from === to) return;
-  // No transaction needed — two independent upserts. If one fails, the periodic
-  // recompute corrects it. Keeping this outside a transaction avoids blocking
-  // the worker on a long lock in the queue-mode pooler.
-  if (from) await bumpCloneJobStatusCount(db, from, -1);
-  if (to) await bumpCloneJobStatusCount(db, to, 1);
-}
-
-/** Full recompute — reads every row's status via groupBy and upserts. */
+/**
+ * Full recompute — reads every row's status via groupBy and upserts the counts.
+ * Statuses that no longer have any jobs are zeroed (not left at their stale
+ * count), so an emptied status never lingers in the badges.
+ */
 export async function syncCloneJobStatusCounts(db: PrismaClient): Promise<void> {
-  const rows = await db.cloneJob.groupBy({
-    by: ["status"],
-    _count: { _all: true },
-  });
-  await db.$transaction(
-    rows.map((r) =>
+  const [grouped, existing] = await Promise.all([
+    db.cloneJob.groupBy({ by: ["status"], _count: { _all: true } }),
+    db.cloneJobStatusCount.findMany({ select: { status: true } }),
+  ]);
+
+  const nextByStatus = new Map(grouped.map((r) => [r.status, r._count._all]));
+
+  const ops: Promise<unknown>[] = [];
+  for (const [status, count] of nextByStatus) {
+    ops.push(
       db.cloneJobStatusCount.upsert({
-        where: { status: r.status },
-        create: { status: r.status, count: r._count._all },
-        update: { count: r._count._all },
+        where: { status },
+        create: { status, count },
+        update: { count },
       }),
-    ),
-  );
+    );
+  }
+  // Zero out cached statuses that the recompute no longer sees any jobs for.
+  for (const e of existing) {
+    if (!nextByStatus.has(e.status)) {
+      ops.push(
+        db.cloneJobStatusCount.update({ where: { status: e.status }, data: { count: 0 } }),
+      );
+    }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous upsert/update ops
+  await db.$transaction(ops as any);
 }
 
 /**
@@ -77,6 +67,8 @@ export async function readCloneJobStatusCounts(
 
   const isEmpty = rows.length === 0;
   const staleThreshold = new Date(Date.now() - STALE_TTL_SECONDS * 1000);
+  // After a recompute every row shares the same updatedAt, so "all rows older
+  // than the threshold" == "the cache as a whole is older than TTL".
   const isStale =
     !isEmpty && rows.every((r) => r.updatedAt.getTime() < staleThreshold.getTime());
 

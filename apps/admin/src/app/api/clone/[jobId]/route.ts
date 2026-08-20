@@ -10,9 +10,13 @@ import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
-export async function GET(_req: NextRequest, { params }: RouteParams) {
+export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
+    // `?lite=1` drops the heavy per-page `rawData` (scene/characters/prompts) and
+    // bookData/entityMap — for consumers that only render page thumbnails (e.g.
+    // the book-detail "Sách gốc" section), which otherwise pull the full analysis.
+    const lite = new URL(req.url).searchParams.get("lite") === "1";
     const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
 
     if (!row) {
@@ -22,12 +26,15 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     const extra = (row.data as any) || {};
     const pages = (row.pages as CloneJobPage[]) || [];
 
-    // Resolve R2 URLs for client display
-    const resolvedPages = pages.map((p) => ({
-      ...p,
-      imageUrl: resolveR2Url(p.imageUrl),
-      redesignedUrl: p.redesignedUrl ? resolveR2Url(p.redesignedUrl) : undefined,
-    }));
+    // Resolve R2 URLs for client display (and strip rawData in lite mode).
+    const resolvedPages = pages.map((p) => {
+      const { rawData, ...rest } = p;
+      return {
+        ...(lite ? rest : p),
+        imageUrl: resolveR2Url(p.imageUrl),
+        redesignedUrl: p.redesignedUrl ? resolveR2Url(p.redesignedUrl) : undefined,
+      };
+    });
 
     const job: CloneJob = {
       id: row.id,
@@ -41,8 +48,8 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       totalPages: row.totalPages,
       analyzedPages: row.analyzedPages,
       pages,
-      bookData: (row.bookData as any) ?? undefined,
-      entityMap: (row.entityMap as any) ?? undefined,
+      bookData: lite ? undefined : ((row.bookData as any) ?? undefined),
+      entityMap: lite ? undefined : ((row.entityMap as any) ?? undefined),
       bookId: row.bookId ?? undefined,
       resultBookId: row.resultBookId ?? undefined,
       error: row.error ?? undefined,

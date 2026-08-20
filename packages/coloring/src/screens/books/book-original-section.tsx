@@ -41,7 +41,9 @@ function Thumb({ src, caption, onClick }: { src?: string; caption: string; onCli
  */
 export function BookOriginalSection({ jobId, sourceCoverFallback }: { jobId: string | null; sourceCoverFallback?: string }) {
   const router = useRouter();
-  const { job, isLoading } = useCloneJob(jobId ?? "");
+  // Thumbnails only — skip the heavy per-page rawData (this renders on the book
+  // detail default tab, so it must not pull the full clone analysis).
+  const { job, isLoading } = useCloneJob(jobId ?? "", { lite: true });
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
 
   if (!jobId) {
