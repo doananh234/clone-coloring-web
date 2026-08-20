@@ -127,7 +127,9 @@ export function GenerationQueueDrawer() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const { jobs, activeCount, isLoading, remove, clearCompleted } = useGenerationJobs();
+  // Fast 4s polling only while the drawer is open; closed keeps the badge live
+  // at a gentle cadence (and stops entirely when nothing is running).
+  const { jobs, activeCount, isLoading, remove, clearCompleted } = useGenerationJobs({ open });
 
   const activeJobs = jobs.filter(isActiveGenerationJob);
   const doneJobs = jobs.filter((j) => !isActiveGenerationJob(j));

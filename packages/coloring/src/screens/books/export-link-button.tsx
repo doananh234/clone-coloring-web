@@ -33,7 +33,8 @@ export function ExportLinkButton({ bookId, exportInfo }: { bookId: string; expor
     setErr(null);
     try {
       await httpPost(`${COLORING_API_BASE}/books/${bookId}/export-zip`, {});
-      // Reflect the newly-created pending job immediately (idle poll is 30s).
+      // Surface the newly-created job now — when idle the feed doesn't poll, so
+      // this explicit refetch is what wakes the queue after enqueue.
       await refetch();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Tạo link thất bại");
