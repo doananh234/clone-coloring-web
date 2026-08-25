@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
@@ -15,7 +15,9 @@ import type { BookColoringPage } from "../../data/types";
 const mono = { fontFamily: "var(--font-mono)" as const };
 
 /** One selectable page tile: click toggles selection; shows spinner / result state. */
-function SelectableThumb({
+// Memoized + driven by a stable `onToggle(index)` so selecting one page doesn't
+// re-render every other thumb (a book can have 100+ pages).
+const SelectableThumb = memo(function SelectableThumb({
   page,
   index,
   selected,
@@ -28,7 +30,7 @@ function SelectableThumb({
   selected: boolean;
   state?: "running" | "ok" | "err";
   disabled: boolean;
-  onToggle: () => void;
+  onToggle: (index: number) => void;
 }) {
   // Batch-select shows the B&W line-art (never the colored result) — you pick
   // pages to regen the line-art, so a colorized page must not appear coloured here.
@@ -41,7 +43,7 @@ function SelectableThumb({
         : "1px solid var(--border)";
   return (
     <div
-      onClick={disabled ? undefined : onToggle}
+      onClick={disabled ? undefined : () => onToggle(index)}
       className="mo-bookthumb"
       style={{
         cursor: disabled ? "default" : "pointer",
@@ -105,7 +107,7 @@ function SelectableThumb({
       )}
     </div>
   );
-}
+});
 
 /**
  * Batch-select surface for a book's pages: multi-select pages and regen them all
@@ -137,13 +139,17 @@ export function PageBatchSelect({
     return <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />;
   }
 
-  const toggle = (i: number) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
-      return next;
-    });
+  // Stable identity so memoized SelectableThumbs don't all re-render on one toggle.
+  const toggle = useCallback(
+    (i: number) =>
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(i)) next.delete(i);
+        else next.add(i);
+        return next;
+      }),
+    [],
+  );
   const selectAll = () => setSelected(new Set(pages.map((_, i) => i)));
   const clear = () => setSelected(new Set());
 
@@ -286,7 +292,7 @@ export function PageBatchSelect({
             selected={selected.has(i)}
             state={stateOf(i)}
             disabled={running}
-            onToggle={() => toggle(i)}
+            onToggle={toggle}
           />
         ))}
       </div>

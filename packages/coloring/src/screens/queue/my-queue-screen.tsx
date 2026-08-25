@@ -20,18 +20,22 @@ export function MyQueueScreen() {
   const isAdmin = user?.role === "admin";
   const operators = useOperators(isAdmin);
   const [assignee, setAssignee] = useState(""); // admin person filter (operator id); "" = all
-  // Members: only books assigned to them. Admins: all assigned books, filtered client-side by person.
-  const { books, isLoading, isError } = useBooks(1, 200, { assign: isAdmin ? "assigned" : "mine" });
+  // Members: only books assigned to them. Admins: all assigned books, or one
+  // person's queue via the indexed `assignee` server filter (no client-side sift).
+  const { books, isLoading, isError } = useBooks(1, 200, {
+    assign: isAdmin ? "assigned" : "mine",
+    assignee: isAdmin && assignee ? assignee : undefined,
+  });
   const setStatus = useSetQueueStatus();
   const [override, setOverride] = useState<Record<string, QueueStatus>>({});
   const [err, setErr] = useState<string | null>(null);
 
   const opName = useMemo(() => new Map(operators.map((o) => [o.id, o.name || o.username])), [operators]);
   const rows = useMemo(() => {
-    let list = books.map(applyBookPatch);
-    if (isAdmin && assignee) list = list.filter((b) => b.assignedToId === assignee);
+    // Assignee filtering is now server-side (see useBooks above).
+    const list = books.map(applyBookPatch);
     return list.map((b) => (override[b.id] ? { ...b, queueStatus: override[b.id] } : b));
-  }, [books, isAdmin, assignee, override]);
+  }, [books, override]);
 
   const assigneeName = (b: BookRow): string | undefined =>
     isAdmin && b.assignedToId ? opName.get(b.assignedToId) || b.assignedToId.slice(0, 6) : undefined;

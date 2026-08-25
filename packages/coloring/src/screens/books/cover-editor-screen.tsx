@@ -15,7 +15,7 @@ import { useEntityList } from "../../data/use-entity-list";
 import { useSaveCover, useGenerateCover, type GeneratedCover } from "../../data/use-cover-actions";
 import { useCoverDesign, type CoverStylePack } from "../../data/use-cover-design";
 import { useCoverTextOverlays } from "../../data/use-cover-text-overlays";
-import { resolveImg } from "../../data/img";
+import { resolveImg, thumbImg } from "../../data/img";
 import { CoverFabricEditor, type CoverEditorHandle } from "./cover-fabric-editor";
 import { CoverElementPanel } from "./cover-element-panel";
 import { defaultCoverDoc, normalizeCoverDoc, applyExtractedStyles, docToOverlayElements, type CoverDoc, type CoverElement, type CoverElementKey, type CoverElementStyleSeeds } from "../../lib/cover-doc";
@@ -278,7 +278,7 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
                         }}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={resolveImg(u)} alt="Ảnh nền" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        <img src={thumbImg(u, 128)} alt="Ảnh nền" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                         {active && (
                           <span style={{ position: "absolute", right: 2, top: 2, background: "var(--volt-500)", color: "#fff", borderRadius: 99, width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <Icon name="check" size={12} />
