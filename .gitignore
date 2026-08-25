@@ -21,3 +21,9 @@ detail-scroll
 012-detail-scroll
 026-detail-scrolled
 backups/
+
+# KingCong image session cookie + Playwright profile (credentials — never commit)
+.kingcong-session.json
+.kingcong-profile/
+**/.kingcong-session.json
+**/.kingcong-profile/
