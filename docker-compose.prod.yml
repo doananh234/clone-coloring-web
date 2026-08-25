@@ -15,6 +15,11 @@ services:
         NEXT_PUBLIC_COLORING_WRITE: "1"
     env_file:
       - apps/admin/.env.prod
+    volumes:
+      # Same KingCong cookie volume as the worker — the admin app runs the
+      # synchronous regen/colorize image calls, so it needs KingCong auth when an
+      # operator picks that provider. Shared file → one session for both.
+      - /opt/vx-admin-data:/data
 
   worker:
     env_file:

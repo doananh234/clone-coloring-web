@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
+import { ProviderSelect, useProviderPreference } from "../../components/provider-select";
 import { thumbImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
 import type { TitleSafePosition } from "../../data/source-covers";
@@ -23,10 +24,11 @@ export function InteriorPickerModal({
   busy: boolean;
   /** Fired on "Gen (N)": the chosen interior ids + the (possibly edited) prompt
    *  (empty string = server default). One background job is queued per id. */
-  onConfirm: (interiorPageIds: string[], promptOverride: string) => void;
+  onConfirm: (interiorPageIds: string[], promptOverride: string, provider: "kingcong" | "diaflow") => void;
   onClose: () => void;
   fetchDefaultPrompt: (titleSafe: TitleSafePosition) => Promise<string>;
 }) {
+  const [provider, setProvider] = useProviderPreference();
   const [prompt, setPrompt] = useState("");
   const [showPrompt, setShowPrompt] = useState(false);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
@@ -70,7 +72,7 @@ export function InteriorPickerModal({
 
   const confirmGen = () => {
     if (busy || selected.length === 0) return;
-    onConfirm(selected, prompt);
+    onConfirm(selected, prompt, provider);
   };
 
   // Copy Prompt — put the current text on the clipboard.
@@ -195,7 +197,8 @@ export function InteriorPickerModal({
         </div>
         <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Đã chọn {selected.length}/{MAX_SELECT}</span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <ProviderSelect value={provider} onChange={setProvider} disabled={busy} />
             <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Đóng</Button>
             <Button size="sm" onClick={confirmGen} disabled={busy || selected.length === 0}>
               <Icon name="sparkles" size={14} /> Gen ({selected.length})

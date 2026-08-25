@@ -6,10 +6,12 @@ import { resolveR2Url } from "@vx/server-core/r2";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageUrl, coloringStyleId } = body as {
+    const { imageUrl, coloringStyleId, provider: providerRaw } = body as {
       imageUrl: string;
       coloringStyleId: string;
+      provider?: string;
     };
+    const provider = providerRaw === "kingcong" || providerRaw === "diaflow" ? providerRaw : undefined;
 
     if (!imageUrl || !coloringStyleId) {
       return NextResponse.json(
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
     );
     const img = await colorizeImage(resolveR2Url(imageUrl), style.colorizationDirective, {
       referenceImageUrls,
+      provider,
     });
 
     return NextResponse.json({

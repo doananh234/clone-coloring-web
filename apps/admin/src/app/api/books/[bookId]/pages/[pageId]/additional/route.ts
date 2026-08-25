@@ -19,10 +19,11 @@ type RouteParams = { params: Promise<{ bookId: string; pageId: string }> };
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { bookId, pageId } = await params;
-    const body = (await req.json().catch(() => ({}))) as { count?: number; source?: "A" | "B"; changePercent?: number };
+    const body = (await req.json().catch(() => ({}))) as { count?: number; source?: "A" | "B"; changePercent?: number; provider?: string };
     const count = Math.min(4, Math.max(1, body.count ?? 1));
     const source: "A" | "B" = body.source === "B" ? "B" : "A";
     const pct = Math.min(95, Math.max(5, body.changePercent ?? 30));
+    const provider = body.provider === "kingcong" || body.provider === "diaflow" ? body.provider : undefined;
 
     const book = await prisma.book.findUnique({ where: { id: bookId } });
     if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const created: BookColoringPage[] = [];
     for (let k = 0; k < count; k++) {
       const img = await editImage(anchorUrl, prompt, {
+        provider,
         trace: { caller: "books/page-additional", entityType: "book", entityId: bookId },
       });
       const base64 = img.base64 || img.dataUrl?.split(",")[1] || "";

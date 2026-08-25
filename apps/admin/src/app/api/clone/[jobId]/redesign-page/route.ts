@@ -18,10 +18,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
     const body = await req.json();
-    const { pageIndex, changePercent } = body as {
+    const { pageIndex, changePercent, provider: providerRaw } = body as {
       pageIndex: number;
       changePercent?: number;
+      provider?: string;
     };
+    const provider = providerRaw === "kingcong" || providerRaw === "diaflow" ? providerRaw : undefined;
 
     if (pageIndex === undefined || pageIndex === null) {
       return NextResponse.json({ error: "pageIndex required" }, { status: 400 });
@@ -48,6 +50,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // Image-to-image: original as anchor + template-only instruction (no scene re-description)
     const img = await editImage(originalImageUrl, fullPrompt, {
+      provider,
       trace: { caller: "clone/redesign-page", entityType: "cloneJob", entityId: jobId },
     });
 

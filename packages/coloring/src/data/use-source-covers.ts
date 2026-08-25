@@ -16,14 +16,20 @@ export function useSourceCovers(bookId: string) {
 
   return {
     enabled: COLORING_WRITE_ENABLED,
-    gen: async (interiorPageId: string, titleSafe: TitleSafePosition, promptOverride?: string) => {
+    gen: async (
+      interiorPageId: string,
+      titleSafe: TitleSafePosition,
+      promptOverride?: string,
+      provider?: "kingcong" | "diaflow",
+    ) => {
       guard();
       // A non-empty promptOverride lets operators tune the prompt in the dialog
       // without a redeploy; omit it (undefined) to use the server default.
+      // provider: operator-chosen backend; omit → worker's IMAGE_PROVIDER default.
       // Runs in the background now — returns a GenerationJob id; progress is
       // tracked in the header queue drawer (["coloring","generation-jobs"]).
       const res = await httpPost<{ jobId?: string }>(base, {
-        interiorPageId, titleSafe, prompt: promptOverride?.trim() || undefined,
+        interiorPageId, titleSafe, prompt: promptOverride?.trim() || undefined, provider,
       });
       qc.invalidateQueries({ queryKey: ["coloring", "generation-jobs"] });
       return res;

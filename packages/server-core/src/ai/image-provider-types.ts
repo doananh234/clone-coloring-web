@@ -4,10 +4,19 @@
  * Switch provider via IMAGE_PROVIDER env var ("azure" | "gemini" | "vertex").
  */
 
+/** Selectable image backends. The factory falls back to IMAGE_PROVIDER env. */
+export type ImageProviderName = "azure" | "diaflow" | "kingcong" | "vertex" | "gemini";
+
 export type ImageGenerationOptions = {
   size?: "1024x1024" | "1024x1792" | "1792x1024";
   quality?: "standard" | "hd";
   n?: number;
+  /**
+   * Per-call provider override. When set, this wins over the IMAGE_PROVIDER env
+   * so a single request (e.g. an operator-chosen cover/regen) can pick KingCong
+   * or Diaflow regardless of the process default.
+   */
+  provider?: ImageProviderName;
   /** Langfuse trace metadata for cost tracking */
   trace?: { caller?: string; entityType?: string; entityId?: string };
 };

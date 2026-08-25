@@ -18,8 +18,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const pageNum = parseInt(pageNumber, 10);
     if (isNaN(pageNum)) return NextResponse.json({ error: "Invalid page number" }, { status: 400 });
 
-    const body = (await req.json().catch(() => ({}))) as { changePercent?: number };
+    const body = (await req.json().catch(() => ({}))) as { changePercent?: number; provider?: string };
     const pct = Math.min(95, Math.max(5, body.changePercent || 30));
+    const provider = body.provider === "kingcong" || body.provider === "diaflow" ? body.provider : undefined;
 
     const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
     if (!row) return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const img = await editImage(resolveR2Url(pages[idx].imageUrl), buildRedesignPrompt(pct), {
+      provider,
       trace: { caller: "clone/page-regen", entityType: "cloneJob", entityId: jobId },
     });
     const base64 = img.base64 || img.dataUrl?.split(",")[1] || "";

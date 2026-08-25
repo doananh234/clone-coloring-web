@@ -8,9 +8,10 @@ import { upsertColoredSourceCover, type SourceCover } from "@vx/coloring/data/so
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageUrl, coloringStyleId, coloringVariantId, bookId, pageId, useReference = true, target = "page" } = body as {
+    const { imageUrl, coloringStyleId, coloringVariantId, bookId, pageId, useReference = true, target = "page", provider: providerRaw } = body as {
       imageUrl: string;
       coloringStyleId: string;
+      provider?: string;
       /** Optional color variant within the style — its palette/directive/reference
        *  override the style-level defaults so the exact chosen colors are used. */
       coloringVariantId?: string;
@@ -60,8 +61,10 @@ export async function POST(req: NextRequest) {
         ? [resolveR2Url(variant.thumbnailUrl)]
         : styleRefs
       : [];
+    const provider = providerRaw === "kingcong" || providerRaw === "diaflow" ? providerRaw : undefined;
     const img = await colorizeImage(resolveR2Url(imageUrl), directive, {
       referenceImageUrls,
+      provider,
       trace: { caller: "coloring-styles/colorize" },
     });
 

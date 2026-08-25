@@ -11,6 +11,8 @@ type SourceCoverPayload = {
   titleSafe: TitleSafe;
   prompt?: string;
   sourceImageUrl?: string;
+  /** Operator-chosen image backend; undefined → worker's IMAGE_PROVIDER default. */
+  provider?: "kingcong" | "diaflow";
 };
 type SourceCover = {
   id: string;
@@ -54,7 +56,7 @@ export async function processGenerationJob(generationJobId: string): Promise<voi
 }
 
 async function runSourceCover(genJobId: string, bookId: string, payload: SourceCoverPayload): Promise<void> {
-  const { interiorPageId, titleSafe, prompt } = payload;
+  const { interiorPageId, titleSafe, prompt, provider } = payload;
 
   const book = await prisma.book.findUnique({ where: { id: bookId } });
   if (!book) throw new Error("Book not found");
@@ -67,7 +69,7 @@ async function runSourceCover(genJobId: string, bookId: string, payload: SourceC
   const img = await generateCoverSourceBW(
     resolveR2Url(interior.url),
     titleSafe,
-    { trace: { caller: "worker/generation/source-cover", entityId: genJobId } },
+    { provider, trace: { caller: "worker/generation/source-cover", entityId: genJobId } },
     prompt && prompt.trim() ? prompt : undefined,
   );
 

@@ -17,11 +17,14 @@ type Page = { id?: string; url?: string };
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { bookId } = await params;
-    const { interiorPageId, titleSafe, prompt } = (await req.json().catch(() => ({}))) as {
-      interiorPageId?: string; titleSafe?: TitleSafePosition; prompt?: string;
+    const { interiorPageId, titleSafe, prompt, provider } = (await req.json().catch(() => ({}))) as {
+      interiorPageId?: string; titleSafe?: TitleSafePosition; prompt?: string; provider?: string;
     };
     if (!interiorPageId || !titleSafe)
       return NextResponse.json({ error: "interiorPageId and titleSafe are required" }, { status: 400 });
+    // Only the two operator-selectable backends; anything else falls back to the
+    // worker's IMAGE_PROVIDER default (payload provider left undefined).
+    const chosenProvider = provider === "kingcong" || provider === "diaflow" ? provider : undefined;
 
     const book = await prisma.book.findUnique({ where: { id: bookId } });
     if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
@@ -44,6 +47,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           titleSafe,
           prompt: typeof prompt === "string" && prompt.trim() ? prompt.trim() : undefined,
           sourceImageUrl: interior.url,
+          provider: chosenProvider,
         },
       },
     });

@@ -28,11 +28,11 @@ export function SourceCoverSection({
   // Queue one background job per selected interior page, then close the dialog.
   // Each sc.gen() only enqueues (returns fast) — progress shows in the header
   // queue drawer, so the operator can keep working.
-  const doGen = async (interiorPageIds: string[], promptOverride: string) => {
+  const doGen = async (interiorPageIds: string[], promptOverride: string, provider: "kingcong" | "diaflow") => {
     if (!pickFor || interiorPageIds.length === 0) return;
     setBusy(true); setErr(null);
     try {
-      for (const id of interiorPageIds) await sc.gen(id, pickFor, promptOverride);
+      for (const id of interiorPageIds) await sc.gen(id, pickFor, promptOverride, provider);
       setPickFor(null);
     }
     catch (e) { setErr(e instanceof Error ? e.message : "Tạo source cover thất bại"); }
