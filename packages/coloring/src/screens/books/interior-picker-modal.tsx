@@ -30,6 +30,11 @@ export function InteriorPickerModal({
 }) {
   const [provider, setProvider] = useProviderPreference();
   const [prompt, setPrompt] = useState("");
+  // The server's built-in default for this position. Used to detect whether the
+  // operator actually customized the prompt — if not, we send an empty override
+  // so the worker builds its own provider-aware default (compact for KingCong,
+  // full for Diaflow) instead of the full prompt being sent verbatim.
+  const [defaultPrompt, setDefaultPrompt] = useState("");
   const [showPrompt, setShowPrompt] = useState(false);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
   // Transient status line (Copy/Xóa/Apply feedback). Cleared after a moment.
@@ -37,17 +42,25 @@ export function InteriorPickerModal({
   // Selected interior page ids (order preserved), capped at MAX_SELECT.
   const [selected, setSelected] = useState<string[]>([]);
 
-  // On open (or position change): use the saved per-position edit if present,
-  // otherwise prefill from the server's built-in default for that position.
+  // On open (or position change): always fetch the server default (to compare
+  // against on submit), then show the saved per-position edit if present,
+  // otherwise the default.
   useEffect(() => {
     if (!open || !titleSafe) return;
     const saved = typeof window !== "undefined" ? window.localStorage.getItem(promptKey(titleSafe)) : null;
-    if (saved != null) { setPrompt(saved); return; }
     let cancelled = false;
     setLoadingPrompt(true);
     fetchDefaultPrompt(titleSafe)
-      .then((d) => { if (!cancelled) setPrompt(d); })
-      .catch(() => { if (!cancelled) setPrompt(""); })
+      .then((d) => {
+        if (cancelled) return;
+        setDefaultPrompt(d);
+        setPrompt(saved != null ? saved : d);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDefaultPrompt("");
+        setPrompt(saved != null ? saved : "");
+      })
       .finally(() => { if (!cancelled) setLoadingPrompt(false); });
     return () => { cancelled = true; };
   }, [open, titleSafe, fetchDefaultPrompt]);
@@ -72,7 +85,12 @@ export function InteriorPickerModal({
 
   const confirmGen = () => {
     if (busy || selected.length === 0) return;
-    onConfirm(selected, prompt, provider);
+    // Only send a prompt override when the operator actually customized it.
+    // Unedited → send "" so the worker builds its provider-aware default: the
+    // compact prompt for KingCong (avoids the 4000-char cap) or the full prompt
+    // for Diaflow. Sending the full prefill verbatim would defeat both.
+    const edited = prompt.trim() !== "" && prompt.trim() !== defaultPrompt.trim();
+    onConfirm(selected, edited ? prompt : "", provider);
   };
 
   // Copy Prompt — put the current text on the clipboard.

@@ -238,3 +238,31 @@ describe("kingcongImageProvider", () => {
     await expect(kingcongImageProvider.generateImage("x")).rejects.toThrow(/expired|rejected|Non-JSON/i);
   });
 });
+
+describe("capPrompt", () => {
+  // KingCong rejects prompts over 4000 chars, counting each newline as CRLF
+  // (\n = 2). The cap must fit the CRLF-adjusted length, not raw string length —
+  // a line-heavy prompt can blow past 4000 while `.length` still reads under it
+  // (the real prod bug: 3960 chars + 132 newlines = 4092).
+  const KINGCONG_LIMIT = 4000;
+  const crlfLen = (s: string): number => s.length + (s.match(/\n/g)?.length ?? 0);
+
+  beforeEach(() => vi.spyOn(console, "warn").mockImplementation(() => undefined));
+
+  it("caps a line-heavy prompt so its CRLF-adjusted length stays within KingCong's limit", async () => {
+    // ~4000 short lines: raw length ~8000, but CRLF length ~12000. The old cap
+    // (raw length ≤ 4000) leaves CRLF length well over the limit.
+    const prompt = Array.from({ length: 4000 }, (_, i) => `line ${i}`).join("\n");
+    const { capPrompt } = await import("./image-provider-kingcong");
+
+    const capped = capPrompt(prompt);
+
+    expect(crlfLen(capped)).toBeLessThanOrEqual(KINGCONG_LIMIT);
+  });
+
+  it("returns a short prompt unchanged (no cap needed)", async () => {
+    const prompt = "a cat coloring page\nwith a hat";
+    const { capPrompt } = await import("./image-provider-kingcong");
+    expect(capPrompt(prompt)).toBe(prompt);
+  });
+});

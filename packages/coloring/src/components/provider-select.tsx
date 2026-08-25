@@ -6,7 +6,10 @@ import { useCallback, useEffect, useState } from "react";
 export type ImageProvider = "kingcong" | "diaflow";
 
 const STORAGE_KEY = "vx.imageProvider";
-const DEFAULT_PROVIDER: ImageProvider = "kingcong";
+// Default to Diaflow: it takes the full (non-truncated) prompt and produces
+// higher-quality covers. KingCong caps prompts at 4000 chars, which degrades
+// cover quality — operators can still pick it explicitly when they want it.
+const DEFAULT_PROVIDER: ImageProvider = "diaflow";
 
 function readStored(): ImageProvider {
   if (typeof window === "undefined") return DEFAULT_PROVIDER;
