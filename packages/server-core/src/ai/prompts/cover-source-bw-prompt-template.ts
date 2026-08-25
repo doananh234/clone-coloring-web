@@ -1567,3 +1567,31 @@ export function buildCoverSourceBWPrompt(titleSafe: TitleSafePosition): string {
       return BOTTOM_COVER_PROMPT;
   }
 }
+
+/** Per-position title-area rule for the compact variant. */
+const COMPACT_TITLE_ZONE: Record<TitleSafePosition, string> = {
+  top: "Keep a clean, calm TOP-CENTER band as the title/subtitle area and place the artwork in the lower-to-middle area with generous, usable top breathing room.",
+  middle: "Reserve a calm, usable title area around the MIDDLE of the composition — visually clean but a natural part of the artwork, not an artificially empty band.",
+  bottom: "Reserve a calm, usable title area in the LOWER portion; let decoration thin out gradually toward the bottom rather than stopping abruptly.",
+};
+
+/**
+ * Compact variant of buildCoverSourceBWPrompt for providers with a hard prompt
+ * limit (KingCong caps at 4000 chars; the full prompts run 17k–28k). Distills
+ * the same contract — recomposition-not-redesign, source + structural lock,
+ * per-position title area, sparse decoration, borderless, and the shared B&W /
+ * no-text guard — into ~2.3k chars. Keep in sync with the full prompt's intent.
+ */
+export function buildCoverSourceBWPromptCompact(titleSafe: TitleSafePosition): string {
+  return `Recompose the FIRST PROVIDED IMAGE into ONE premium 1:1 square coloring-book cover. This is a RECOMPOSITION, not a redesign.
+
+PRESERVE THE SOURCE (highest priority): keep all characters, objects, poses, proportions, relative scale, cropping, perspective and composition faithful to the original — it must stay immediately recognizable as the same illustration. Do NOT invent, redesign, rearrange, center, shrink or enlarge the main artwork. Keep it large and visually dominant; let elements approach or extend past the edges as the original does.
+
+PRESERVE STRUCTURAL CONNECTIONS: keep every rope, string, cable, handle, strap, stem, support and connecting line attached to the correct objects. Never turn a structural line into decoration, and never let clouds/flowers/stars/hearts interrupt or attach to structural elements.
+
+TITLE AREA: ${COMPACT_TITLE_ZONE[titleSafe]} Preserve the original composition first — do not push characters away just to make room.
+
+DECORATION: add only a small amount of cute, on-theme decoration (clouds, stars, flowers, hearts, dots, sparkles) in the existing negative space. Keep it sparse, irregular, non-grid, secondary to the artwork, with generous calm negative space. Decoration must always yield to the source.
+
+BORDERLESS: fill the full square canvas edge-to-edge; if the source has an outer border or frame, remove it and add none.${BW_GUARD}`;
+}

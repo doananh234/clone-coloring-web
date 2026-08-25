@@ -29,6 +29,15 @@ import {
 // Re-export types so callers don't need to import from types file
 export type { ImageGenerationOptions, GeneratedImage, ColorizeOptions };
 
+/**
+ * True when the active image provider caps prompt length (KingCong: 4000 chars).
+ * The long cover/colorize prompts (6k–28k) must use their compact variants for
+ * this provider — tail-truncation would drop most of the instructions.
+ */
+function usesCompactPrompts(): boolean {
+  return (process.env.IMAGE_PROVIDER || "azure").toLowerCase() === "kingcong";
+}
+
 function getProvider(): ImageProviderInterface {
   const provider = process.env.IMAGE_PROVIDER || "azure";
 
@@ -224,8 +233,12 @@ export async function colorizeImage(
   colorizationDirective: string,
   options: ColorizeOptions = {},
 ): Promise<GeneratedImage> {
-  const { buildColorizationPrompt } = await import("./prompts/colorization-prompt-template");
-  const colorizePrompt = buildColorizationPrompt(colorizationDirective);
+  const { buildColorizationPrompt, buildColorizationPromptCompact } = await import(
+    "./prompts/colorization-prompt-template"
+  );
+  const colorizePrompt = usesCompactPrompts()
+    ? buildColorizationPromptCompact(colorizationDirective)
+    : buildColorizationPrompt(colorizationDirective);
   return editImage(imageUrl, colorizePrompt, options);
 }
 
@@ -242,8 +255,12 @@ export async function generateCoverSource(
   colorizationDirective: string,
   options: ColorizeOptions = {},
 ): Promise<GeneratedImage> {
-  const { buildCoverSourcePrompt } = await import("./prompts/cover-source-prompt-template");
-  const coverSourcePrompt = buildCoverSourcePrompt(colorizationDirective);
+  const { buildCoverSourcePrompt, buildCoverSourcePromptCompact } = await import(
+    "./prompts/cover-source-prompt-template"
+  );
+  const coverSourcePrompt = usesCompactPrompts()
+    ? buildCoverSourcePromptCompact(colorizationDirective)
+    : buildCoverSourcePrompt(colorizationDirective);
   // Cover generation runs on Diaflow's GPT-image flow.
   return editImage(imageUrl, coverSourcePrompt, { ...options, flow: "gpt_image" });
 }
@@ -260,11 +277,15 @@ export async function generateCoverSourceBW(
   options: ColorizeOptions = {},
   promptOverride?: string,
 ): Promise<GeneratedImage> {
-  const { buildCoverSourceBWPrompt } = await import("./prompts/cover-source-bw-prompt-template");
+  const { buildCoverSourceBWPrompt, buildCoverSourceBWPromptCompact } = await import(
+    "./prompts/cover-source-bw-prompt-template"
+  );
   // Operators can pass a custom prompt (the staging prompt-tuning tool in the
   // Source Cover dialog) to iterate without a redeploy; empty/whitespace falls
-  // back to the built-in default for the position.
-  const prompt = promptOverride?.trim() ? promptOverride : buildCoverSourceBWPrompt(titleSafe);
+  // back to the built-in default for the position. KingCong (4000-char cap) uses
+  // the compact variant so the full 17k–28k prompt isn't tail-truncated.
+  const buildDefault = usesCompactPrompts() ? buildCoverSourceBWPromptCompact : buildCoverSourceBWPrompt;
+  const prompt = promptOverride?.trim() ? promptOverride : buildDefault(titleSafe);
   // Cover generation runs on Diaflow's GPT-image flow.
   return editImage(imageUrl, prompt, { ...options, flow: "gpt_image" });
 }

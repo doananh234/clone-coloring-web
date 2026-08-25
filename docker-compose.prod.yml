@@ -19,6 +19,15 @@ services:
   worker:
     env_file:
       - apps/worker/.env.prod
+    volumes:
+      # KingCong session cookie persisted OUTSIDE the image + rsync tree so
+      # runtime PHPSESSID refreshes survive restart/redeploy, and the cookie can
+      # be hot-swapped (edit the host file + `docker restart vx-worker`) with no
+      # rebuild. Pairs with KINGCONG_SESSION_FILE=/data/kingcong-session.json.
+      # NOTE: mount the DIRECTORY, not the single file — Docker single-file bind
+      # mounts decouple (writes stop reflecting to the host). The cookie lives at
+      # /opt/vx-admin-data/kingcong-session.json — see docs/kingcong-image-provider.md.
+      - /opt/vx-admin-data:/data
 
   mobile-api:
     env_file:

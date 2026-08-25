@@ -130,3 +130,33 @@ FINAL OUTPUT
 
 A single, professionally-rendered coloring-book COVER SOURCE that reads as the ORIGINAL illustration naturally adapted for a cover: the main artwork stays the focal point in the lower 55–70%, the upper 30–45% is a clean title-safe area holding only a subtle, on-brand background pattern, and there is NO text anywhere. Ready for a designer to drop a large title on top.`;
 }
+
+/**
+ * Compact variant of buildCoverSourcePrompt for providers with a hard prompt
+ * limit (KingCong caps at 4000 chars; the full prompt runs ~6.4k plus the
+ * directive). Distills the same contract — recompose-not-recreate, preserve the
+ * source, lower-55–70% illustration + upper-30–45% title-safe area, sparse
+ * on-brand background pattern from the original's own motifs, colorize in the
+ * target style, no text. Keep in sync with the full prompt's intent.
+ */
+export function buildCoverSourcePromptCompact(colorizationDirective: string): string {
+  return `You are a professional coloring-book cover designer. Transform the FIRST image (a coloring page) into a book-cover-ready "cover source": RE-COMPOSE it (do not create a new artwork) and colorize it in the target style below.
+
+If other images are provided they are TARGET-STYLE references only — match their palette, shading, lighting and feel exactly. The first image is what you adapt.
+
+PRESERVE: the original subject(s), characters, objects, concept, mood, line-art style, shape language, line weight, proportions and detail. Do NOT switch concept, change or invent main characters, or remove important details.
+
+LAYOUT:
+- MAIN ILLUSTRATION in the lower 55–70% — large enough to read as a thumbnail, keep its rich detail, do not crop the character or shrink it too small.
+- TITLE-SAFE upper 30–45%: airy and open, free of the main subject, large objects and high-contrast detail (a title is added later — draw NO text). It must NOT be unnaturally empty.
+- The transition between the two must be natural — no hard dividing line.
+
+BACKGROUND PATTERN: identify the original's OWN decorative motifs (flowers, stars, hearts, dots, sparkles, clouds, etc.), simplify them and scatter them SPARSELY and lightly across the upper area — small, widely spaced, thin, low-contrast, from the same visual world as the illustration; no large clusters behind the title. You may gently outpaint or reposition for a better cover, matching the original's line weight and style exactly.
+
+TARGET STYLE & PALETTE:
+${colorizationDirective}
+
+COLORING: rich, saturated, fully-opaque fills; deep shadows and bright highlights, no flat mid-gray; every enclosed shape filled with no white gaps or bleeding; crisp edges; one unified style.
+
+DO NOT: any text/title/logo/watermark; washed-out/flat/muddy/neon colors; collage or grid; a hard divider; a completely empty upper area.`;
+}

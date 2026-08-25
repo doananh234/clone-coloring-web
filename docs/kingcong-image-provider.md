@@ -81,6 +81,37 @@ Files:
 6. **Langfuse**: provider đã log `kingcong/generateImage|editImage`. KingCong không trả token usage
    nên `usage` trống — nếu muốn theo dõi chi phí, đọc `cost`/`new_balance` từ response và map vào trace.
 
+## Giới hạn prompt 4000 ký tự — prompt rút gọn riêng cho KingCong
+- KingCong từ chối prompt > 4000 ký tự (`Mô tả tối đa 4000 ký tự`). Các prompt dùng chung dài hơn
+  nhiều: cover-source-bw 17k–28k, cover-source ~6.4k, colorization ~6.1k (Diaflow/Vertex nhận full).
+- **Không cắt đuôi** (mất rule) — thay vào đó có **bản compact riêng** distill đúng ý cốt lõi trong
+  ~1.6k–2.2k ký tự:
+  - `buildCoverSourceBWPromptCompact(titleSafe)`
+  - `buildCoverSourcePromptCompact(directive)`
+  - `buildColorizationPromptCompact(directive)`
+- Facade `image-provider.ts` chọn bản compact khi `IMAGE_PROVIDER=kingcong` (helper
+  `usesCompactPrompts()`); provider khác vẫn dùng prompt đầy đủ.
+- `createTask` trong provider vẫn **cap 4000** làm lưới an toàn cuối (vd promptOverride do operator
+  nhập tay quá dài) — có `console.warn` khi phải cắt.
+- Prompt ngắn (redesign 1.6k, coloring-page 1.4k, character/location extraction <1k) không cần compact.
+
+## Prod ops — cookie qua host volume (đang chạy)
+- Worker prod: `IMAGE_PROVIDER=kingcong`, `LLM_PROVIDER=diaflow`, `KINGCONG_POLL_TIMEOUT=600`
+  (EC2 sinh ảnh ~200–360s, mặc định 180s bị timeout), `KINGCONG_POLL_INTERVAL=5`.
+- **KHÔNG** để `KINGCONG_COOKIE` trong `.env.prod` — docker-compose env_file không parse được
+  cookie (có `g_state={...}` với `"` `;` `{}`) → `docker compose up` fail.
+- Cookie nằm trên **host volume**: `docker-compose.prod.yml` bind-mount **thư mục**
+  `/opt/vx-admin-data:/data` (KHÔNG mount 1 file — single-file bind mount bị decouple, ghi không
+  phản chiếu về host), `.env.prod` đặt `KINGCONG_SESSION_FILE=/data/kingcong-session.json`.
+  → PHPSESSID refresh lúc runtime **sống qua restart/redeploy**; thư mục nằm ngoài cây rsync nên
+  deploy không ghi đè.
+- **Đổi cookie nóng (không rebuild)** khi remember token chết: cập nhật
+  `apps/worker/.kingcong-session.json` (cookie mới từ Chrome) rồi chạy
+  `apps/worker/scripts/kingcong-reseed-prod.sh` (scp vào volume + `docker restart vx-worker`).
+- **Playwright fallback KHÔNG cài** trên worker: cần profile Google đăng nhập sẵn (không tạo được
+  trên EC2 headless), Alpine không chạy chromium bundled, và Google có thể chặn profile copy trên
+  IP EC2. Dùng reseed thủ công ở trên thay thế.
+
 ## Lệnh kiểm thử
 ```bash
 cd packages/server-core

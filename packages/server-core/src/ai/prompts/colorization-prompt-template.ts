@@ -190,3 +190,27 @@ MOST IMPORTANT:
 - ZERO style inconsistency
 - ZERO lighting inconsistency`;
 }
+
+/**
+ * Compact variant of buildColorizationPrompt for providers with a hard prompt
+ * limit (KingCong caps at 4000 chars; the full prompt runs ~6.1k plus the
+ * directive). Distills the same contract — strict line-art preservation, clean
+ * gap-free fills, full-bleed (no white border/halo), match the reference
+ * saturation/contrast, one unified style. Keep in sync with the full prompt.
+ */
+export function buildColorizationPromptCompact(colorizationDirective: string): string {
+  return `You are a professional coloring-book colorist. Colorize the FIRST image (a B&W coloring page) while STRICTLY preserving its line art, composition, placement, proportions and readability — never redraw, move, distort, add or remove anything.
+
+If other images are provided they are TARGET-STYLE references only: match their palette, shading, lighting and contrast exactly (sample the real colors, do not approximate). The first image is what you colorize.
+
+FILL: color every enclosed shape fully to the outline edge — no white gaps near lines, no bleeding outside lines, no unfinished regions.
+
+FULL-BLEED: the colored illustration must cover 100% of the canvas. If the input has a printed border, frame or margin, do NOT erase it to white — instead scale the artwork up so its content reaches every edge AND extend its own background (matching palette and lighting) into any remaining space. No white/cream/gray strip, ring or halo on any side. One single view — not a collage or grid.
+
+TARGET STYLE & PALETTE:
+${colorizationDirective}
+
+QUALITY: rich, fully-opaque, saturated fills like a printed coloring-book cover (not a faded wash unless the reference is one); deep shadows and bright highlights, no flat mid-gray; crisp anti-aliased edges; one unified lighting and shading style everywhere.
+
+DO NOT: washed-out/low-contrast/flat/muddy/neon colors, gray shadows, blur, inconsistent shading, unfinished regions, white gaps inside shapes, distorted anatomy, decorative page border or frame, colored margin or white halo at any edge, an illustration floating with empty space around it, collage/grid, or ANY text or watermark.`;
+}

@@ -320,6 +320,24 @@ function mapSize(size: ImageGenerationOptions["size"]): { aspect: string; resolu
   return { aspect: "1:1", resolution };
 }
 
+// KingCong rejects prompts over 4000 chars ("Mô tả tối đa 4000 ký tự"). Some
+// shared prompts (cover-source, style) run 17k–28k chars — far longer than
+// Diaflow/Vertex need. These prompts front-load the core directive, so keep the
+// head and cut at a clean paragraph/line boundary under the limit.
+const KINGCONG_MAX_PROMPT_CHARS = 4000;
+
+function capPrompt(prompt: string): string {
+  if (prompt.length <= KINGCONG_MAX_PROMPT_CHARS) return prompt;
+  const head = prompt.slice(0, KINGCONG_MAX_PROMPT_CHARS);
+  const lastBreak = Math.max(head.lastIndexOf("\n\n"), head.lastIndexOf("\n"));
+  const cut = lastBreak > KINGCONG_MAX_PROMPT_CHARS * 0.6 ? head.slice(0, lastBreak) : head;
+  const capped = cut.trimEnd();
+  console.warn(
+    `[KingCong] prompt ${prompt.length} chars > ${KINGCONG_MAX_PROMPT_CHARS} — cắt còn ${capped.length} (giữ phần đầu).`,
+  );
+  return capped;
+}
+
 async function createTask(
   config: KingCongConfig,
   prompt: string,
@@ -331,7 +349,7 @@ async function createTask(
     const form = new FormData();
     form.set("action", "create_task");
     form.set("model_id", config.model);
-    form.set("prompt", prompt);
+    form.set("prompt", capPrompt(prompt));
     form.set("generations_count", "1");
     form.set("aspect_ratio", aspect);
     form.set("resolution", resolution);
