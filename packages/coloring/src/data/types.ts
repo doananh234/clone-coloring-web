@@ -38,7 +38,10 @@ export interface CloneJobPage {
   status: string;
   /** D2 classification fields (set during gate review). */
   pageType?: "cover" | "interiorIntro" | "interior";
+  /** Legacy drop flag. Superseded by excludedFromClone; still read for old rows. */
   excluded?: boolean;
+  /** Operator drop mark from the pre-spend gate: page is not sent for redesign. */
+  excludedFromClone?: boolean;
   /** D3 lineage fields (set by stepFillInterior / fill route). */
   origin?: "original" | "additional";
   parentPageNumber?: number;

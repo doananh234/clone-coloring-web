@@ -7,7 +7,28 @@ import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
 const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (bật NEXT_PUBLIC_COLORING_WRITE=1, upstream staging).";
 
 export type PageType = "cover" | "interiorIntro" | "interior";
-export type ClassifyEdit = { pageNumber: number; pageType?: PageType; excluded?: boolean };
+export type ClassifyEdit = {
+  pageNumber: number;
+  pageType?: PageType;
+  excludedFromClone?: boolean;
+};
+
+/**
+ * Display-only mirror of `LANE1_MIN_INTERIOR` in @vx/clone-core. Duplicated
+ * because @vx/coloring does not depend on @vx/clone-core; the worker's copy
+ * remains authoritative for the actual routing decision.
+ */
+export const GATE_MIN_INTERIOR = 40;
+
+/** Interior pages that will actually be sent for cloning. Mirrors planPageSelection. */
+export function countInteriorPages(edits: ClassifyEdit[]): number {
+  return edits.filter(
+    (e) =>
+      !e.excludedFromClone &&
+      e.pageType !== "cover" &&
+      e.pageType !== "interiorIntro",
+  ).length;
+}
 
 /** Pure payload builder — unit-tested without a live client. */
 export function buildClassifyPayload(edits: ClassifyEdit[], confirm: boolean) {

@@ -258,8 +258,14 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
 
       <Tabs<"classify" | "pipeline" | "pages" | "info">
         items={[
-          ...(job.status === "awaiting-classify"
-            ? [{ key: "classify" as const, label: "Phân loại trang · chờ duyệt" }]
+          ...(job.status === "awaiting-classify" || job.status === "awaiting-fill"
+            ? [{
+                key: "classify" as const,
+                label:
+                  job.status === "awaiting-fill"
+                    ? "Phân loại trang · thiếu trang ruột"
+                    : "Phân loại trang · chờ duyệt",
+              }]
             : []),
           { key: "pages", label: `So sánh & chọn trang · ${job.pages.length}` },
           { key: "pipeline", label: "Pipeline & xác nhận" },
