@@ -115,6 +115,8 @@ export type CloneJob = {
     | "entities_ready"
     | "reproduced"
     | "awaiting-classify"
+    /** Lane 2 park: interior < 40, no AI spend made. Written by the worker. */
+    | "awaiting-fill"
     | "error"
     | "pending"
     | "queued"
