@@ -7,6 +7,7 @@ import {
   resolveR2Url,
 } from "@vx/server-core/r2";
 import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
+import { copyPdfPages } from "@vx/server-core/pdf-trim";
 import { visionAnalyzeJSON, cloneOneShot, recheckOneShotSession } from "@vx/server-core/ai/llm-provider";
 import {
   CLONE_EXTRACTION_PROMPT,
@@ -105,6 +106,7 @@ async function generatePage(args: {
 
 export const downloadDeps = { fetchPdf, uploadToR2 };
 export const renderDeps = { readPdfFromR2, renderPdfToImages, uploadToR2 };
+export const trimPdfDeps = { readPdfFromR2, copyPdfPages, uploadToR2 };
 export const analyzeDeps = { analyzePage, resolveR2Url };
 export const extractEntitiesDeps = {
   generateCharacterReference: (prompt: string, opts: { sourceImageUrl?: string; characterName: string; characterInfo?: string }) =>

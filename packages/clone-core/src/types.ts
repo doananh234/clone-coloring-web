@@ -1,6 +1,7 @@
 export type CloneStep =
   | "download"
   | "render"
+  | "trim-pdf"
   | "analyze"
   | "extract-entities"
   | "reproduce"
@@ -11,6 +12,7 @@ export type CloneStep =
 export const STEP_ORDER: readonly CloneStep[] = [
   "download",
   "render",
+  "trim-pdf",
   "analyze",
   "extract-entities",
   "reproduce",

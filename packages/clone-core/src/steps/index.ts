@@ -43,3 +43,4 @@ export {
   type SelectablePage,
   type PageSelection,
 } from "./plan-page-selection";
+export { stepTrimPdf, type TrimPdfDeps } from "./trim-pdf";
