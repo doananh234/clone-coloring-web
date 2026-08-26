@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 import { normalizeRawData } from "./book-page-meta";
+import { isDroppedFromClone } from "./plan-page-selection";
 
 /**
  * stepCreateBook — writes the final Book row from a finished CloneJob.
@@ -105,7 +106,7 @@ export async function stepCreateBook(
   const usablePages = pages.filter(
     (p) =>
       p.status !== "error" &&
-      !(p.excludedFromClone ?? p.excluded ?? false) &&
+      !isDroppedFromClone(p) &&
       (p.redesignedUrl || p.imageUrl),
   );
 

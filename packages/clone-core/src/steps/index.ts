@@ -39,7 +39,9 @@ export {
 } from "./remove-coloring-style-variant";
 export {
   planPageSelection,
+  isDroppedFromClone,
   LANE1_MIN_INTERIOR,
+  type DroppablePage,
   type SelectablePage,
   type PageSelection,
 } from "./plan-page-selection";
