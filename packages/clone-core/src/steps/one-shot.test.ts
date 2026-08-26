@@ -329,4 +329,41 @@ describe("stepOneShot with a trimmed PDF", () => {
     expect(byNumber[1].pageType).toBe("cover");
     expect(byNumber[3].pageType).toBe("interior");
   });
+
+  it("short-circuits without calling runOneShot when all kept pages are already done, even though the dropped page never got a redesign", async () => {
+    const { db } = fakeDb({
+      id: "job-1",
+      sourcePdfUrl: "/source.pdf",
+      pages: [
+        {
+          pageNumber: 1,
+          imageUrl: "/p1.png",
+          status: "reproduced",
+          pageType: "cover",
+          redesignedUrl: "https://r2/r1.png",
+        },
+        // Dropped page: no redesignedUrl, excluded from clone. Under the old,
+        // unscoped allDone check this would fail `.every()` and force a full
+        // (expensive) re-run every time. It must stay this way for this test
+        // to be a real regression guard.
+        { pageNumber: 2, imageUrl: "/p2.png", status: "pending", pageType: "interior", excludedFromClone: true },
+        {
+          pageNumber: 3,
+          imageUrl: "/p3.png",
+          status: "reproduced",
+          pageType: "interior",
+          redesignedUrl: "https://r2/r3.png",
+        },
+      ],
+      data: { trimmedPdfUrl: "/source-trimmed.pdf", keptPageNumbers: [1, 3] },
+      bookData: {},
+    });
+    const ctx = fakeCtx("job-1");
+    const deps = twoPageDeps();
+
+    await stepOneShot(ctx, db, deps);
+
+    expect(deps.runOneShot).not.toHaveBeenCalled();
+    expect(ctx.markStepComplete).toHaveBeenCalledWith("reproduce");
+  });
 });
