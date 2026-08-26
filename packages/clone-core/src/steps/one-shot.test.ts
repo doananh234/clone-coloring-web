@@ -367,3 +367,87 @@ describe("stepOneShot with a trimmed PDF", () => {
     expect(ctx.markStepComplete).toHaveBeenCalledWith("reproduce");
   });
 });
+
+describe("stepOneShot — index map safety", () => {
+  const jobPages = [
+    { pageNumber: 1, imageUrl: "/p1.png", status: "pending", pageType: "cover" },
+    { pageNumber: 2, imageUrl: "/p2.png", status: "pending", pageType: "interior", excludedFromClone: true },
+    { pageNumber: 3, imageUrl: "/p3.png", status: "pending", pageType: "interior" },
+  ];
+
+  // Regression: `keptPageNumbers?.[i] ?? i + 1` silently fell back to identity
+  // for indices past the end of the map, so a provider returning MORE pages
+  // than were sent collided with a real page number and overwrote a correct
+  // page's redesignedUrl/rawData.
+  it("drops provider results past the end of keptPageNumbers instead of guessing", async () => {
+    const { db, updates } = fakeDb({
+      id: "job-1",
+      sourcePdfUrl: "/source.pdf",
+      pages: jobPages,
+      data: { trimmedPdfUrl: "/source-trimmed.pdf", keptPageNumbers: [1, 3] },
+      bookData: {},
+    });
+    const deps = {
+      ...fakeDeps(),
+      runOneShot: vi.fn().mockResolvedValue({
+        sessionId: "sess-1",
+        pages: [
+          { redesignedImageUrl: "https://cdn/r-a.png", analyzeData: { reproductionPrompt: "a" } },
+          { redesignedImageUrl: "https://cdn/r-b.png", analyzeData: { reproductionPrompt: "b" } },
+          // Third result: only two pages were sent. There is no original page
+          // this belongs to.
+          { redesignedImageUrl: "https://cdn/r-c.png", analyzeData: { reproductionPrompt: "c" } },
+        ],
+      }),
+      uploadToR2: vi
+        .fn()
+        .mockImplementation(async ({ key }: { key: string }) => ({ url: `https://r2/${key}` })),
+    };
+
+    await stepOneShot(fakeCtx("job-1"), db, deps);
+
+    const written = updates.find((u) => Array.isArray((u as { pages?: unknown }).pages)) as {
+      pages: Array<Record<string, unknown>>;
+    };
+    expect(written.pages).toHaveLength(3);
+    const byNumber = Object.fromEntries(written.pages.map((p) => [p.pageNumber, p]));
+    // Page 3 keeps ITS result (index 1 -> "b"), not the orphan third result.
+    expect((byNumber[3].rawData as { reproductionPrompt: string }).reproductionPrompt).toBe("b");
+    expect(byNumber[3].redesignedUrl).toBe(
+      "https://r2/assets/clone-jobs/job-1/redesigned/page-003.png",
+    );
+    // Only the two mapped pages were uploaded — the orphan never hit R2.
+    expect(deps.uploadToR2).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the legacy identity fallback when keptPageNumbers is absent", async () => {
+    const { db, updates } = fakeDb({
+      id: "job-legacy",
+      sourcePdfUrl: "/source.pdf",
+      pages: [
+        { pageNumber: 1, imageUrl: "/p1.png", status: "pending" },
+        { pageNumber: 2, imageUrl: "/p2.png", status: "pending" },
+      ],
+      data: null,
+      bookData: {},
+    });
+    const deps = {
+      ...fakeDeps(),
+      runOneShot: vi.fn().mockResolvedValue({
+        sessionId: "sess-1",
+        pages: [
+          { redesignedImageUrl: "https://cdn/r-a.png", analyzeData: { reproductionPrompt: "a" } },
+          { redesignedImageUrl: "https://cdn/r-b.png", analyzeData: { reproductionPrompt: "b" } },
+        ],
+      }),
+    };
+
+    await stepOneShot(fakeCtx("job-legacy"), db, deps);
+
+    const written = updates.find((u) => Array.isArray((u as { pages?: unknown }).pages)) as {
+      pages: Array<Record<string, unknown>>;
+    };
+    expect(written.pages.map((p) => p.pageNumber)).toEqual([1, 2]);
+    expect(written.pages.every((p) => p.redesignedUrl)).toBe(true);
+  });
+});

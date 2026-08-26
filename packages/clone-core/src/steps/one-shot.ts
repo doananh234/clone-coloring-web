@@ -84,7 +84,14 @@ export async function stepOneShot(
   const keptPageNumbers = Array.isArray(jobDataForMap.keptPageNumbers)
     ? (jobDataForMap.keptPageNumbers as number[])
     : null;
-  const originalPageNumber = (i: number): number => keptPageNumbers?.[i] ?? i + 1;
+  // When the map exists it is AUTHORITATIVE: an index past its end means the
+  // provider returned more pages than were sent, and there is no original page
+  // that result belongs to. Falling back to `i + 1` there would collide with a
+  // real page number and overwrite a correct page's redesignedUrl/rawData.
+  // `i + 1` stays the fallback only for legacy jobs that predate stepTrimPdf
+  // and therefore have no map at all.
+  const originalPageNumber = (i: number): number | null =>
+    keptPageNumbers ? (keptPageNumbers[i] ?? null) : i + 1;
   const existingByNumber = new Map(existing.map((p) => [p.pageNumber, p]));
 
   // Peek at SourceBook cache — a previous stepOneShot run mirrors the raw
@@ -174,8 +181,18 @@ export async function stepOneShot(
   const errors: Array<{ pageNumber: number; error: string }> = [];
 
   const jobPages: JobPage[] = [];
+  let unmappedResults = 0;
   for (let i = 0; i < pages.length; i++) {
     const pageNumber = originalPageNumber(i);
+    if (pageNumber === null) {
+      unmappedResults++;
+      console.warn(
+        `[stepOneShot] result #${i + 1} of ${pages.length} has no entry in ` +
+          `keptPageNumbers (length ${keptPageNumbers?.length ?? 0}) — Diaflow returned ` +
+          `more pages than were sent. Skipping it rather than guessing a page number.`,
+      );
+      continue;
+    }
     const paddedPage = String(pageNumber).padStart(3, "0");
     const existingPage = existingByNumber.get(pageNumber);
     const renderedOriginal = existingPage?.imageUrl ?? "";
@@ -274,14 +291,17 @@ export async function stepOneShot(
   // If EVERY page failed we should not commit — let withRetry surface the
   // failure and retry the whole step. A partial success is still worth
   // committing so downstream steps can proceed on the salvaged pages.
-  if (errors.length === pages.length && pages.length > 0) {
+  // Count against the pages we actually ATTEMPTED — unmapped results were
+  // skipped, not failed, and must not mask an all-failed run.
+  const attempted = pages.length - unmappedResults;
+  if (errors.length === attempted && attempted > 0) {
     throw new Error(
-      `[stepOneShot] all ${pages.length} pages failed. First error: ${errors[0].error}`,
+      `[stepOneShot] all ${attempted} pages failed. First error: ${errors[0].error}`,
     );
   }
   if (errors.length > 0) {
     console.warn(
-      `[stepOneShot] committing with ${errors.length}/${pages.length} failed page(s): ` +
+      `[stepOneShot] committing with ${errors.length}/${attempted} failed page(s): ` +
         errors.map((e) => `page ${e.pageNumber}`).join(", "),
     );
   }
