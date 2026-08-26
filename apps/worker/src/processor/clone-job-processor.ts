@@ -10,6 +10,9 @@ import {
   stepOneShot,
   stepGenerateCover,
   stepFillInterior,
+  stepTrimPdf,
+  planPageSelection,
+  type SelectablePage,
 } from "@vx/clone-core";
 import { db } from "../db";
 import { notifySuccess, notifyFailure } from "../notify/telegram";
@@ -23,11 +26,32 @@ import {
   oneShotDeps,
   generateCoverDeps,
   fillInteriorDeps,
+  trimPdfDeps,
 } from "./step-deps";
 
 // silence unused-import warnings for the manually-triggered extract step.
 void stepExtractEntities;
 void extractEntitiesDeps;
+
+export type GateOutcome =
+  | { outcome: "await-classify" }
+  | { outcome: "await-fill"; lane: 2; interiorCount: number }
+  | { outcome: "proceed"; lane: 1; interiorCount: number };
+
+/**
+ * Pure gate decision. Kept separate from processCloneJob so the routing rule is
+ * unit-testable without a database.
+ */
+export function decideGateOutcome(
+  pages: SelectablePage[],
+  classifyConfirmed: boolean,
+): GateOutcome {
+  if (!classifyConfirmed) return { outcome: "await-classify" };
+  const { interiorCount, lane } = planPageSelection(pages);
+  return lane === 1
+    ? { outcome: "proceed", lane: 1, interiorCount }
+    : { outcome: "await-fill", lane: 2, interiorCount };
+}
 
 export async function processCloneJob(jobId: string): Promise<void> {
   // A job can be stashed between enqueue and pickup (stash removes the BullMQ
@@ -80,29 +104,53 @@ export async function processCloneJob(jobId: string): Promise<void> {
       //   2. Diaflow one-shot handles the redesign + analyze JSON. stepOneShot
       //      merges its output into the pages that stepRender already seeded,
       //      preserving `imageUrl` and adding `redesignedUrl` + `rawData`.
-      if (!ctx.isDone("render"))    await withRetry("render",    () => stepRender(ctx, db, renderDeps),    ctx);
-      if (!ctx.isDone("reproduce")) await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx);
-    }
+      if (!ctx.isDone("render")) await withRetry("render", () => stepRender(ctx, db, renderDeps), ctx);
 
-    // D2 gate — pause for the operator's classification review before building
-    // the Book. The default one-shot pipeline has already reproduced the pages
-    // by this point (spec §4.4), so the gate lands here: after reproduce,
-    // before create-book. Resumed by POST /api/clone/[jobId]/classify with
-    // { confirm: true }, which sets classifyConfirmed and re-enqueues the job —
-    // on the second run download/render/reproduce are all `isDone`, so the
-    // worker skips straight back to this check (now passing) and continues.
-    const gateRow = await db.cloneJob.findUnique({
-      where: { id: jobId },
-      select: { data: true },
-    });
-    const gateData = (gateRow?.data as { classifyConfirmed?: boolean } | null | undefined) ?? {};
-    if (!gateData.classifyConfirmed) {
+      // ---- Gate: everything above is free, everything below costs money. ----
+      const gateRow = await db.cloneJob.findUnique({
+        where: { id: jobId },
+        select: { data: true, pages: true },
+      });
+      const gateData = (gateRow?.data as { classifyConfirmed?: boolean } | null | undefined) ?? {};
+      const gatePages = (gateRow?.pages as SelectablePage[] | null | undefined) ?? [];
+      const decision = decideGateOutcome(gatePages, gateData.classifyConfirmed === true);
+
+      if (decision.outcome === "await-classify") {
+        await db.cloneJob.updateMany({
+          where: { id: jobId },
+          data: { status: "awaiting-classify" },
+        });
+        console.log(`[worker] clone job ${jobId} paused at classify gate (pre-spend)`);
+        return;
+      }
+
       await db.cloneJob.updateMany({
         where: { id: jobId },
-        data: { status: "awaiting-classify" },
+        data: {
+          data: {
+            ...gateData,
+            interiorCount: decision.interiorCount,
+            lane: decision.lane,
+          } as never,
+        },
       });
-      console.log(`[worker] clone job ${jobId} paused at classify gate`);
-      return;
+
+      if (decision.outcome === "await-fill") {
+        await db.cloneJob.updateMany({
+          where: { id: jobId },
+          data: { status: "awaiting-fill" },
+        });
+        console.log(
+          `[worker] clone job ${jobId} parked in lane 2 ` +
+            `(interior=${decision.interiorCount} < 40) — no AI spend`,
+        );
+        return;
+      }
+
+      if (!ctx.isDone("trim-pdf"))
+        await withRetry("trim-pdf", () => stepTrimPdf(ctx, db, trimPdfDeps), ctx);
+      if (!ctx.isDone("reproduce"))
+        await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx);
     }
 
     // D3 — reach the configured interior target by cloning source interiors.
