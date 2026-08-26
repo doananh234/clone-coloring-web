@@ -44,6 +44,13 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     currentStep: _dropStep,
     failedStep: _dropFailed,
     finishedAt: _dropFinished,
+    // A re-run wipes `pages` and re-renders them unclassified, so the operator's
+    // previous classification no longer describes anything. Leaving
+    // classifyConfirmed set would let the job walk through the pre-spend gate
+    // without review and pay for a full redesign of every page.
+    classifyConfirmed: _dropConfirmed,
+    interiorCount: _dropInteriorCount,
+    lane: _dropLane,
     ...keptData
   } = prevData;
 
