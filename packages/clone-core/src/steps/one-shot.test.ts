@@ -368,6 +368,168 @@ describe("stepOneShot with a trimmed PDF", () => {
   });
 });
 
+describe("stepOneShot — SourceBook cache alignment", () => {
+  // A cache is only reusable if it was produced under the SAME kept-page set.
+  // Otherwise `originalPageNumber(i) = keptPageNumbers[i]` attributes every
+  // result after the first divergence to the wrong original page — no error,
+  // no warning, just shifted artwork.
+  function cacheDb(
+    job: Record<string, unknown>,
+    sbData: Record<string, unknown>,
+  ) {
+    const updates: Record<string, unknown>[] = [];
+    const sourceBookUpdates: Record<string, unknown>[] = [];
+    return {
+      updates,
+      sourceBookUpdates,
+      db: {
+        cloneJob: {
+          findUnique: vi.fn().mockResolvedValue(job),
+          update: vi.fn().mockImplementation(async (arg: { data: unknown }) => {
+            updates.push({ kind: "update", ...(arg.data as object) });
+          }),
+          updateMany: vi.fn().mockImplementation(async (arg: { data: unknown }) => {
+            updates.push({ kind: "updateMany", ...(arg.data as object) });
+          }),
+        },
+        sourceBook: {
+          findUnique: vi.fn().mockResolvedValue({ id: "sb-1", data: sbData }),
+          update: vi.fn().mockImplementation(async (arg: { data: { data: unknown } }) => {
+            sourceBookUpdates.push(arg.data.data as Record<string, unknown>);
+          }),
+        },
+        brand: { findFirst: vi.fn().mockResolvedValue(null) },
+      } as never,
+    };
+  }
+
+  const fourPageCache = [
+    { redesignedImageUrl: "https://cdn/c-1.png", analyzeData: { reproductionPrompt: "1" } },
+    { redesignedImageUrl: "https://cdn/c-2.png", analyzeData: { reproductionPrompt: "2" } },
+    { redesignedImageUrl: "https://cdn/c-3.png", analyzeData: { reproductionPrompt: "3" } },
+    { redesignedImageUrl: "https://cdn/c-4.png", analyzeData: { reproductionPrompt: "4" } },
+  ];
+
+  const jobWithKept = (keptPageNumbers: number[]) => ({
+    id: "job-c",
+    sourcePdfUrl: "/source.pdf",
+    pages: [
+      { pageNumber: 1, imageUrl: "/p1.png", status: "pending", pageType: "cover" },
+      { pageNumber: 2, imageUrl: "/p2.png", status: "pending", pageType: "interior" },
+      { pageNumber: 3, imageUrl: "/p3.png", status: "pending", pageType: "interior" },
+      { pageNumber: 4, imageUrl: "/p4.png", status: "pending", pageType: "interior" },
+    ],
+    data: { trimmedPdfUrl: "/source-trimmed.pdf", keptPageNumbers },
+    bookData: {},
+  });
+
+  it("discards a cache produced under a different kept-page set", async () => {
+    // Cache covers the full 4-page book; the job has since been trimmed to [1, 3].
+    const { db } = cacheDb(jobWithKept([1, 3]), {
+      oneShotSessionId: "sess-old",
+      oneShotPages: fourPageCache,
+      oneShotKeptPageNumbers: [1, 2, 3, 4],
+    });
+    const deps = {
+      ...fakeDeps(),
+      runOneShot: vi.fn().mockResolvedValue({
+        sessionId: "sess-new",
+        pages: [
+          { redesignedImageUrl: "https://cdn/n-1.png", analyzeData: { reproductionPrompt: "n1" } },
+          { redesignedImageUrl: "https://cdn/n-3.png", analyzeData: { reproductionPrompt: "n3" } },
+        ],
+      }),
+    };
+
+    await stepOneShot(fakeCtx("job-c", "sb-1"), db, deps);
+
+    expect(deps.runOneShot).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards a legacy cache that recorded no kept-page set at all", async () => {
+    const { db } = cacheDb(jobWithKept([1, 3]), {
+      oneShotSessionId: "sess-old",
+      oneShotPages: fourPageCache,
+    });
+    const deps = {
+      ...fakeDeps(),
+      runOneShot: vi.fn().mockResolvedValue({
+        sessionId: "sess-new",
+        pages: [
+          { redesignedImageUrl: "https://cdn/n-1.png", analyzeData: {} },
+          { redesignedImageUrl: "https://cdn/n-3.png", analyzeData: {} },
+        ],
+      }),
+    };
+
+    await stepOneShot(fakeCtx("job-c", "sb-1"), db, deps);
+
+    expect(deps.runOneShot).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses a cache whose recorded kept-page set matches", async () => {
+    const { db, updates } = cacheDb(jobWithKept([1, 3]), {
+      oneShotSessionId: "sess-old",
+      oneShotPages: [fourPageCache[0], fourPageCache[2]],
+      oneShotKeptPageNumbers: [1, 3],
+    });
+    const deps = { ...fakeDeps(), runOneShot: vi.fn() };
+
+    await stepOneShot(fakeCtx("job-c", "sb-1"), db, deps);
+
+    expect(deps.runOneShot).not.toHaveBeenCalled();
+    const written = updates.find((u) => Array.isArray((u as { pages?: unknown }).pages)) as {
+      pages: Array<Record<string, unknown>>;
+    };
+    const byNumber = Object.fromEntries(written.pages.map((p) => [p.pageNumber, p]));
+    expect((byNumber[1].rawData as { reproductionPrompt: string }).reproductionPrompt).toBe("1");
+    expect((byNumber[3].rawData as { reproductionPrompt: string }).reproductionPrompt).toBe("3");
+  });
+
+  it("records the kept-page set alongside the cache it writes", async () => {
+    const { db, sourceBookUpdates } = cacheDb(jobWithKept([1, 3]), {});
+    const deps = {
+      ...fakeDeps(),
+      runOneShot: vi.fn().mockResolvedValue({
+        sessionId: "sess-new",
+        pages: [
+          { redesignedImageUrl: "https://cdn/n-1.png", analyzeData: {} },
+          { redesignedImageUrl: "https://cdn/n-3.png", analyzeData: {} },
+        ],
+      }),
+    };
+
+    await stepOneShot(fakeCtx("job-c", "sb-1"), db, deps);
+
+    expect(sourceBookUpdates[0].oneShotKeptPageNumbers).toEqual([1, 3]);
+    expect(sourceBookUpdates[0].oneShotSessionId).toBe("sess-new");
+  });
+
+  it("still reuses a legacy cache on a legacy job that has no kept-page set", async () => {
+    const { db } = cacheDb(
+      {
+        id: "job-c",
+        sourcePdfUrl: "/source.pdf",
+        pages: [
+          { pageNumber: 1, imageUrl: "/p1.png", status: "pending" },
+          { pageNumber: 2, imageUrl: "/p2.png", status: "pending" },
+        ],
+        data: null,
+        bookData: {},
+      },
+      {
+        oneShotSessionId: "sess-old",
+        oneShotPages: [fourPageCache[0], fourPageCache[1]],
+      },
+    );
+    const deps = { ...fakeDeps(), runOneShot: vi.fn() };
+
+    await stepOneShot(fakeCtx("job-c", "sb-1"), db, deps);
+
+    expect(deps.runOneShot).not.toHaveBeenCalled();
+  });
+});
+
 describe("stepOneShot — index map safety", () => {
   const jobPages = [
     { pageNumber: 1, imageUrl: "/p1.png", status: "pending", pageType: "cover" },

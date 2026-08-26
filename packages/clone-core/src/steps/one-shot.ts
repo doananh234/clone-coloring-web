@@ -110,6 +110,32 @@ export async function stepOneShot(
     if (Array.isArray(sbData.oneShotPages)) {
       cachedPages = sbData.oneShotPages as OneShotPageResult[];
     }
+
+    // A cache is ONLY reusable if it was produced under the same kept-page set.
+    // The cached array is fed straight through `originalPageNumber`, so a cache
+    // built from a different set attributes every result after the first
+    // divergence to the wrong original page — silently shifted artwork, no
+    // error. This is reachable today: the cache is written BEFORE the
+    // image-mirroring loop, so a job whose Diaflow call succeeded but whose R2
+    // mirroring failed keeps a full-book cache, then gets retried, gated,
+    // trimmed, and re-enters here with a SHORTER keptPageNumbers.
+    //
+    // Discard rather than remap: one re-run costs money, a silently wrong book
+    // costs more. A legacy cache with no recorded set is discarded too, because
+    // there is no way to prove which pages it covers.
+    const cachedKeptPageNumbers = Array.isArray(sbData.oneShotKeptPageNumbers)
+      ? (sbData.oneShotKeptPageNumbers as number[])
+      : null;
+    if (cachedPages && !sameNumbers(cachedKeptPageNumbers, keptPageNumbers)) {
+      console.warn(
+        `[stepOneShot] DISCARDING SourceBook one-shot cache for ${ctx.sourceBookId}: ` +
+          `it covers pages [${cachedKeptPageNumbers?.join(",") ?? "unrecorded"}] but this job now ` +
+          `keeps [${keptPageNumbers?.join(",") ?? "all (no map)"}]. Re-running Diaflow rather ` +
+          `than attributing ${cachedPages.length} cached result(s) to the wrong original pages.`,
+      );
+      cachedPages = null;
+      cachedSessionId = "";
+    }
   }
 
   const keptExisting = keptPageNumbers
@@ -156,6 +182,10 @@ export async function stepOneShot(
             ...prevSbData,
             oneShotSessionId: sessionId,
             oneShotPages: pages,
+            // Which ORIGINAL pages this cache covers. Without it a later run
+            // under a different kept-set cannot tell that reusing the cache
+            // would misattribute every result.
+            oneShotKeptPageNumbers: keptPageNumbers,
             oneShotCompletedAt: new Date().toISOString(),
           } as never,
         },
@@ -387,6 +417,16 @@ export async function stepOneShot(
   });
 
   await markStepsComplete(ctx);
+}
+
+/**
+ * Kept-page-set equality. `null` means "no map recorded" and only matches
+ * another `null` — a recorded set and an unrecorded one are never assumed
+ * equivalent, because an unrecorded one could cover any pages at all.
+ */
+function sameNumbers(a: number[] | null, b: number[] | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.length === b.length && a.every((n, i) => n === b[i]);
 }
 
 async function markStepsComplete(ctx: JobContext): Promise<void> {
