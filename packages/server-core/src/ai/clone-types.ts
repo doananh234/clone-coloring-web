@@ -67,8 +67,14 @@ export type CloneJobPage = {
   error?: string;
   /** D2 classification — undefined = legacy page, treated as "interior". */
   pageType?: "cover" | "interiorIntro" | "interior";
-  /** D2 inclusion flag — true drops the page from the built Book. */
+  /** Legacy D2 inclusion flag. Superseded by excludedFromClone; still read for old rows. */
   excluded?: boolean;
+  /**
+   * Operator drop mark set at the pre-spend gate. True = do NOT send this page
+   * to Diaflow and do NOT put it in the clone Book. It has NO effect on the
+   * exported "Main book" archive, which always keeps every source page.
+   */
+  excludedFromClone?: boolean;
   /** D3 lineage — "additional" = auto-filled clone; undefined/"original" = source page. */
   origin?: "original" | "additional";
   /** D3 lineage — for additional pages, the pageNumber of the interior it was cloned from. */

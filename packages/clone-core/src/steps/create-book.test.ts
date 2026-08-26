@@ -227,3 +227,47 @@ describe("stepCreateBook — D2 classification partitioning", () => {
     expect(book.coloringPages).toHaveLength(1);
   });
 });
+
+describe("stepCreateBook — clone-drop flag", () => {
+  const deps = {
+    randomUUID: () => "uuid-1",
+    copyImage: async ({ destKey }: { sourceUrl: string; destKey: string }) => `/${destKey}`,
+  };
+
+  it("drops pages marked excludedFromClone from the built Book", async () => {
+    const { db, created } = fakeDb();
+    (db as { cloneJob: { findUnique: ReturnType<typeof vi.fn> } }).cloneJob.findUnique.mockResolvedValueOnce({
+      id: "j1",
+      name: "MyBook",
+      bookData: { title: "MyBook" },
+      pages: [
+        { pageNumber: 1, imageUrl: "/a.png", redesignedUrl: "/ra.png", pageType: "interior" },
+        { pageNumber: 2, imageUrl: "/b.png", redesignedUrl: "/rb.png", pageType: "interior", excludedFromClone: true },
+        { pageNumber: 3, imageUrl: "/c.png", redesignedUrl: "/rc.png", pageType: "interior" },
+      ],
+    });
+
+    await stepCreateBook(fakeCtx("j1"), db, deps);
+
+    const book = created[0].data as { coloringPages: Array<{ sourcePageNumber: number }> };
+    expect(book.coloringPages.map((p) => p.sourcePageNumber)).toEqual([1, 3]);
+  });
+
+  it("still honours the legacy `excluded` flag on old rows", async () => {
+    const { db, created } = fakeDb();
+    (db as { cloneJob: { findUnique: ReturnType<typeof vi.fn> } }).cloneJob.findUnique.mockResolvedValueOnce({
+      id: "j1",
+      name: "MyBook",
+      bookData: { title: "MyBook" },
+      pages: [
+        { pageNumber: 1, imageUrl: "/a.png", redesignedUrl: "/ra.png", pageType: "interior" },
+        { pageNumber: 2, imageUrl: "/b.png", redesignedUrl: "/rb.png", pageType: "interior", excluded: true },
+      ],
+    });
+
+    await stepCreateBook(fakeCtx("j1"), db, deps);
+
+    const book = created[0].data as { coloringPages: Array<{ sourcePageNumber: number }> };
+    expect(book.coloringPages.map((p) => p.sourcePageNumber)).toEqual([1]);
+  });
+});
