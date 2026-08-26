@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
-import { classifyPage, type PageType } from "./classify-page";
+import type { PageType } from "./classify-page";
 
 /**
  * Single-call clone step — replaces render + analyze + extract-entities +
@@ -77,6 +77,16 @@ export async function stepOneShot(
 
   const existing = (job.pages as JobPage[] | null | undefined) ?? [];
 
+  // The trimmed PDF renumbers its pages 1..N, so Diaflow's i-th result belongs
+  // to ORIGINAL page keptPageNumbers[i]. Falls back to identity for jobs that
+  // predate stepTrimPdf.
+  const jobDataForMap = (job.data as Record<string, unknown> | null | undefined) ?? {};
+  const keptPageNumbers = Array.isArray(jobDataForMap.keptPageNumbers)
+    ? (jobDataForMap.keptPageNumbers as number[])
+    : null;
+  const originalPageNumber = (i: number): number => keptPageNumbers?.[i] ?? i + 1;
+  const existingByNumber = new Map(existing.map((p) => [p.pageNumber, p]));
+
   // Peek at SourceBook cache — a previous stepOneShot run mirrors the raw
   // Diaflow output there BEFORE image processing, so if it exists we can
   // skip re-calling Diaflow (~30-40min per PDF). Also used to detect the
@@ -95,11 +105,14 @@ export async function stepOneShot(
     }
   }
 
+  const keptExisting = keptPageNumbers
+    ? existing.filter((p) => keptPageNumbers.includes(p.pageNumber))
+    : existing;
   const expectedCount = cachedPages?.length ?? 0;
   const allDone =
-    existing.length > 0 &&
-    (expectedCount === 0 || existing.length >= expectedCount) &&
-    existing.every((p) => p.redesignedUrl && p.status === "reproduced");
+    keptExisting.length > 0 &&
+    (expectedCount === 0 || keptExisting.length >= expectedCount) &&
+    keptExisting.every((p) => p.redesignedUrl && p.status === "reproduced");
   if (allDone) {
     await markStepsComplete(ctx);
     return;
@@ -113,7 +126,10 @@ export async function stepOneShot(
     sessionId = cachedSessionId;
     pages = cachedPages;
   } else {
-    const pdfPublicUrl = deps.resolveR2Url(job.sourcePdfUrl);
+    const jobData = (job.data as Record<string, unknown> | null | undefined) ?? {};
+    const trimmedPdfUrl =
+      typeof jobData.trimmedPdfUrl === "string" ? jobData.trimmedPdfUrl : job.sourcePdfUrl;
+    const pdfPublicUrl = deps.resolveR2Url(trimmedPdfUrl);
     const brandInfo = await resolveBrandInfo(job, db);
     ({ sessionId, pages } = await deps.runOneShot(pdfPublicUrl, ctx.jobId, brandInfo));
   }
@@ -157,22 +173,16 @@ export async function stepOneShot(
   let urlsRefreshed = false;
   const errors: Array<{ pageNumber: number; error: string }> = [];
 
-  // Pre-scan: if ANY page has isCover: true from the LLM, treat cover as
-  // already assigned so the page-1 fallback in classifyPage doesn't also
-  // claim "cover" before we reach the LLM-flagged page.
-  const llmFlaggedCover = pages.some(
-    (p) => (p.analyzeData as { isCover?: unknown } | null | undefined)?.isCover === true,
-  );
-  let coverAlreadyAssigned = llmFlaggedCover;
   const jobPages: JobPage[] = [];
   for (let i = 0; i < pages.length; i++) {
-    const pageNumber = i + 1;
+    const pageNumber = originalPageNumber(i);
     const paddedPage = String(pageNumber).padStart(3, "0");
-    const renderedOriginal = existing[i]?.imageUrl ?? "";
+    const existingPage = existingByNumber.get(pageNumber);
+    const renderedOriginal = existingPage?.imageUrl ?? "";
     if (!renderedOriginal) {
       console.warn(
         `[stepOneShot] page ${pageNumber}: no rendered original found in job.pages. ` +
-          `stepRender may have failed or Diaflow returned more pages than the PDF rendered.`,
+          `stepRender may have failed or Diaflow returned more pages than were sent.`,
       );
     }
 
@@ -230,24 +240,19 @@ export async function stepOneShot(
           typeof analyze.reproductionPrompt === "string" ? analyze.reproductionPrompt : "",
       };
 
-      const signals = analyze as { isCover?: unknown; isIntro?: unknown; isInterior?: unknown };
-      const { pageType, excluded } = classifyPage({
-        pageNumber,
-        isCover: signals.isCover === true,
-        isIntro: signals.isIntro === true,
-        isInterior: signals.isInterior === true,
-        coverAlreadyAssigned,
-      });
-      if (pageType === "cover") coverAlreadyAssigned = true;
+      // Classification now comes from the operator at the pre-spend gate, so
+      // preserve it rather than re-deriving it from Diaflow's unreliable
+      // isCover/isIntro signals (absent on ~85% of pages).
+      const pageType = existingPage?.pageType;
 
       jobPages.push({
+        ...existingPage,
         pageNumber,
         imageUrl: renderedOriginal,
         redesignedUrl: redesignedR2Url,
         status: "reproduced",
         rawData,
         pageType,
-        excluded,
       });
     } catch (err) {
       // Persistent failure for this page — record it but keep going so the
@@ -257,6 +262,7 @@ export async function stepOneShot(
       console.error(`[stepOneShot] page ${pageNumber} failed: ${message}`);
       errors.push({ pageNumber, error: message });
       jobPages.push({
+        ...existingPage,
         pageNumber,
         imageUrl: renderedOriginal,
         status: "error",
@@ -340,13 +346,23 @@ export async function stepOneShot(
     }
   }
 
+  // MERGE, never replace: pages the operator dropped were not sent to Diaflow
+  // and have no entry in jobPages, but they must stay in job.pages so the
+  // exported "Main book" archive keeps the complete source book.
+  const touched = new Map(jobPages.map((p) => [p.pageNumber, p]));
+  const merged = existing.map((p) => touched.get(p.pageNumber) ?? p);
+  for (const p of jobPages) {
+    if (!existing.some((e) => e.pageNumber === p.pageNumber)) merged.push(p);
+  }
+  merged.sort((a, b) => a.pageNumber - b.pageNumber);
+
   await db.cloneJob.updateMany({
     where: { id: ctx.jobId },
     data: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      pages: jobPages as any,
+      pages: merged as any,
       analyzedPages: jobPages.length,
-      totalPages: jobPages.length,
+      totalPages: merged.length,
     },
   });
 

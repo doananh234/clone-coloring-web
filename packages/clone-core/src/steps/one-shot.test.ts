@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { stepOneShot } from "./one-shot";
-import { classifyPage } from "./classify-page";
 
 function fakeCtx(jobId: string, sourceBookId?: string) {
   return {
@@ -244,116 +243,90 @@ describe("stepOneShot — extracts book-level cover meta", () => {
   });
 });
 
-describe("stepOneShot — D2 auto-classify", () => {
-  it("writes pageType=cover on the isCover page and interior elsewhere", async () => {
-    // Arrange: a 3-page one-shot result where page 2 is the LLM cover.
-    const pagesOut: unknown[] = [];
-    const db = {
-      cloneJob: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "j1",
-          sourcePdfUrl: "assets/clone-jobs/j1/src.pdf",
-          data: {},
-          bookData: {},
-          pages: [
-            { pageNumber: 1, imageUrl: "o1", status: "rendered" },
-            { pageNumber: 2, imageUrl: "o2", status: "rendered" },
-            { pageNumber: 3, imageUrl: "o3", status: "rendered" },
-          ],
-        }),
-        update: vi.fn().mockResolvedValue(undefined),
-        updateMany: vi.fn().mockImplementation(async (arg: { data?: { pages?: unknown[] } }) => {
-          if (arg.data?.pages) pagesOut.splice(0, pagesOut.length, ...arg.data.pages);
-        }),
-      },
-      sourceBook: { findUnique: vi.fn().mockResolvedValue(null), update: vi.fn() },
-      brand: { findFirst: vi.fn().mockResolvedValue(null) },
-    } as never;
+describe("stepOneShot with a trimmed PDF", () => {
+  const jobPages = [
+    { pageNumber: 1, imageUrl: "/p1.png", status: "pending", pageType: "cover" },
+    { pageNumber: 2, imageUrl: "/p2.png", status: "pending", pageType: "interior", excludedFromClone: true },
+    { pageNumber: 3, imageUrl: "/p3.png", status: "pending", pageType: "interior" },
+  ];
 
-    const ctx = {
-      jobId: "j1",
-      sourceBookId: undefined,
-      isDone: () => false,
-      markStepComplete: vi.fn().mockResolvedValue(undefined),
-    } as never;
-
-    const deps = {
-      runOneShot: vi.fn().mockResolvedValue({
-        sessionId: "s1",
-        pages: [
-          { redesignedImageUrl: "r1", analyzeData: { isCover: false } },
-          { redesignedImageUrl: "r2", analyzeData: { isCover: true } },
-          { redesignedImageUrl: "r3", analyzeData: { isCover: false } },
-        ],
-      }),
-      fetchImage: vi.fn().mockResolvedValue({ body: Buffer.from(""), contentType: "image/png" }),
-      uploadToR2: vi.fn().mockResolvedValue({ url: "https://r2/red.png" }),
-      resolveR2Url: (k: string) => `https://r2/${k}`,
-    };
-
-    await stepOneShot(ctx, db, deps);
-
-    const written = pagesOut as Array<{ pageNumber: number; pageType?: string }>;
-    expect(written.find((p) => p.pageNumber === 2)?.pageType).toBe("cover");
-    expect(written.find((p) => p.pageNumber === 1)?.pageType).toBe("interior");
-    expect(written.find((p) => p.pageNumber === 3)?.pageType).toBe("interior");
-    // sanity: helper agrees
-    expect(classifyPage({ pageNumber: 2, isCover: true }).pageType).toBe("cover");
+  const twoPageDeps = () => ({
+    ...fakeDeps(),
+    runOneShot: vi.fn().mockResolvedValue({
+      sessionId: "sess-1",
+      pages: [
+        { redesignedImageUrl: "https://cdn/r-a.png", analyzeData: { reproductionPrompt: "a" } },
+        { redesignedImageUrl: "https://cdn/r-b.png", analyzeData: { reproductionPrompt: "b" } },
+      ],
+    }),
   });
 
-  it("maps Diaflow isIntro/isInterior signals to interiorIntro/interior", async () => {
-    const pagesOut: unknown[] = [];
-    const db = {
-      cloneJob: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "j2",
-          sourcePdfUrl: "assets/clone-jobs/j2/src.pdf",
-          data: {},
-          bookData: {},
-          pages: [
-            { pageNumber: 1, imageUrl: "o1", status: "rendered" },
-            { pageNumber: 2, imageUrl: "o2", status: "rendered" },
-            { pageNumber: 3, imageUrl: "o3", status: "rendered" },
-            { pageNumber: 4, imageUrl: "o4", status: "rendered" },
-          ],
-        }),
-        update: vi.fn().mockResolvedValue(undefined),
-        updateMany: vi.fn().mockImplementation(async (arg: { data?: { pages?: unknown[] } }) => {
-          if (arg.data?.pages) pagesOut.splice(0, pagesOut.length, ...arg.data.pages);
-        }),
-      },
-      sourceBook: { findUnique: vi.fn().mockResolvedValue(null), update: vi.fn() },
-      brand: { findFirst: vi.fn().mockResolvedValue(null) },
-    } as never;
+  it("sends the trimmed PDF, not the original", async () => {
+    const { db } = fakeDb({
+      id: "job-1",
+      sourcePdfUrl: "/source.pdf",
+      pages: jobPages,
+      data: { trimmedPdfUrl: "/source-trimmed.pdf", keptPageNumbers: [1, 3] },
+      bookData: {},
+    });
+    const deps = twoPageDeps();
+    await stepOneShot(fakeCtx("job-1"), db, deps);
+    // resolveR2Url (mocked as `https://r2${key}`) is applied to the trimmed
+    // PDF's relative R2 key, same as it would be to sourcePdfUrl — proving
+    // the trimmed key was sent, not "/source.pdf".
+    expect(deps.runOneShot).toHaveBeenCalledWith(
+      "https://r2/source-trimmed.pdf",
+      "job-1",
+      undefined,
+    );
+  });
 
-    const ctx = {
-      jobId: "j2",
-      sourceBookId: undefined,
-      isDone: () => false,
-      markStepComplete: vi.fn().mockResolvedValue(undefined),
-    } as never;
+  it("maps Diaflow output back onto original page numbers", async () => {
+    const { db, updates } = fakeDb({
+      id: "job-1",
+      sourcePdfUrl: "/source.pdf",
+      pages: jobPages,
+      data: { trimmedPdfUrl: "/source-trimmed.pdf", keptPageNumbers: [1, 3] },
+      bookData: {},
+    });
+    await stepOneShot(fakeCtx("job-1"), db, twoPageDeps());
+    const written = updates.find((u) => Array.isArray((u as { pages?: unknown }).pages)) as { pages: Array<Record<string, unknown>> };
+    const byNumber = Object.fromEntries(written.pages.map((p) => [p.pageNumber, p]));
+    expect(byNumber[1].redesignedUrl).toBeTruthy();
+    expect(byNumber[3].redesignedUrl).toBeTruthy();
+    expect(byNumber[1].imageUrl).toBe("/p1.png");
+    expect(byNumber[3].imageUrl).toBe("/p3.png");
+  });
 
-    const deps = {
-      runOneShot: vi.fn().mockResolvedValue({
-        sessionId: "s2",
-        pages: [
-          { redesignedImageUrl: "r1", analyzeData: { isCover: true } },
-          { redesignedImageUrl: "r2", analyzeData: { isIntro: true } },
-          { redesignedImageUrl: "r3", analyzeData: { isInterior: true } },
-          { redesignedImageUrl: "r4", analyzeData: {} }, // no signal → interior (cover already assigned)
-        ],
-      }),
-      fetchImage: vi.fn().mockResolvedValue({ body: Buffer.from(""), contentType: "image/png" }),
-      uploadToR2: vi.fn().mockResolvedValue({ url: "https://r2/red.png" }),
-      resolveR2Url: (k: string) => `https://r2/${k}`,
-    };
+  it("leaves the dropped page in job.pages with its original image and no redesign", async () => {
+    const { db, updates } = fakeDb({
+      id: "job-1",
+      sourcePdfUrl: "/source.pdf",
+      pages: jobPages,
+      data: { trimmedPdfUrl: "/source-trimmed.pdf", keptPageNumbers: [1, 3] },
+      bookData: {},
+    });
+    await stepOneShot(fakeCtx("job-1"), db, twoPageDeps());
+    const written = updates.find((u) => Array.isArray((u as { pages?: unknown }).pages)) as { pages: Array<Record<string, unknown>> };
+    expect(written.pages).toHaveLength(3);
+    const dropped = written.pages.find((p) => p.pageNumber === 2)!;
+    expect(dropped.imageUrl).toBe("/p2.png");
+    expect(dropped.redesignedUrl).toBeUndefined();
+    expect(dropped.excludedFromClone).toBe(true);
+  });
 
-    await stepOneShot(ctx, db, deps);
-
-    const written = pagesOut as Array<{ pageNumber: number; pageType?: string }>;
-    expect(written.find((p) => p.pageNumber === 1)?.pageType).toBe("cover");
-    expect(written.find((p) => p.pageNumber === 2)?.pageType).toBe("interiorIntro");
-    expect(written.find((p) => p.pageNumber === 3)?.pageType).toBe("interior");
-    expect(written.find((p) => p.pageNumber === 4)?.pageType).toBe("interior");
+  it("preserves the operator's pageType instead of re-deriving it", async () => {
+    const { db, updates } = fakeDb({
+      id: "job-1",
+      sourcePdfUrl: "/source.pdf",
+      pages: jobPages,
+      data: { trimmedPdfUrl: "/source-trimmed.pdf", keptPageNumbers: [1, 3] },
+      bookData: {},
+    });
+    await stepOneShot(fakeCtx("job-1"), db, twoPageDeps());
+    const written = updates.find((u) => Array.isArray((u as { pages?: unknown }).pages)) as { pages: Array<Record<string, unknown>> };
+    const byNumber = Object.fromEntries(written.pages.map((p) => [p.pageNumber, p]));
+    expect(byNumber[1].pageType).toBe("cover");
+    expect(byNumber[3].pageType).toBe("interior");
   });
 });
