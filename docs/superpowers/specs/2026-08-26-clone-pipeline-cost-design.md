@@ -1,7 +1,9 @@
 # Clone pipeline — classify before spend — Design
 
 **Date:** 2026-08-26
-**Status:** Proposed
+**Status:** Implemented — see "Corrections found during implementation" at the end.
+This document is kept as written, with its errors marked rather than edited away,
+because several of them caused real defects that the final review caught.
 
 ## Problem
 
@@ -202,3 +204,78 @@ sleeping, a reconciler that only runs at boot, an unwired Diaflow rate limiter,
 and two enqueue sites that bypass `enqueueCloneJob`. None of these waste tokens,
 so all are deferred. They are recorded in the conversation that produced this
 document and should get their own design once cost is under control.
+
+---
+
+## Corrections found during implementation
+
+The design above was written from static reading. Implementation and a
+whole-branch review found eight places where it was wrong. All are fixed in
+code; they are recorded here so the document does not mislead a later reader.
+
+**1. "Resume works as it does today" was wrong for existing rows.**
+The Target pipeline section reasoned only about jobs that stop *at* the gate.
+It never considered the backlog whose `classifyConfirmed` was set by the OLD,
+post-`reproduce` gate — for those rows, `classifyConfirmed === true` means the
+provider **already ran**. Moving a gate from after the spend to before it
+changes its meaning for every row that already passed the old one. Left
+unhandled this parked already-paid jobs in `awaiting-fill` with nothing to
+un-park them. Fixed: the Lane 2 park is now conditional on `!isDone("reproduce")`.
+
+**2. The consumer inventory for the drop flag was incomplete.**
+The Data model section named the read rule but never grepped for its consumers.
+Four were missed: `fill-interior.ts`, the admin `create-book` route, the admin
+`fill-interior` route, and `use-fill-interior.ts`. The first is the serious one
+— `planFillInterior` counted dropped pages as interiors *and pooled them as
+clone sources*, so it could pay to clone a page the operator had just dropped.
+Fixed: a shared `isDroppedFromClone()` in `plan-page-selection.ts`, all four
+migrated.
+
+**3. The SourceBook one-shot cache was never reconciled with the trimmed PDF.**
+W4 framed `SourceBook.data.oneShotPages` as a retry concern only. But the cache
+records nothing about which original pages it covers, so a cache built under one
+kept-set replayed through a different `keptPageNumbers` silently attributes every
+result after the first divergence to the wrong page. Reachable via `/retry` on a
+job whose provider call succeeded but whose R2 mirroring failed. Fixed:
+`oneShotKeptPageNumbers` is persisted alongside the cache and a mismatch is
+discarded loudly. A legacy cache with no map on a job with no map is treated as
+consistent and reused.
+
+**4. `awaiting-fill` was declared a first-class status but only registered as UI
+metadata.** The shared `CloneJob.status` union in `@vx/server-core` never learned
+about it. Fixed.
+
+**5. `classifyPage()` could not be "demoted to seeding the gate UI".**
+`@vx/coloring` cannot depend on `@vx/clone-core`, so the seed rule was inlined
+there instead and `classifyPage` is now production-dead — retained only for its
+tests. Either delete it or annotate it.
+
+**6. The identity fallback `?? i + 1` in `stepOneShot` was unsafe.**
+Correct as a legacy fallback when `keptPageNumbers` is absent, but when the array
+is present and the provider returns more pages than were sent, out-of-range
+indices collided with real page numbers. Fixed: returns `null` past the end and
+the result is skipped with a warning.
+
+**7. The legacy `useMultiStep` branch was left ungated, then left drop-blind.**
+The old gate sat after BOTH branches, so removing it did not merely fail to add a
+gate to the legacy path — it removed the one that path had. Fixed by hoisting
+`stepRender` and the gate above the branch. Separately, `stepAnalyze` and
+`stepReproduce` still iterated dropped pages; both now skip them.
+
+**8. Lane 2 had no specified un-park path.**
+One exists — the classify tab renders for `awaiting-fill`, so an operator can
+re-classify and re-confirm — but it emerged rather than being designed. Note that
+`/rerun` deliberately rejects `awaiting-fill` (its `allowedStatuses` are
+`reproduced`, `error`, `stashed`).
+
+### Still open
+
+- **The saving is still unmeasured.** No page has ever been dropped in
+  production, so the drop rate that determines this work's payoff remains
+  unknown. Gate ~20 jobs, count `excludedFromClone: true` per book, and record
+  the real rate here before extrapolating to the backlog.
+- **The `isPublic` question above is unresolved.** 118/124 books are public and
+  51 of those have fewer than 40 interior pages, which contradicts the ≥40
+  publication rule that motivates Lane 2.
+- **`stepTrimPdf` has no guard for an operator dropping every page.** Unreachable
+  today because Lane 2 parks such a job first, but worth a guard.
