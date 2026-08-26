@@ -90,63 +90,68 @@ export async function processCloneJob(jobId: string): Promise<void> {
       }
     }
 
+    // Render the source PDF into per-page PNGs ourselves and mirror to R2.
+    // This gives us permanent `imageUrl` values for each page's original —
+    // Diaflow's `loop_N_output` URLs are signed and expire, and the field is
+    // not always present. Shared by both pipelines below.
+    if (!ctx.isDone("render")) await withRetry("render", () => stepRender(ctx, db, renderDeps), ctx);
+
+    // ---- Gate: everything above is free, everything below costs money. ----
+    // Applies to BOTH pipelines (one-shot and legacy multi-step) — hoisted
+    // above the branch so neither path can reach an AI-calling step without
+    // passing it. Resumed by POST /api/clone/[jobId]/classify with
+    // { confirm: true }, which sets classifyConfirmed and re-enqueues the job —
+    // on the second run download/render are already `isDone`, so the worker
+    // skips straight back to this check (now passing) and continues.
+    const gateRow = await db.cloneJob.findUnique({
+      where: { id: jobId },
+      select: { data: true, pages: true },
+    });
+    const gateData = (gateRow?.data as { classifyConfirmed?: boolean } | null | undefined) ?? {};
+    const gatePages = (gateRow?.pages as SelectablePage[] | null | undefined) ?? [];
+    const decision = decideGateOutcome(gatePages, gateData.classifyConfirmed === true);
+
+    if (decision.outcome === "await-classify") {
+      await db.cloneJob.updateMany({
+        where: { id: jobId },
+        data: { status: "awaiting-classify" },
+      });
+      console.log(`[worker] clone job ${jobId} paused at classify gate (pre-spend)`);
+      return;
+    }
+
+    await db.cloneJob.updateMany({
+      where: { id: jobId },
+      data: {
+        data: {
+          ...gateData,
+          interiorCount: decision.interiorCount,
+          lane: decision.lane,
+        } as never,
+      },
+    });
+
+    if (decision.outcome === "await-fill") {
+      await db.cloneJob.updateMany({
+        where: { id: jobId },
+        data: { status: "awaiting-fill" },
+      });
+      console.log(
+        `[worker] clone job ${jobId} parked in lane 2 ` +
+          `(interior=${decision.interiorCount} < 40) — no AI spend`,
+      );
+      return;
+    }
+
     if (useMultiStep) {
-      if (!ctx.isDone("render"))           await withRetry("render",           () => stepRender(ctx, db, renderDeps),                     ctx);
       if (!ctx.isDone("analyze"))          await withRetry("analyze",          () => stepAnalyze(ctx, db, analyzeDeps),                   ctx);
       if (!ctx.isDone("extract-entities")) await ctx.markStepComplete("extract-entities");
       if (!ctx.isDone("reproduce"))        await withRetry("reproduce",        () => stepReproduce(ctx, db, reproduceDeps),               ctx);
     } else {
-      // Default one-shot path:
-      //   1. Render the source PDF into per-page PNGs ourselves and mirror to
-      //      R2. This gives us permanent `imageUrl` values for each page's
-      //      original — Diaflow's `loop_N_output` URLs are signed and expire,
-      //      and the field is not always present.
-      //   2. Diaflow one-shot handles the redesign + analyze JSON. stepOneShot
-      //      merges its output into the pages that stepRender already seeded,
-      //      preserving `imageUrl` and adding `redesignedUrl` + `rawData`.
-      if (!ctx.isDone("render")) await withRetry("render", () => stepRender(ctx, db, renderDeps), ctx);
-
-      // ---- Gate: everything above is free, everything below costs money. ----
-      const gateRow = await db.cloneJob.findUnique({
-        where: { id: jobId },
-        select: { data: true, pages: true },
-      });
-      const gateData = (gateRow?.data as { classifyConfirmed?: boolean } | null | undefined) ?? {};
-      const gatePages = (gateRow?.pages as SelectablePage[] | null | undefined) ?? [];
-      const decision = decideGateOutcome(gatePages, gateData.classifyConfirmed === true);
-
-      if (decision.outcome === "await-classify") {
-        await db.cloneJob.updateMany({
-          where: { id: jobId },
-          data: { status: "awaiting-classify" },
-        });
-        console.log(`[worker] clone job ${jobId} paused at classify gate (pre-spend)`);
-        return;
-      }
-
-      await db.cloneJob.updateMany({
-        where: { id: jobId },
-        data: {
-          data: {
-            ...gateData,
-            interiorCount: decision.interiorCount,
-            lane: decision.lane,
-          } as never,
-        },
-      });
-
-      if (decision.outcome === "await-fill") {
-        await db.cloneJob.updateMany({
-          where: { id: jobId },
-          data: { status: "awaiting-fill" },
-        });
-        console.log(
-          `[worker] clone job ${jobId} parked in lane 2 ` +
-            `(interior=${decision.interiorCount} < 40) — no AI spend`,
-        );
-        return;
-      }
-
+      // Default one-shot path: Diaflow one-shot handles the redesign + analyze
+      // JSON. stepOneShot merges its output into the pages that stepRender
+      // already seeded, preserving `imageUrl` and adding `redesignedUrl` +
+      // `rawData`. stepTrimPdf runs first so Diaflow only sees kept pages.
       if (!ctx.isDone("trim-pdf"))
         await withRetry("trim-pdf", () => stepTrimPdf(ctx, db, trimPdfDeps), ctx);
       if (!ctx.isDone("reproduce"))
