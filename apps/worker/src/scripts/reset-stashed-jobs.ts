@@ -72,6 +72,9 @@ async function main() {
         const {
           oneShotSessionId: _sbSession,
           oneShotPages: _sbPages,
+          // Part of the same cache record: it says which original pages
+          // oneShotPages covers, so it must not outlive them.
+          oneShotKeptPageNumbers: _sbKeptPages,
           ...sbKept
         } = ((sb.data as JsonObj | null | undefined) ?? {});
         await db.sourceBook.update({

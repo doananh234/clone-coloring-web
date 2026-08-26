@@ -63,6 +63,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
       const {
         oneShotSessionId: _sbSession,
         oneShotPages: _sbPages,
+        // Part of the same cache record: it says which original pages
+        // oneShotPages covers, so it must not outlive them.
+        oneShotKeptPageNumbers: _sbKept,
         ...sbKept
       } = ((sb.data as Record<string, unknown> | null | undefined) ?? {});
       await prisma.sourceBook.update({
