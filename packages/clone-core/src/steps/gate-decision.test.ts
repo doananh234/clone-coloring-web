@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideGateOutcome } from "./clone-job-processor";
+import { decideGateOutcome } from "./gate-decision";
 
 describe("decideGateOutcome", () => {
   const interiors = (n: number) =>

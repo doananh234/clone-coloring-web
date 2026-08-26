@@ -11,7 +11,8 @@ import {
   stepGenerateCover,
   stepFillInterior,
   stepTrimPdf,
-  planPageSelection,
+  decideGateOutcome,
+  type GateOutcome,
   type SelectablePage,
 } from "@vx/clone-core";
 import { db } from "../db";
@@ -33,25 +34,10 @@ import {
 void stepExtractEntities;
 void extractEntitiesDeps;
 
-export type GateOutcome =
-  | { outcome: "await-classify" }
-  | { outcome: "await-fill"; lane: 2; interiorCount: number }
-  | { outcome: "proceed"; lane: 1; interiorCount: number };
-
-/**
- * Pure gate decision. Kept separate from processCloneJob so the routing rule is
- * unit-testable without a database.
- */
-export function decideGateOutcome(
-  pages: SelectablePage[],
-  classifyConfirmed: boolean,
-): GateOutcome {
-  if (!classifyConfirmed) return { outcome: "await-classify" };
-  const { interiorCount, lane } = planPageSelection(pages);
-  return lane === 1
-    ? { outcome: "proceed", lane: 1, interiorCount }
-    : { outcome: "await-fill", lane: 2, interiorCount };
-}
+// The gate decision itself lives in @vx/clone-core (next to planPageSelection,
+// the pure router it calls) so it is testable without this file's env/DB
+// import chain. Re-exported here for existing importers.
+export { decideGateOutcome, type GateOutcome };
 
 export async function processCloneJob(jobId: string): Promise<void> {
   // A job can be stashed between enqueue and pickup (stash removes the BullMQ

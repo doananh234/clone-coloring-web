@@ -43,4 +43,5 @@ export {
   type SelectablePage,
   type PageSelection,
 } from "./plan-page-selection";
+export { decideGateOutcome, type GateOutcome } from "./gate-decision";
 export { stepTrimPdf, type TrimPdfDeps } from "./trim-pdf";
