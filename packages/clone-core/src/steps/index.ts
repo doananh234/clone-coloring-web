@@ -37,3 +37,9 @@ export {
   type RemoveVariantResult,
   type VariantMirror,
 } from "./remove-coloring-style-variant";
+export {
+  planPageSelection,
+  LANE1_MIN_INTERIOR,
+  type SelectablePage,
+  type PageSelection,
+} from "./plan-page-selection";
