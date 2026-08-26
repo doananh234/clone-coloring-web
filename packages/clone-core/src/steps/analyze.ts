@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
+import { isDroppedFromClone } from "./plan-page-selection";
 
 interface JobPage {
   pageNumber: number;
@@ -7,6 +8,8 @@ interface JobPage {
   status: string;
   rawData?: unknown;
   error?: string;
+  excludedFromClone?: boolean;
+  excluded?: boolean;
 }
 
 export interface AnalyzeDeps {
@@ -29,6 +32,9 @@ export async function stepAnalyze(
   for (let i = 0; i < updatedPages.length; i++) {
     const page = updatedPages[i];
     if (page.status === "analyzed" && page.rawData) continue;
+    // Pages the operator dropped at the pre-spend gate never reach the clone
+    // Book, so analysing them is a vision call paid for and thrown away.
+    if (isDroppedFromClone(page)) continue;
 
     const imageUrl = deps.resolveR2Url(page.imageUrl);
     const rawData = await deps.analyzePage(imageUrl, ctx.jobId);
