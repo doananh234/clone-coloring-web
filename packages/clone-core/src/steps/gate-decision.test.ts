@@ -19,11 +19,43 @@ describe("decideGateOutcome", () => {
     });
   });
 
-  it("parks a confirmed job with 39 interiors in lane 2", () => {
+  it("parks a confirmed job with 39 interiors in lane 2 — before any spend", () => {
+    expect(decideGateOutcome(interiors(39), true, false)).toEqual({
+      outcome: "await-fill",
+      lane: 2,
+      interiorCount: 39,
+    });
+  });
+
+  it("defaults to the pre-spend park when the caller omits alreadySpent", () => {
     expect(decideGateOutcome(interiors(39), true)).toEqual({
       outcome: "await-fill",
       lane: 2,
       interiorCount: 39,
+    });
+  });
+
+  // Regression: rows created before the gate moved ahead of `reproduce` were
+  // confirmed DOWNSTREAM of the Diaflow call, so classifyConfirmed on them
+  // implies the money is already spent. Parking such a job in `awaiting-fill`
+  // strands purchased work — nothing un-parks it automatically.
+  it("does NOT park a sub-40 job whose AI spend already happened", () => {
+    expect(decideGateOutcome(interiors(39), true, true)).toEqual({
+      outcome: "proceed",
+      lane: 2,
+      interiorCount: 39,
+    });
+  });
+
+  it("still reports lane 2 + interiorCount when it lets an already-spent job through", () => {
+    const decision = decideGateOutcome(interiors(12), true, true);
+    expect(decision.outcome).toBe("proceed");
+    expect(decision).toMatchObject({ lane: 2, interiorCount: 12 });
+  });
+
+  it("keeps waiting for the operator even when the spend already happened", () => {
+    expect(decideGateOutcome(interiors(39), false, true)).toEqual({
+      outcome: "await-classify",
     });
   });
 

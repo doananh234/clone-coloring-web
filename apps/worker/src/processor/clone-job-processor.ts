@@ -95,7 +95,17 @@ export async function processCloneJob(jobId: string): Promise<void> {
     });
     const gateData = (gateRow?.data as { classifyConfirmed?: boolean } | null | undefined) ?? {};
     const gatePages = (gateRow?.pages as SelectablePage[] | null | undefined) ?? [];
-    const decision = decideGateOutcome(gatePages, gateData.classifyConfirmed === true);
+    // `ctx.isDone("reproduce")` = this job's AI call already happened. The gate
+    // re-evaluates on every pass, so without this the Lane 2 park would fire on
+    // jobs whose money is already spent — rows created before the gate moved
+    // ahead of `reproduce` were confirmed downstream of the Diaflow call, and
+    // parking one in `awaiting-fill` strands purchased work with nothing to
+    // un-park it. The park is a pre-spend decision only.
+    const decision = decideGateOutcome(
+      gatePages,
+      gateData.classifyConfirmed === true,
+      ctx.isDone("reproduce"),
+    );
 
     if (decision.outcome === "await-classify") {
       await db.cloneJob.updateMany({
@@ -127,6 +137,13 @@ export async function processCloneJob(jobId: string): Promise<void> {
           `(interior=${decision.interiorCount} < 40) — no AI spend`,
       );
       return;
+    }
+
+    if (decision.lane === 2) {
+      console.log(
+        `[worker] clone job ${jobId} is lane 2 (interior=${decision.interiorCount} < 40) ` +
+          `but its AI spend is already complete — continuing to create-book rather than parking`,
+      );
     }
 
     if (useMultiStep) {
