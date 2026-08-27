@@ -86,3 +86,47 @@ describe("describeGateState", () => {
     expect(v.banner).toContain("phát sinh chi phí");
   });
 });
+
+/**
+ * The gate's park is a PRE-SPEND decision: decideGateOutcome() suppresses it
+ * when the job's Diaflow call already happened. The banner used to compute lane
+ * from interiorCount alone, so on those rows it promised "KHÔNG gọi Diaflow và
+ * không tốn chi phí" for a job that would in fact proceed straight into
+ * fill-interior + generate-cover. Five of the ten rows sitting at the gate in
+ * production were in exactly that state.
+ */
+describe("describeGateState — alreadySpent", () => {
+  it("lane 2 on a row whose AI spend already happened does NOT promise a free park", () => {
+    const v = describeGateState("awaiting-classify", 36, 46, true);
+    expect(v.lane).toBe(2);
+    expect(v.willPark).toBe(false);
+    expect(v.banner).not.toContain("không tốn chi phí");
+    expect(v.banner).toContain("phát sinh chi phí");
+    expect(v.tone).toBe("danger");
+  });
+
+  it("states how many interior pages the fill would still have to clone", () => {
+    const v = describeGateState("awaiting-classify", 36, 46, true);
+    expect(v.banner).toContain("tối đa 4 trang ruột");
+  });
+
+  it("lane 2 with no spend yet still promises the free park", () => {
+    const v = describeGateState("awaiting-classify", 36, 46, false);
+    expect(v.willPark).toBe(true);
+    expect(v.banner).toContain("không tốn chi phí");
+    expect(v.tone).toBe("warning");
+  });
+
+  it("lane 1 is unaffected by alreadySpent — it was always going to proceed", () => {
+    const spent = describeGateState("awaiting-classify", 41, 45, true);
+    const fresh = describeGateState("awaiting-classify", 41, 45, false);
+    expect(spent.lane).toBe(1);
+    expect(spent.willPark).toBe(false);
+    expect(fresh.willPark).toBe(false);
+    expect(spent.tone).toBe("success");
+  });
+
+  it("defaults to not-spent so an unmigrated caller keeps the old meaning", () => {
+    expect(describeGateState("awaiting-classify", 36, 46).willPark).toBe(true);
+  });
+});

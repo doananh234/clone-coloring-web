@@ -81,6 +81,12 @@ export interface CloneJobDetail {
   sourcePdfUrl?: string;
   brand?: string | null;
   currentStep?: string | null;
+  /**
+   * Server-computed: the job's Diaflow call already ran (worker's
+   * `ctx.isDone("reproduce")`). The gate's Lane 2 park is suppressed on these,
+   * so the classify banner must not promise a free park.
+   */
+  alreadySpent?: boolean;
   error?: string;
   /** Which pipeline step failed (from CloneJob.data.failedStep). */
   failedStep?: string | null;

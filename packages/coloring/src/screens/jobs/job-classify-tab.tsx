@@ -139,7 +139,7 @@ export function JobClassifyTab({ job }: { job: CloneJobDetail }) {
   const coverCount = rows.filter((r) => r.pageType === "cover" && !r.excludedFromClone).length;
   const interiorCount = countInteriorPages(edits);
   const keptCount = edits.filter((e) => !e.excludedFromClone).length;
-  const view = describeGateState(job.status, interiorCount, keptCount);
+  const view = describeGateState(job.status, interiorCount, keptCount, job.alreadySpent ?? false);
 
   // `okText` matters: a confirm that succeeds leaves the job in `awaiting-fill`,
   // which keeps THIS tab mounted and re-renders it identically. Without an
@@ -194,9 +194,15 @@ export function JobClassifyTab({ job }: { job: CloneJobDetail }) {
           padding: "0.75rem 1rem",
           borderRadius: 8,
           background:
-            view.tone === "warning"
-              ? "color-mix(in srgb, orange 18%, var(--card))"
-              : "color-mix(in srgb, green 15%, var(--card))",
+            view.tone === "danger"
+              ? "color-mix(in srgb, red 16%, var(--card))"
+              : view.tone === "warning"
+                ? "color-mix(in srgb, orange 18%, var(--card))"
+                : "color-mix(in srgb, green 15%, var(--card))",
+          border:
+            view.tone === "danger"
+              ? "1px solid color-mix(in srgb, red 45%, transparent)"
+              : undefined,
         }}
       >
         {view.banner}
@@ -241,7 +247,7 @@ export function JobClassifyTab({ job }: { job: CloneJobDetail }) {
             onClick={() =>
               run(
                 () => gate.confirm(edits),
-                view.lane === 2
+                view.willPark
                   ? "Đã xác nhận — job vào hàng chờ bổ sung trang, không phát sinh chi phí"
                   : "Đã xác nhận — job đã vào hàng đợi xử lý",
               )
