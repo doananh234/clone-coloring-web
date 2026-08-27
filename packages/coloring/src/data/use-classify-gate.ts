@@ -30,6 +30,51 @@ export function countInteriorPages(edits: ClassifyEdit[]): number {
   ).length;
 }
 
+export interface GateStateView {
+  /** The operator already confirmed and the worker parked the job. */
+  parked: boolean;
+  lane: 1 | 2;
+  tone: "success" | "warning";
+  /** Live: what confirming with the CURRENT edits would do. */
+  banner: string;
+  /** Present only once parked — what already happened, in the past tense. */
+  parkedNotice?: string;
+  confirmLabel: string;
+}
+
+/**
+ * Everything the classify screen needs to tell the operator where the job
+ * stands. Pure so it can be tested without rendering.
+ *
+ * The reason it takes `status` at all: a successful confirm leaves the job in
+ * `awaiting-fill`, which KEEPS this tab mounted. Without a parked branch the
+ * screen re-renders byte-identically — same grid, same future-tense banner,
+ * same button label — and an operator at the bottom of a long page reads that
+ * as "nothing happened" and clicks again.
+ */
+export function describeGateState(
+  status: string,
+  interiorCount: number,
+  keptPageCount: number,
+): GateStateView {
+  const lane: 1 | 2 = interiorCount < GATE_MIN_INTERIOR ? 2 : 1;
+  const parked = status === "awaiting-fill";
+  const banner =
+    lane === 2
+      ? `Interior: ${interiorCount} — dưới ${GATE_MIN_INTERIOR}. Xác nhận sẽ đưa job vào hàng chờ bổ sung trang, KHÔNG gọi Diaflow và không tốn chi phí.`
+      : `Interior: ${interiorCount} — đủ điều kiện. Xác nhận sẽ gửi ${keptPageCount} trang cho Diaflow và bắt đầu phát sinh chi phí.`;
+  return {
+    parked,
+    lane,
+    tone: lane === 2 ? "warning" : "success",
+    banner,
+    parkedNotice: parked
+      ? "Đã xác nhận. Job nằm trong hàng chờ bổ sung trang ruột — chưa gọi Diaflow, chưa phát sinh chi phí. Sửa phân loại rồi bấm Xác nhận lại nếu muốn đổi quyết định."
+      : undefined,
+    confirmLabel: parked ? "Xác nhận lại" : "Xác nhận & tạo book",
+  };
+}
+
 /** Pure payload builder — unit-tested without a live client. */
 export function buildClassifyPayload(edits: ClassifyEdit[], confirm: boolean) {
   return { pages: edits, confirm };
