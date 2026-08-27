@@ -19,6 +19,8 @@ import { useLocalJobs } from "../../data/local-store";
 import { useQueueActions, rowActionFor } from "../../data/use-queue-actions";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
 import { metaFor, STATUS_TABS, countFor } from "../../data/status";
+import { describeRunningStep } from "../../data/describe-running-step";
+import { useNow } from "../../data/use-now";
 import { resolveImg } from "../../data/img";
 import type { CloneJobRow } from "../../data/types";
 
@@ -41,6 +43,21 @@ function progressOf(j: CloneJobRow): number {
 }
 
 /** DD/MM/YYYY HH:MM — for the Created/Updated columns. */
+/**
+ * The BƯỚC column. `currentStep` is the last step to FINISH, so on its own it
+ * names the wrong thing for the whole duration of a slow step — a 40-minute
+ * Diaflow one-shot showed "trim-pdf" and looked stuck. Prefer the live step.
+ */
+function StepCell({ job, now }: { job: CloneJobRow; now: number }) {
+  const running = describeRunningStep(job.runningStep, job.runningSince, job.runningBudgetSec, now);
+  if (running) {
+    return (
+      <span style={{ color: running.overBudget ? "var(--danger)" : undefined }}>{running.label}</span>
+    );
+  }
+  return <>{job.currentStep || `${job.analyzedPages}/${job.totalPages || "—"}`}</>;
+}
+
 function fmtDateTime(s?: string | null): string {
   if (!s) return "—";
   const d = new Date(s);
@@ -99,6 +116,9 @@ export function JobsScreen() {
       ),
     [allJobs, ql],
   );
+
+  // One timer for the whole table, and only when some row is mid-step.
+  const now = useNow(rows.some((j) => Boolean(j.runningStep)));
 
   const tabs = STATUS_TABS.map((t) => ({ key: t.key, label: t.label, count: countFor(t, counts) }));
 
@@ -194,7 +214,7 @@ export function JobsScreen() {
                         <div>{j.brand || "—"}</div>
                         {j.totalPages ? <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{j.totalPages} trang</div> : null}
                       </td>
-                      <td style={{ ...td, ...mono }}>{j.currentStep || `${j.analyzedPages}/${j.totalPages || "—"}`}</td>
+                      <td style={{ ...td, ...mono }}><StepCell job={j} now={now} /></td>
                       <td style={td}>
                         <div style={{ width: 120 }}>
                           <Progress value={pct} tone={meta.bucket === "error" ? "danger" : "volt"} />

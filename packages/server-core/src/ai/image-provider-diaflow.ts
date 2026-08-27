@@ -94,6 +94,16 @@ const MAX_RETRIES = 3;
  * only returns the URL + timing for a scope. The active token is passed into
  * the network functions by withDiaflowKeyRotation().
  */
+/**
+ * How long the one-shot clone call is allowed to run, in seconds. Exported so
+ * the worker can publish it as the denominator of the "16/40 phút" clock the
+ * job screen shows — same env var the poll loop itself uses, so the number the
+ * operator reads can never drift from the number that actually applies.
+ */
+export function resolveOneShotPollTimeoutSec(): number {
+  return getConfig("one-shot").pollTimeout;
+}
+
 function getConfig(scope: DiaflowScope = "default") {
   const isOneShot = scope === "one-shot";
 

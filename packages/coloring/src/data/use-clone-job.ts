@@ -41,13 +41,22 @@ export function useCloneJob(jobId: string, opts: UseCloneJobOptions = {}): UseCl
   // job query when status/analyzedPages actually change (i.e. a page finished).
   const status = query.data?.job?.status ?? "";
   const analyzed = query.data?.job?.analyzedPages ?? 0;
+  const running = query.data?.job?.runningStep ?? null;
   useQuery({
     queryKey: ["coloring", "clone-job-status", jobId],
     queryFn: async () => {
-      const s = await httpGet<{ status: string; analyzedPages: number }>(
+      const s = await httpGet<{ status: string; analyzedPages: number; runningStep?: string | null }>(
         `${COLORING_API_BASE}/clone/${encodeURIComponent(jobId)}/status`,
       );
-      if (s && (s.status !== status || s.analyzedPages !== analyzed)) {
+      // runningStep is part of the comparison because a step transition (e.g.
+      // trim-pdf -> reproduce) moves neither status nor analyzedPages — without
+      // it the screen would keep naming the step the worker already left.
+      if (
+        s &&
+        (s.status !== status ||
+          s.analyzedPages !== analyzed ||
+          (s.runningStep ?? null) !== running)
+      ) {
         void qc.invalidateQueries({ queryKey: ["coloring", "clone-job", jobId] });
       }
       return s;

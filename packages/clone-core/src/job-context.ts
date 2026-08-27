@@ -12,6 +12,16 @@ interface CloneJobDataExtras {
   finishedAt?: string;
   /** D3 per-job override for interior target; falls back to DEFAULT_TARGET_INTERIOR. */
   targetInteriorCount?: number;
+  /**
+   * The step executing RIGHT NOW, as opposed to `currentStep`, which records
+   * the last step to FINISH. Written by withRetry so the UI can show what the
+   * worker is actually doing instead of what it last did.
+   */
+  runningStep?: CloneStep | null;
+  /** ISO timestamp the current attempt of `runningStep` began. */
+  runningSince?: string | null;
+  /** Wall-clock budget for `runningStep`, so the UI can show "16/40 phút". */
+  runningBudgetSec?: number | null;
   [k: string]: unknown;
 }
 
@@ -68,6 +78,41 @@ export class JobContext {
     await this.db.cloneJob.updateMany({
       where: { id: this.jobId },
       data: { data: { ...prev, retryHistory } as never },
+    });
+  }
+
+  /**
+   * Publish the in-progress step. Called by withRetry on every attempt, so a
+   * retry restarts the clock the operator sees.
+   */
+  async markStepRunning(step: CloneStep, budgetSec?: number): Promise<void> {
+    const prev = await this.readData();
+    await this.db.cloneJob.updateMany({
+      where: { id: this.jobId },
+      data: {
+        data: {
+          ...prev,
+          runningStep: step,
+          runningSince: new Date().toISOString(),
+          runningBudgetSec: budgetSec ?? null,
+        } as never,
+      },
+    });
+  }
+
+  /** Drop the in-progress marker. A stale one makes the UI count up forever. */
+  async clearStepRunning(): Promise<void> {
+    const prev = await this.readData();
+    await this.db.cloneJob.updateMany({
+      where: { id: this.jobId },
+      data: {
+        data: {
+          ...prev,
+          runningStep: null,
+          runningSince: null,
+          runningBudgetSec: null,
+        } as never,
+      },
     });
   }
 

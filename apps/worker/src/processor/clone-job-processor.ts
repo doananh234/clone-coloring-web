@@ -15,6 +15,7 @@ import {
   type GateOutcome,
   type SelectablePage,
 } from "@vx/clone-core";
+import { resolveOneShotPollTimeoutSec } from "@vx/server-core/ai/image-provider-diaflow";
 import { db } from "../db";
 import { notifySuccess, notifyFailure } from "../notify/telegram";
 import {
@@ -158,7 +159,13 @@ export async function processCloneJob(jobId: string): Promise<void> {
       if (!ctx.isDone("trim-pdf"))
         await withRetry("trim-pdf", () => stepTrimPdf(ctx, db, trimPdfDeps), ctx);
       if (!ctx.isDone("reproduce"))
-        await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx);
+        // budgetSec gives the job screen a denominator for its clock. Without
+        // it a 40-minute one-shot shows no progress of any kind and reads as a
+        // hang. Pulled from the provider so it cannot drift from the real
+        // timeout the poll loop applies.
+        await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx, {
+          budgetSec: resolveOneShotPollTimeoutSec(),
+        });
     }
 
     // D3 — reach the configured interior target by cloning source interiors.

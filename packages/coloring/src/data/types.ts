@@ -16,6 +16,13 @@ export interface CloneJobRow {
   bookId: string | null;
   sourceBookId: string | null;
   currentStep: string | null;
+  /**
+   * The step executing right now — as opposed to `currentStep`, which is the
+   * last step to FINISH. Null when the worker is between steps.
+   */
+  runningStep: string | null;
+  runningSince: string | null;
+  runningBudgetSec: number | null;
   failedStep: string | null;
   /** Failure reason message (from CloneJob.error). Null unless the job errored. */
   error: string | null;
@@ -81,6 +88,13 @@ export interface CloneJobDetail {
   sourcePdfUrl?: string;
   brand?: string | null;
   currentStep?: string | null;
+  /**
+   * The step executing right now — as opposed to `currentStep`, which is the
+   * last step to FINISH. Null when the worker is between steps.
+   */
+  runningStep?: string | null;
+  runningSince?: string | null;
+  runningBudgetSec?: number | null;
   /**
    * Server-computed: the job's Diaflow call already ran (worker's
    * `ctx.isDone("reproduce")`). The gate's Lane 2 park is suppressed on these,

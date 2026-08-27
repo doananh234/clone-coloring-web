@@ -3,6 +3,8 @@ import { withRetry, isRateLimitError, RETRY_POLICY, StepFailedError } from "./re
 
 const fakeCtx = () => ({
   recordRetry: vi.fn().mockResolvedValue(undefined),
+  markStepRunning: vi.fn().mockResolvedValue(undefined),
+  clearStepRunning: vi.fn().mockResolvedValue(undefined),
 });
 
 const fakeDeps = (sequence: number[]) => {
@@ -82,5 +84,47 @@ describe("isRateLimitError", () => {
   it("returns false otherwise", () => {
     expect(isRateLimitError(new Error("bad request"))).toBe(false);
     expect(isRateLimitError(null)).toBe(false);
+  });
+});
+
+/**
+ * The job list and detail screens read `currentStep`, which markStepComplete()
+ * sets to the step that just FINISHED — so a job spending 40 minutes inside the
+ * Diaflow one-shot displayed "trim-pdf" with an empty progress bar and no ETA,
+ * and read as frozen. withRetry is the single choke point every slow step goes
+ * through, so publishing the running step here covers all of them at once.
+ */
+describe("withRetry — running-step publishing", () => {
+  it("marks the step running before the work and clears it after success", async () => {
+    const ctx = fakeCtx();
+    const order: string[] = [];
+    ctx.markStepRunning.mockImplementation(async () => { order.push("mark"); });
+    ctx.clearStepRunning.mockImplementation(async () => { order.push("clear"); });
+    const fn = vi.fn().mockImplementation(async () => { order.push("work"); return "ok"; });
+
+    await withRetry("reproduce", fn, ctx, fakeDeps([]));
+
+    expect(order).toEqual(["mark", "work", "clear"]);
+    expect(ctx.markStepRunning).toHaveBeenCalledWith("reproduce", undefined);
+  });
+
+  it("forwards the step budget when one is given", async () => {
+    const ctx = fakeCtx();
+    await withRetry("reproduce", vi.fn().mockResolvedValue("ok"), ctx, { ...fakeDeps([]), budgetSec: 2400 });
+    expect(ctx.markStepRunning).toHaveBeenCalledWith("reproduce", 2400);
+  });
+
+  it("clears the running step when every attempt fails", async () => {
+    const ctx = fakeCtx();
+    const fn = vi.fn().mockRejectedValue(new Error("boom"));
+    await expect(withRetry("reproduce", fn, ctx, fakeDeps([0,0,0,0,0]))).rejects.toBeInstanceOf(StepFailedError);
+    expect(ctx.clearStepRunning).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-marks on each attempt so a retry restarts the clock", async () => {
+    const ctx = fakeCtx();
+    const fn = vi.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValue("ok");
+    await withRetry("reproduce", fn, ctx, fakeDeps([0, 0]));
+    expect(ctx.markStepRunning).toHaveBeenCalledTimes(2);
   });
 });
