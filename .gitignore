@@ -30,3 +30,4 @@ backups/
 .kingcong-profile/
 **/.kingcong-session.json
 **/.kingcong-profile/
+.yarn/install-state.gz
