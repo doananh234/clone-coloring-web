@@ -61,7 +61,10 @@ export async function POST(req: NextRequest) {
         ? [resolveR2Url(variant.thumbnailUrl)]
         : styleRefs
       : [];
-    const provider = providerRaw === "kingcong" || providerRaw === "diaflow" ? providerRaw : undefined;
+    const provider =
+      providerRaw === "kingcong" || providerRaw === "diaflow" || providerRaw === "litellm" || providerRaw === "azure"
+        ? providerRaw
+        : undefined;
     const img = await colorizeImage(resolveR2Url(imageUrl), directive, {
       referenceImageUrls,
       provider,

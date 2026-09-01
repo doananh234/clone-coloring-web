@@ -22,6 +22,13 @@ function patchDatabaseUrl(): void {
   if (globalForPrisma.__prismaPoolerPatched) return;
   const url = process.env.DATABASE_URL;
   if (!url) return;
+  // Only Postgres/PgBouncer needs these params. SQLite (file:) and other
+  // providers must be left untouched — appending pgbouncer/connection_limit to a
+  // `file:` URL corrupts the SQLite datasource.
+  if (!url.startsWith("postgres")) {
+    globalForPrisma.__prismaPoolerPatched = true;
+    return;
+  }
   try {
     const u = new URL(url);
     let changed = false;
@@ -58,3 +65,4 @@ export {
   syncCloneJobStatusCounts,
   readCloneJobStatusCounts,
 } from "./clone-status-counts";
+export { dbProvider, isSqlite, ci, cieq, jsonPath } from "./sql-compat";

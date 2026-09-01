@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@vx/db";
+import { prisma, jsonPath } from "@vx/db";
 import { getR2Config, createR2Client, resolveR2Url } from "@vx/server-core/r2";
 import { DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import type { S3Client } from "@aws-sdk/client-s3";
@@ -150,7 +150,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     if (row.resultBookId) bookIds.add(row.resultBookId);
     try {
       const linked = await prisma.book.findMany({
-        where: { data: { path: ["cloneJobId"], equals: jobId } },
+        where: { data: { path: jsonPath(["cloneJobId"]), equals: jobId } },
         select: { id: true },
       });
       linked.forEach((b) => bookIds.add(b.id));

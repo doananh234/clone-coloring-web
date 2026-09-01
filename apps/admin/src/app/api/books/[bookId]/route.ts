@@ -16,19 +16,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ book
   const { bookId } = await params;
   try {
     const body = await req.json();
-    // `coverMeta` and `coverLayout` are NOT Book columns — they live inside Book.data JSON.
-    const { id: _id, createdAt: _c, updatedAt: _u, coverMeta, coverLayout, ...rest } = body;
-    const data: Record<string, unknown> = { ...rest };
-    if (coverMeta !== undefined || coverLayout !== undefined) {
+    // Non-column fields live inside Book.data JSON. `data` (a partial blob),
+    // `coverMeta` and `coverLayout` are all merged into the existing Book.data
+    // NON-destructively so we never clobber keys the form didn't touch.
+    const {
+      id: _id,
+      createdAt: _c,
+      updatedAt: _u,
+      coverMeta,
+      coverLayout,
+      data: incomingData,
+      ...cols
+    } = body;
+    const update: Record<string, unknown> = { ...cols };
+    const touchesData =
+      incomingData !== undefined || coverMeta !== undefined || coverLayout !== undefined;
+    if (touchesData) {
       const current = await prisma.book.findUnique({ where: { id: bookId }, select: { data: true } });
       const curData = (current?.data as Record<string, unknown> | null) ?? {};
-      const incomingData = (rest.data as Record<string, unknown> | undefined) ?? {};
-      const merged: Record<string, unknown> = { ...curData, ...incomingData };
+      const merged: Record<string, unknown> = {
+        ...curData,
+        ...((incomingData as Record<string, unknown> | undefined) ?? {}),
+      };
       if (coverMeta !== undefined) merged.coverMeta = coverMeta;
       if (coverLayout !== undefined) merged.coverLayout = coverLayout;
-      data.data = merged;
+      update.data = merged;
     }
-    const book = await prisma.book.update({ where: { id: bookId }, data });
+    const book = await prisma.book.update({ where: { id: bookId }, data: update });
     return NextResponse.json(book);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

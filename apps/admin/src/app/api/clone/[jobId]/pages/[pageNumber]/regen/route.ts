@@ -20,7 +20,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const body = (await req.json().catch(() => ({}))) as { changePercent?: number; provider?: string };
     const pct = Math.min(95, Math.max(5, body.changePercent || 30));
-    const provider = body.provider === "kingcong" || body.provider === "diaflow" ? body.provider : undefined;
+    const provider =
+      body.provider === "kingcong" || body.provider === "diaflow" || body.provider === "litellm" || body.provider === "azure"
+        ? body.provider
+        : undefined;
 
     const row = await prisma.cloneJob.findUnique({ where: { id: jobId } });
     if (!row) return NextResponse.json({ error: "Clone job not found" }, { status: 404 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { EntityRecord } from "./use-entity";
+import type { EntityRecord } from "./entity-types";
 
 /**
  * SAFE local edit sandbox for entities (characters, locations, styles, brands).

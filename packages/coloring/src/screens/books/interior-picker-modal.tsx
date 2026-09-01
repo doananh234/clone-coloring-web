@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
-import { ProviderSelect, useProviderPreference } from "../../components/provider-select";
+import { ProviderSelect, useProviderPreference, type ImageProvider } from "../../components/provider-select";
 import { thumbImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
 import type { TitleSafePosition } from "../../data/source-covers";
@@ -24,7 +24,7 @@ export function InteriorPickerModal({
   busy: boolean;
   /** Fired on "Gen (N)": the chosen interior ids + the (possibly edited) prompt
    *  (empty string = server default). One background job is queued per id. */
-  onConfirm: (interiorPageIds: string[], promptOverride: string, provider: "kingcong" | "diaflow") => void;
+  onConfirm: (interiorPageIds: string[], promptOverride: string, provider: ImageProvider) => void;
   onClose: () => void;
   fetchDefaultPrompt: (titleSafe: TitleSafePosition) => Promise<string>;
 }) {

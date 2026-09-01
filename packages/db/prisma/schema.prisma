@@ -3,15 +3,14 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 // Singleton app config (Firestore: collection "app")
 model App {
   id        String   @id @default("default")
-  data      Json     @default("{}")
+  data      Json     @default(dbgenerated("'{}'"))
   updatedAt DateTime @updatedAt
 }
 
@@ -32,13 +31,13 @@ model Book {
   pdfUrl             String?
   squareThumbnailUrl String?
   thumbnailUrl       String?
-  summaryPages       Json     @default("[]")
-  coloringPages      Json     @default("[]")
+  summaryPages       Json     @default(dbgenerated("'[]'"))
+  coloringPages      Json     @default(dbgenerated("'[]'"))
   isPublic           Boolean  @default(false)
   // Operator (Operator.id) this book is assigned to. Null = unassigned (visible
   // to all operators). Once assigned, only the assignee + admins see it.
   assignedToId       String?
-  data               Json     @default("{}")
+  data               Json     @default(dbgenerated("'{}'"))
   priceAmount        Int?
   // Denormalized, read-only from the app's perspective: a Postgres trigger
   // (book_denorm_perf, see prisma/books-denorm-2026-08.sql) keeps these in sync
@@ -49,6 +48,9 @@ model Book {
   niche              String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  // NOTE: the Postgres GIN index on coloringPages (jsonb containment) is omitted
+  // on SQLite — jsonb operators/GIN don't exist here. Containment lookups fall
+  // back to a table scan; fine for local dev volumes.
 
   @@index([categoryId])
   @@index([priceAmount])
@@ -62,9 +64,6 @@ model Book {
   @@index([createdAt])
   @@index([isPublic, createdAt])
   @@index([assignedToId, createdAt])
-  // coloring-styles usages route matches books via coloringPages @> [{styleId}];
-  // a GIN index turns that full-table jsonb scan into an index lookup.
-  @@index([coloringPages], type: Gin)
 }
 
 model Category {
@@ -76,8 +75,8 @@ model Category {
   iconPrompt  String?
   isPublic    Boolean  @default(false)
   index       Int?
-  books       Json     @default("[]")
-  data        Json     @default("{}")
+  books       Json     @default(dbgenerated("'[]'"))
+  data        Json     @default(dbgenerated("'{}'"))
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -90,7 +89,7 @@ model Brand {
   logoUrl     String?
   isPublic    Boolean  @default(false)
   index       Int?
-  data        Json     @default("{}")
+  data        Json     @default(dbgenerated("'{}'"))
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -100,12 +99,12 @@ model Character {
   name              String
   type              String?
   role              String?
-  visualDna         Json     @default("{}")
+  visualDna         Json     @default(dbgenerated("'{}'"))
   characterPrompt   String?
-  tags              String[] @default([])
+  tags              Json     @default(dbgenerated("'[]'"))
   referenceImageUrl String?
   sourceBookId      String?
-  data              Json     @default("{}")
+  data              Json     @default(dbgenerated("'{}'"))
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -118,12 +117,12 @@ model Location {
   description       String?
   visualDescription String?
   locationPrompt    String?
-  atmosphere        Json     @default("{}")
-  props             String[] @default([])
-  tags              String[] @default([])
+  atmosphere        Json     @default(dbgenerated("'{}'"))
+  props             Json     @default(dbgenerated("'[]'"))
+  tags              Json     @default(dbgenerated("'[]'"))
   referenceImageUrl String?
   sourceBookId      String?
-  data              Json     @default("{}")
+  data              Json     @default(dbgenerated("'{}'"))
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -137,17 +136,17 @@ model ArtStyle {
   name                String
   description         String?
   thumbnailUrl        String?
-  referenceImages     Json     @default("[]")
-  lineWork            Json     @default("{}")
-  composition         Json     @default("{}")
-  formAndShape        Json     @default("{}")
-  moodAndAtmosphere   Json     @default("{}")
-  patternAndTexture   Json     @default("{}")
-  technical           Json     @default("{}")
+  referenceImages     Json     @default(dbgenerated("'[]'"))
+  lineWork            Json     @default(dbgenerated("'{}'"))
+  composition         Json     @default(dbgenerated("'{}'"))
+  formAndShape        Json     @default(dbgenerated("'{}'"))
+  moodAndAtmosphere   Json     @default(dbgenerated("'{}'"))
+  patternAndTexture   Json     @default(dbgenerated("'{}'"))
+  technical           Json     @default(dbgenerated("'{}'"))
   generationDirective String?
-  tags                String[] @default([])
+  tags                Json     @default(dbgenerated("'[]'"))
   sourceBookId        String?
-  data                Json     @default("{}")
+  data                Json     @default(dbgenerated("'{}'"))
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -160,20 +159,20 @@ model ColoringStyle {
   name                  String
   description           String?
   thumbnailUrl          String?
-  referenceImages       Json     @default("[]")
-  medium                Json     @default("{}")
-  colorPalette          Json     @default("{}")
-  shadingAndLighting    Json     @default("{}")
-  fillBehavior          Json     @default("{}")
-  overallFeel           Json     @default("{}")
+  referenceImages       Json     @default(dbgenerated("'[]'"))
+  medium                Json     @default(dbgenerated("'{}'"))
+  colorPalette          Json     @default(dbgenerated("'{}'"))
+  shadingAndLighting    Json     @default(dbgenerated("'{}'"))
+  fillBehavior          Json     @default(dbgenerated("'{}'"))
+  overallFeel           Json     @default(dbgenerated("'{}'"))
   colorizationDirective String?
-  tags                  String[] @default([])
+  tags                  Json     @default(dbgenerated("'[]'"))
   // Color variants: one style groups many palettes. Each item =
   // { id, colorPalette, thumbnailUrl, colorizationDirective, sourceBookId, createdAt }.
   // The style's own top-level colorPalette/thumbnailUrl mirror variant #1.
-  variants              Json     @default("[]")
+  variants              Json     @default(dbgenerated("'[]'"))
   sourceBookId          String?
-  data                  Json     @default("{}")
+  data                  Json     @default(dbgenerated("'{}'"))
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
@@ -192,7 +191,7 @@ model SourceBook {
   niche            String?
   priority         String?
   importedFromCsv  String?
-  data             Json     @default("{}")
+  data             Json     @default(dbgenerated("'{}'"))
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -207,7 +206,7 @@ model Purchase {
   currency    String?  @default("USD")
   provider    String?
   providerRef String?
-  data        Json     @default("{}")
+  data        Json     @default(dbgenerated("'{}'"))
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -221,7 +220,7 @@ model Wallet {
   id        String   @id
   balance   Int      @default(0)
   currency  String   @default("USD")
-  data      Json     @default("{}")
+  data      Json     @default(dbgenerated("'{}'"))
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -236,7 +235,7 @@ model User {
   avatarUrl    String?
   passwordHash String?
   role         String   @default("user")
-  data         Json     @default("{}")
+  data         Json     @default(dbgenerated("'{}'"))
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -250,7 +249,7 @@ model CreditLedger {
   amount      Int
   type        String
   description String?
-  data        Json     @default("{}")
+  data        Json     @default(dbgenerated("'{}'"))
   createdAt   DateTime @default(now())
 
   @@index([userId])
@@ -267,13 +266,13 @@ model CloneJob {
   sourcePdfUrl   String?
   totalPages     Int      @default(0)
   analyzedPages  Int      @default(0)
-  pages          Json     @default("[]")
+  pages          Json     @default(dbgenerated("'[]'"))
   bookData       Json?
   entityMap      Json?
   bookId         String?
   resultBookId   String?
   error          String?
-  data           Json     @default("{}")
+  data           Json     @default(dbgenerated("'{}'"))
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -306,7 +305,7 @@ model GenerationJob {
   bookId    String
   bookTitle String?
   // Kind-specific input, e.g. { interiorPageId, titleSafe, prompt?, sourceImageUrl? }.
-  payload   Json     @default("{}")
+  payload   Json     @default(dbgenerated("'{}'"))
   resultUrl String? // generated image url (for quick preview in the drawer)
   resultId  String? // id of the created artifact (e.g. sourceCover id)
   error     String?
@@ -325,7 +324,7 @@ model Font {
   format    String
   weight    Int?
   isPublic  Boolean  @default(true)
-  data      Json     @default("{}")
+  data      Json     @default(dbgenerated("'{}'"))
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -339,10 +338,10 @@ model Font {
 model CoverTextOverlay {
   id                String   @id @default(cuid())
   name              String
-  elements          Json     @default("{}")
+  elements          Json     @default(dbgenerated("'{}'"))
   referenceImageUrl String?
   isPublic          Boolean  @default(true)
-  data              Json     @default("{}")
+  data              Json     @default(dbgenerated("'{}'"))
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -357,7 +356,7 @@ model UserColoring {
   pageIndex Int?
   status    String   @default("in_progress")
   imageUrl  String?
-  progress  Json     @default("{}")
+  progress  Json     @default(dbgenerated("'{}'"))
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

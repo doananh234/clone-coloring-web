@@ -16,6 +16,7 @@ import { useBook } from "../../data/use-book";
 import { useBookJob } from "../../data/use-book-job";
 import { getBookPatch } from "../../data/local-books";
 import { useGeneratePdf, useGenerateSubtitle, useReclone, useDeleteBook, useApproveBook } from "../../data/use-book-actions";
+import { usePageAdditional, DEFAULT_INTERIOR_TARGET } from "../../data/use-page-additional";
 import { PageActionsRow } from "./page-actions-row";
 import { CoverCandidatesStrip } from "./cover-candidates-strip";
 import { BookInformationTab } from "./book-info-tab";
@@ -178,6 +179,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const reclone = useReclone(bookId);
   const deleteBook = useDeleteBook(bookId);
   const approveBook = useApproveBook(bookId);
+  const additional = usePageAdditional(bookId);
   const { jobId: relatedJobId } = useBookJob(bookId);
   const searchParams = useSearchParams();
   // Deep-link support: `?tab=pages` (e.g. from the generation queue drawer) opens
@@ -189,6 +191,8 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const [tab, setTab] = useState<"info" | "meta" | "pages" | "select">(initialTab);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
+  const [filling, setFilling] = useState(false);
+  const [fillProg, setFillProg] = useState("");
   const [preview, setPreview] = useState<Omit<PreviewModalProps, "open" | "onClose"> | null>(null);
   const [previewPage, setPreviewPage] = useState<BookColoringPage | null>(null);
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
@@ -205,6 +209,29 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
     }
     catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); }
     finally { setBusy(false); }
+  };
+
+  const doFill = async () => {
+    setFilling(true); setMsg(null); setFillProg("");
+    try {
+      await additional.fillToTarget({
+        target: DEFAULT_INTERIOR_TARGET,
+        source: "character",
+        onProgress: (cur, target) => setFillProg(`${cur}/${target}`),
+      });
+      setMsg({ ok: `Đã fill tới ${DEFAULT_INTERIOR_TARGET} trang interior.` });
+    } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Fill thất bại" }); }
+    finally { setFilling(false); setFillProg(""); }
+  };
+
+  const doPurge = async () => {
+    if (!window.confirm("Xoá TẤT CẢ trang bổ sung (origin=additional) của sách này? Các trang gốc/clone được giữ nguyên.")) return;
+    setFilling(true); setMsg(null);
+    try {
+      const removed = await additional.purgeAdditional();
+      setMsg({ ok: `Đã xoá ${removed} trang bổ sung.` });
+    } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Xoá thất bại" }); }
+    finally { setFilling(false); }
   };
 
   if (isLoading) return <Card><LoadingRows rows={6} /></Card>;
@@ -226,6 +253,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   // removed — the Info tab now shows only the Cover candidates.)
   const coverMetaObj = (b.data?.coverMeta ?? {}) as { sourceThumbnailUrl?: string };
   const pages = b.coloringPages ?? [];
+  const additionalCount = pages.filter((p) => (p as { origin?: string }).origin === "additional").length;
   const cloneJobId = typeof b.data?.cloneJobId === "string" ? b.data.cloneJobId : undefined;
   const colored = pages.filter((p) => p.coloredUrl).length;
   // D4c cover candidates (each "Push to Cover" appends one). The Cover section in
@@ -383,10 +411,39 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
           <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/edit`)}><Icon name="pen-line" size={16} /> Sửa thông tin</Button>
           <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/cover`)}><Icon name="image" size={16} /> Cover editor</Button>
           <Button variant="outline" size="sm" onClick={makePdf} disabled={busy}><Icon name="file-text" size={16} /> {busy ? "Đang tạo…" : b.pdfUrl ? "Tạo lại PDF" : "Tạo PDF"}</Button>
+          <Button variant="outline" size="sm" onClick={doFill}
+            disabled={!COLORING_WRITE_ENABLED || busy || filling || pages.length >= DEFAULT_INTERIOR_TARGET}
+            title={pages.length >= DEFAULT_INTERIOR_TARGET ? `Đã đủ ${DEFAULT_INTERIOR_TARGET} trang` : `Sinh thêm trang (giữ nhân vật, đổi cảnh) tới đủ ${DEFAULT_INTERIOR_TARGET}`}>
+            <Icon name="sparkles" size={16} /> {filling ? `Đang fill… ${fillProg}` : `Fill đủ ${DEFAULT_INTERIOR_TARGET} (${pages.length}/${DEFAULT_INTERIOR_TARGET})`}
+          </Button>
+          {additionalCount > 0 && (
+            <Button variant="outline" size="sm" onClick={doPurge}
+              disabled={!COLORING_WRITE_ENABLED || busy || filling}
+              title="Xoá tất cả trang bổ sung đã sinh (giữ trang gốc)">
+              <Icon name="trash-2" size={16} /> Xoá {additionalCount} trang bổ sung
+            </Button>
+          )}
           {resolveImg(b.pdfUrl) && (
             <Button variant="outline" size="sm" onClick={() => window.open(resolveImg(b.pdfUrl)!, "_blank", "noopener")}><Icon name="download" size={16} /> Tải PDF</Button>
           )}
           <ExportLinkButton bookId={bookId} exportInfo={exportInfo} />
+          <Button variant="outline" size="sm" disabled={busy}
+            title="Đẩy sách này lên Firebase (prod) — giữ nguyên cấu trúc doc"
+            onClick={async () => {
+              if (!window.confirm("Đẩy sách này lên Firebase (prod)?")) return;
+              setBusy(true); setMsg(null);
+              try {
+                // Local admin route (reads dev.db) — NOT the coloring-api upstream.
+                const res = await fetch(`/api/books/${bookId}/sync-firebase`, { method: "POST" });
+                const data = await res.json();
+                if (data.success) setMsg({ ok: `Đã sync lên Firebase [${data.projectId}]` });
+                else setMsg({ err: data.error || "Sync Firebase thất bại" });
+              } catch (e) {
+                setMsg({ err: e instanceof Error ? e.message : "Sync Firebase thất bại" });
+              } finally { setBusy(false); }
+            }}>
+            <Icon name="upload" size={16} /> Sync lên Firebase
+          </Button>
           <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED || busy} title={COLORING_WRITE_ENABLED ? undefined : "Cần bật ghi thật (staging)"}
             onClick={async () => { setBusy(true); setMsg(null); try { await genSubtitle(); setMsg({ ok: "Đã sinh phụ đề" }); } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); } finally { setBusy(false); } }}>
             <Icon name="sparkles" size={16} /> Sinh phụ đề AI

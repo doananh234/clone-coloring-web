@@ -4,8 +4,10 @@ import { useState } from "react";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { ColoringStylePickerModal, type StyleSelection } from "../../components/ui/coloring-style-picker-modal";
+import { Select } from "../../components/ui/form-controls";
 import { usePageActions } from "../../data/use-page-actions";
 import { usePageAdditional, type RegenAddOpts } from "../../data/use-page-additional";
+import { useEntityList } from "../../data/use-entity-list";
 import { useCoverCandidates } from "../../data/use-cover-candidates";
 import { useSourceCovers } from "../../data/use-source-covers";
 import { resolveImg } from "../../data/img";
@@ -15,6 +17,8 @@ interface Candidate {
   url: string;
   cameraView?: string;
   kind: "regen" | "angle";
+  /** true = generated via the clone job; false = regenerated from the current image. */
+  viaJob: boolean;
 }
 
 export function PageActionsRow({
@@ -57,6 +61,9 @@ export function PageActionsRow({
   // Regen/Đổi góc generate a candidate WITHOUT applying → user previews + chooses.
   const [cand, setCand] = useState<Candidate | null>(null);
   const [zoom, setZoom] = useState(false);
+  // Optional B&W style to guide Regen / Đổi góc (its refs + directive are followed).
+  const [regenStyleId, setRegenStyleId] = useState("");
+  const { items: bwStyles } = useEntityList("art-styles");
 
   const disabled = !actions.enabled;
 
@@ -78,8 +85,8 @@ export function PageActionsRow({
     setErr(null);
     setZoom(false);
     try {
-      const r = await actions.genCandidate(pageIndex, newAngle);
-      setCand({ url: r.url, cameraView: r.cameraView, kind: newAngle ? "angle" : "regen" });
+      const r = await actions.genCandidate(pageIndex, newAngle, page.id, regenStyleId || undefined);
+      setCand({ url: r.url, cameraView: r.cameraView, kind: newAngle ? "angle" : "regen", viaJob: r.viaJob });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Tạo bản mới thất bại");
     } finally {
@@ -92,7 +99,8 @@ export function PageActionsRow({
     setBusy("apply");
     setErr(null);
     try {
-      await actions.applyCandidate(pageIndex, cand.kind);
+      if (cand.viaJob) await actions.applyCandidate(pageIndex, cand.kind);
+      else await actions.applyImageCandidate(pages, page.id, cand.url);
       setCand(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Áp dụng thất bại");
@@ -137,6 +145,11 @@ export function PageActionsRow({
         </Button>
         {!isSC && actions.canRegen && (
           <>
+            {bwStyles.length > 0 && (
+              <div style={{ minWidth: 150, maxWidth: 190 }} title="Chọn B&W style để regen bám theo (ảnh tham chiếu + directive)">
+                <Select value={regenStyleId} onChange={setRegenStyleId} options={bwStyles.map((s) => ({ label: s.name, value: s.id }))} placeholder="B&W style (tùy chọn)" />
+              </div>
+            )}
             <Button variant="outline" size="sm" disabled={disabled || busy !== null || pageIndex < 0} title="Tạo bản vẽ lại (giữ nguyên góc) để xem trước" onClick={doGen(false)}>
               <Icon name="sparkles" size={15} /> {busy === "regen" ? "Đang tạo…" : "Regen"}
             </Button>
@@ -176,10 +189,12 @@ export function PageActionsRow({
       {!isSC && regenOpen && (
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: 10, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", background: "var(--neutral-100)" }}>
           <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 6 }}>Nguồn
-            <select value={regenOpts.source} onChange={(e) => setRegenOpts((o) => ({ ...o, source: e.target.value as "A" | "B" }))}
+            <select value={regenOpts.source} onChange={(e) => setRegenOpts((o) => ({ ...o, source: e.target.value as "A" | "B" | "story" | "character" }))}
               style={{ padding: "4px 8px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)" }}>
               <option value="A">A · New Source</option>
               <option value="B">B · + Prompt gốc</option>
+              <option value="story">Story · giữ nhân vật, nối truyện</option>
+              <option value="character">Character · extract nhân vật, scene mới đa dạng</option>
             </select>
           </label>
           <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 6 }}>Số bản

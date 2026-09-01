@@ -9,6 +9,8 @@ export interface CreateJobInput {
   file: File | null;
   name: string;
   brand?: string;
+  /** Real Brand row id — lets the pipeline resolve the exact brand for cover gen. */
+  brandId?: string;
   /** Upload strategy for the real POST /api/clone (not the redesign mode). */
   mode?: "one-shot" | "multi-step";
   /** Redesign mode label — kept for the local draft only (applied later in the real pipeline). */
@@ -29,7 +31,7 @@ export interface CreateJobResult {
 export function useCreateJob(): (input: CreateJobInput) => Promise<CreateJobResult> {
   const qc = useQueryClient();
 
-  return async ({ file, name, brand, mode = "one-shot", redesignMode }) => {
+  return async ({ file, name, brand, brandId, mode = "one-shot", redesignMode }) => {
     if (!COLORING_WRITE_ENABLED) {
       const job = addLocalJob({ name, brand, sourceFileName: file?.name, mode: redesignMode });
       return { jobId: job.id, bulk: false };
@@ -66,6 +68,7 @@ export function useCreateJob(): (input: CreateJobInput) => Promise<CreateJobResu
       fileName: file.name,
       mode,
       brand: brand || undefined,
+      brandId: brandId || undefined,
     });
     qc.invalidateQueries({ queryKey: ["coloring", "clone-jobs"] });
     return { jobId: pre.jobId, bulk: false };

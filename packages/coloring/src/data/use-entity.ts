@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { httpGet } from "@vx/core-uikit/api";
 import { COLORING_API_BASE } from "./config";
 import { useEntityPatch } from "./local-entities";
+import type { EntityRecord } from "./entity-types";
 
-export type EntityRecord = Record<string, unknown>;
+export type { EntityRecord } from "./entity-types";
 
 export interface UseEntityResult {
   entity: EntityRecord | undefined;

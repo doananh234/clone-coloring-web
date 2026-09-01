@@ -101,6 +101,25 @@ export interface EtsyListingInfo {
   priceSuggestionUsd?: number;
 }
 
+/** Full Etsy listing block (lives in Book.data.etsyListing). */
+export interface BookEtsyListing {
+  etsyTitle?: string;
+  etsyDescription?: string;
+  materials?: string[];
+  etsyCategory?: string;
+  subcategory?: string;
+  priceSuggestionUsd?: number;
+  priceNotes?: string;
+  section?: string;
+}
+
+/** Print/product specs (lives in Book.data.specifications). */
+export interface BookSpecifications {
+  pages?: number;
+  dimensions?: string;
+  ageRange?: string;
+}
+
 /** Shape returned by GET /api/books (subset we render). */
 export interface BookRow {
   id: string;
@@ -213,11 +232,18 @@ export interface BookDetail extends BookRow {
   originalPrice?: string | null;
   discount?: string | null;
   badge?: string | null;
+  /** Real columns (top-level in the API response). */
+  categoryId?: string | null;
+  backgroundColor?: string | null;
+  tryoutPage?: string | null;
   updatedAt?: string;
   tags?: string[];
   coloringPages?: BookColoringPage[];
   summaryPages?: { id: string; url: string; isPublic?: boolean; sourcePageNumber?: number }[];
-  specifications?: { pages?: number; dimensions?: string; ageRange?: string } | null;
-  /** Raw JSON blob; coverMeta.sourceThumbnailUrl = clean illustration (no text). */
+  specifications?: BookSpecifications | null;
+  /** Raw JSON blob; coverMeta.sourceThumbnailUrl = clean illustration (no text).
+   *  Also holds fields that aren't Book columns: specifications, etsyListing,
+   *  tags, isPremium, isConverted/isRedesigned/isEditionConverted, primaryColor,
+   *  secondaryColor, themeStyle, holiday, occasion. */
   data?: Record<string, unknown> | null;
 }

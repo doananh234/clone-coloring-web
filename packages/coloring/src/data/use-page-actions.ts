@@ -25,26 +25,58 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
     inval();
   };
 
+  /** Regen from the page's CURRENT image (no clone job needed) — preview only.
+   *  Optional `artStyleId` = a B&W style whose reference images + directive guide it. */
+  const genFromImage = async (
+    pageId: string,
+    newAngle: boolean,
+    artStyleId?: string,
+  ): Promise<{ url: string; cameraView?: string; viaJob: false }> => {
+    const res = await httpPost<{ url?: string; cameraView?: string }>(
+      `${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}/pages/${encodeURIComponent(pageId)}/regen`,
+      { newAngle, artStyleId: artStyleId || undefined },
+    );
+    if (!res?.url) throw new Error("Không tạo được bản mới từ ảnh hiện tại.");
+    return { url: res.url, cameraView: res.cameraView, viaJob: false };
+  };
+
   return {
     enabled: COLORING_WRITE_ENABLED,
-    /** Whether Regen/Đổi góc are available (book has a source clone job). */
-    canRegen: Boolean(cloneJobId),
+    /** Regen/Đổi góc are always available: job when present, else from the image. */
+    canRegen: true,
     /**
-     * Generate a candidate via the source clone job WITHOUT applying it, so the user
-     * can preview + choose. newAngle=false → "Regen" (same camera, regenCandidateUrl);
-     * true → "Đổi góc" (new camera, angleCandidateUrl). Returns the candidate image url
-     * (from the reproduce response) — the book page is NOT changed yet.
+     * Generate a candidate WITHOUT applying it, so the user can preview + choose.
+     * With a source clone job → /reproduce (regen / new camera). Without a job (or
+     * if the job no longer exists → 404) → fall back to regenerating from the
+     * page's CURRENT image. `viaJob` tells the caller which apply path to use.
      */
-    genCandidate: async (pageIndex: number, newAngle: boolean): Promise<{ url: string; cameraView?: string }> => {
+    genCandidate: async (pageIndex: number, newAngle: boolean, pageId: string, artStyleId?: string): Promise<{ url: string; cameraView?: string; viaJob: boolean }> => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
-      if (!cloneJobId) throw new Error("Sách này không có clone job nguồn để regen.");
-      const res = await httpPost<{ results?: { url?: string; cameraView?: string }[] }>(
-        `${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`,
-        { pageIndex, newAngle, apply: false },
-      );
-      const r = res?.results?.[0];
-      if (!r?.url) throw new Error("Không tạo được bản mới.");
-      return { url: r.url, cameraView: r.cameraView };
+      // A chosen B&W style can only be honored by the image path (reproduce has no
+      // style input), so a selected style forces regen-from-image.
+      if (artStyleId) return genFromImage(pageId, newAngle, artStyleId);
+      if (!cloneJobId) return genFromImage(pageId, newAngle);
+      try {
+        const res = await httpPost<{ results?: { url?: string; cameraView?: string }[] }>(
+          `${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`,
+          { pageIndex, newAngle, apply: false },
+        );
+        const r = res?.results?.[0];
+        if (!r?.url) throw new Error("no candidate");
+        return { url: r.url, cameraView: r.cameraView, viaJob: true };
+      } catch {
+        // Clone job missing (404) or reproduce failed → regen from current image.
+        return genFromImage(pageId, newAngle);
+      }
+    },
+    /** Apply an image-regen candidate (no job): set the page's line-art url. */
+    applyImageCandidate: async (pages: BookColoringPage[], pageId: string, url: string) => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+      // New line art → the old colored version is stale; clear it so the page
+      // shows the regenerated B&W until re-colorized.
+      await put({
+        coloringPages: pages.map((p) => (p.id === pageId ? { ...p, url, coloredUrl: undefined } : p)),
+      });
     },
     /**
      * Apply a previously generated candidate to this page (sets the job page's

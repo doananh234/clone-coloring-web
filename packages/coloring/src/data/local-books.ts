@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { BookDetail } from "./types";
+import type { BookDetail, BookSpecifications, BookEtsyListing } from "./types";
 
 /**
  * SAFE local edit sandbox for books. Field edits are stored ONLY in
@@ -12,9 +12,44 @@ import type { BookDetail } from "./types";
 const KEY = "coloring:local-book-overrides";
 const EMPTY: Record<string, BookPatch> = {};
 
-export type BookPatch = Partial<
-  Pick<BookDetail, "title" | "subtitle" | "description" | "price" | "category" | "isPublic" | "isPremium">
->;
+/**
+ * All editable book fields. Split at save time (see toBookPayload):
+ *   - real Book columns → sent top-level to PUT
+ *   - the rest → merged into Book.data (non-destructive) by the PUT route
+ */
+export interface BookPatch {
+  // --- real Book columns ---
+  title?: BookDetail["title"];
+  subtitle?: BookDetail["subtitle"];
+  description?: BookDetail["description"];
+  price?: BookDetail["price"];
+  originalPrice?: BookDetail["originalPrice"];
+  discount?: BookDetail["discount"];
+  category?: BookDetail["category"];
+  categoryId?: BookDetail["categoryId"];
+  badge?: BookDetail["badge"];
+  backgroundColor?: BookDetail["backgroundColor"];
+  tryoutPage?: BookDetail["tryoutPage"];
+  coverUrl?: BookDetail["coverUrl"];
+  pdfUrl?: BookDetail["pdfUrl"];
+  thumbnailUrl?: BookDetail["thumbnailUrl"];
+  squareThumbnailUrl?: BookDetail["squareThumbnailUrl"];
+  niche?: BookDetail["niche"];
+  isPublic?: boolean;
+  // --- Book.data blob fields ---
+  isPremium?: boolean;
+  isConverted?: boolean;
+  isRedesigned?: boolean;
+  isEditionConverted?: boolean;
+  tags?: string[];
+  primaryColor?: string;
+  secondaryColor?: string;
+  themeStyle?: string;
+  holiday?: string;
+  occasion?: string;
+  specifications?: BookSpecifications;
+  etsyListing?: BookEtsyListing;
+}
 
 let cache: Record<string, BookPatch> | null = null;
 const listeners = new Set<() => void>();

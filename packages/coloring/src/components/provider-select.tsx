@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 
 /** Operator-selectable image backends. Mirrors the server-side allow-list. */
-export type ImageProvider = "kingcong" | "diaflow";
+export type ImageProvider = "kingcong" | "diaflow" | "litellm" | "azure";
+
+/** Single source of truth for the dropdown options + storage validation. */
+export const IMAGE_PROVIDER_OPTIONS: { value: ImageProvider; label: string }[] = [
+  { value: "kingcong", label: "KingCong" },
+  { value: "diaflow", label: "Diaflow" },
+  { value: "litellm", label: "LiteLLM" },
+  { value: "azure", label: "Azure" },
+];
+const PROVIDER_VALUES = IMAGE_PROVIDER_OPTIONS.map((o) => o.value) as string[];
 
 const STORAGE_KEY = "vx.imageProvider";
 const DEFAULT_PROVIDER: ImageProvider = "kingcong";
@@ -11,7 +20,7 @@ const DEFAULT_PROVIDER: ImageProvider = "kingcong";
 function readStored(): ImageProvider {
   if (typeof window === "undefined") return DEFAULT_PROVIDER;
   const v = window.localStorage.getItem(STORAGE_KEY);
-  return v === "kingcong" || v === "diaflow" ? v : DEFAULT_PROVIDER;
+  return v && PROVIDER_VALUES.includes(v) ? (v as ImageProvider) : DEFAULT_PROVIDER;
 }
 
 /**
@@ -66,8 +75,9 @@ export function ProviderSelect({ value, onChange, label, disabled, id = "image-p
           opacity: disabled ? 0.5 : 1,
         }}
       >
-        <option value="kingcong">KingCong</option>
-        <option value="diaflow">Diaflow</option>
+        {IMAGE_PROVIDER_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
       </select>
     </div>
   );

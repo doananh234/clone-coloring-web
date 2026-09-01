@@ -11,7 +11,10 @@ export async function POST(req: NextRequest) {
       coloringStyleId: string;
       provider?: string;
     };
-    const provider = providerRaw === "kingcong" || providerRaw === "diaflow" ? providerRaw : undefined;
+    const provider =
+      providerRaw === "kingcong" || providerRaw === "diaflow" || providerRaw === "litellm" || providerRaw === "azure"
+        ? providerRaw
+        : undefined;
 
     if (!imageUrl || !coloringStyleId) {
       return NextResponse.json(

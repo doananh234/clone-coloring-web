@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@vx/db";
+import { prisma, isSqlite, Prisma } from "@vx/db";
 
 type PageEntry = {
   id?: string;
@@ -25,9 +25,16 @@ const MAX_USAGES = 500;
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    // jsonb @>: only books whose coloringPages array has an element with this styleId.
+    // Postgres: jsonb @> pre-filters to books whose coloringPages array has an
+    // element with this styleId. SQLite has no array_contains — fetch a bounded
+    // slice and rely on the per-page JS filter below (fine for local dev volumes).
+    // `array_contains` isn't a key on the SQLite-generated Json filter type, so
+    // build the Postgres branch through a cast to keep both clients type-checking.
+    const where: Prisma.BookWhereInput = isSqlite()
+      ? {}
+      : ({ coloringPages: { array_contains: [{ coloringStyleId: id }] } } as Prisma.BookWhereInput);
     const books = await prisma.book.findMany({
-      where: { coloringPages: { array_contains: [{ coloringStyleId: id }] } },
+      where,
       select: { id: true, title: true, coloringPages: true },
       take: MAX_BOOKS,
     });

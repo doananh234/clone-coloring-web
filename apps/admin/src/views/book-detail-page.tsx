@@ -35,6 +35,7 @@ import {
   faChevronRight,
   faFont,
   faDownload,
+  faCloudArrowUp,
 } from "@fortawesome/pro-regular-svg-icons";
 import dynamic from "next/dynamic";
 
@@ -137,6 +138,7 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
 
   const [generatingSubtitle, setGeneratingSubtitle] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncingFb, setSyncingFb] = useState(false);
   const [uploadingR2, setUploadingR2] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<ImageItem[]>([]);
@@ -609,6 +611,32 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
               >
                 <FontAwesomeIcon icon={faRotate} spin={syncing} className="mr-2 h-4 w-4" />
                 Sync Category
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={syncingFb}
+                onClick={async () => {
+                  if (!window.confirm(`Đẩy sách này lên Firebase (prod)?`)) return;
+                  setSyncingFb(true);
+                  try {
+                    const res = await fetch(`/api/books/${bookId}/sync-firebase`, {
+                      method: "POST",
+                    });
+                    const data = await res.json();
+                    if (data.success) notify.success(`Đã sync lên Firebase [${data.projectId}]`);
+                    else notify.error(data.error || "Sync Firebase thất bại");
+                  } catch {
+                    notify.error("Sync Firebase thất bại");
+                  } finally {
+                    setSyncingFb(false);
+                  }
+                }}
+              >
+                <FontAwesomeIcon
+                  icon={syncingFb ? faSpinner : faCloudArrowUp}
+                  spin={syncingFb}
+                  className="mr-2 h-4 w-4"
+                />
+                {syncingFb ? "Đang sync…" : "Sync lên Firebase"}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={uploadingR2}

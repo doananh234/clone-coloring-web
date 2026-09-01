@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { httpGet } from "@vx/core-uikit/api";
-import { COLORING_API_BASE } from "./config";
 
 export interface OperatorRow {
   id: string;
@@ -27,7 +26,10 @@ interface OperatorsResponse {
 export function useOperators() {
   const query = useQuery({
     queryKey: ["coloring", "operators"],
-    queryFn: () => httpGet<OperatorsResponse>(`${COLORING_API_BASE}/operators`),
+    // Operators are LOCAL admin-panel accounts — always the same-origin /api,
+    // never the coloring content upstream (which may proxy to prod). Mirrors the
+    // hardcoded /api/operators in useOperatorActions.
+    queryFn: () => httpGet<OperatorsResponse>("/api/operators"),
   });
   return {
     operators: query.data?.data ?? [],

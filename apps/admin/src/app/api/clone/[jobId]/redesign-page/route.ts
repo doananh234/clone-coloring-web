@@ -23,7 +23,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       changePercent?: number;
       provider?: string;
     };
-    const provider = providerRaw === "kingcong" || providerRaw === "diaflow" ? providerRaw : undefined;
+    const provider =
+      providerRaw === "kingcong" || providerRaw === "diaflow" || providerRaw === "litellm" || providerRaw === "azure"
+        ? providerRaw
+        : undefined;
 
     if (pageIndex === undefined || pageIndex === null) {
       return NextResponse.json({ error: "pageIndex required" }, { status: 400 });

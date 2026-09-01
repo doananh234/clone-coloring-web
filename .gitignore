@@ -27,3 +27,8 @@ backups/
 .kingcong-profile/
 **/.kingcong-session.json
 **/.kingcong-profile/
+
+# Local SQLite dev database (worker + admin shared)
+# dev.db
+# dev.db-shm
+# dev.db-wal

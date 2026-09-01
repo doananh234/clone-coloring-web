@@ -16,6 +16,13 @@ export {
   type GenerateCoverDeps,
 } from "./generate-cover";
 export {
+  stepGenerateBookMeta,
+  type GenerateBookMetaDeps,
+  type GeneratedBookMeta,
+  type CategoryOption,
+} from "./generate-book-meta";
+export { stepFinalizeCover, type FinalizeCoverDeps } from "./finalize-cover";
+export {
   stepFillInterior,
   planFillInterior,
   DEFAULT_TARGET_INTERIOR,

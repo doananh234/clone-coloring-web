@@ -9,6 +9,8 @@ import {
   stepCreateBook,
   stepOneShot,
   stepGenerateCover,
+  stepGenerateBookMeta,
+  stepFinalizeCover,
   stepFillInterior,
 } from "@vx/clone-core";
 import { db } from "../db";
@@ -22,6 +24,7 @@ import {
   createBookDeps,
   oneShotDeps,
   generateCoverDeps,
+  generateBookMetaDeps,
   fillInteriorDeps,
 } from "./step-deps";
 
@@ -87,22 +90,37 @@ export async function processCloneJob(jobId: string): Promise<void> {
     // D2 gate — pause for the operator's classification review before building
     // the Book. The default one-shot pipeline has already reproduced the pages
     // by this point (spec §4.4), so the gate lands here: after reproduce,
-    // before create-book. Resumed by POST /api/clone/[jobId]/classify with
+    // before create-book. Resumed by PATCH /api/clone/[jobId]/classify with
     // { confirm: true }, which sets classifyConfirmed and re-enqueues the job —
     // on the second run download/render/reproduce are all `isDone`, so the
     // worker skips straight back to this check (now passing) and continues.
+    //
+    // Auto-classify: set CLONE_AUTO_CLASSIFY=true (env) or job.data.autoClassify
+    // to skip the manual review entirely — the job flows straight through to
+    // create-book → generate-cover → generate-book-meta → finalize-cover, so a
+    // cloned book ships with full AI meta without any manual step.
     const gateRow = await db.cloneJob.findUnique({
       where: { id: jobId },
       select: { data: true },
     });
-    const gateData = (gateRow?.data as { classifyConfirmed?: boolean } | null | undefined) ?? {};
-    if (!gateData.classifyConfirmed) {
+    const gateData =
+      (gateRow?.data as { classifyConfirmed?: boolean; autoClassify?: boolean } | null | undefined) ?? {};
+    const autoClassify = process.env.CLONE_AUTO_CLASSIFY === "true" || gateData.autoClassify === true;
+    if (!gateData.classifyConfirmed && !autoClassify) {
       await db.cloneJob.updateMany({
         where: { id: jobId },
         data: { status: "awaiting-classify" },
       });
       console.log(`[worker] clone job ${jobId} paused at classify gate`);
       return;
+    }
+    if (!gateData.classifyConfirmed && autoClassify) {
+      // Persist the auto-pass so a later resume/reconcile also treats it confirmed.
+      await db.cloneJob.updateMany({
+        where: { id: jobId },
+        data: { data: { ...(gateRow?.data as Record<string, unknown> | null ?? {}), classifyConfirmed: true } as never },
+      });
+      console.log(`[worker] clone job ${jobId} auto-passed classify gate (CLONE_AUTO_CLASSIFY)`);
     }
 
     // D3 — reach the configured interior target by cloning source interiors.
@@ -122,6 +140,28 @@ export async function processCloneJob(jobId: string): Promise<void> {
       await withRetry(
         "generate-cover",
         () => stepGenerateCover(ctx, db, generateCoverDeps),
+        ctx,
+      );
+    }
+
+    // Full AI book meta (title/subtitle/description, tags, Etsy, colors, badge,
+    // price, category, specs…) generated FROM the cover — parity with the manual
+    // "Sinh meta AI" button, so every cloned book ships complete.
+    if (!ctx.isDone("generate-book-meta")) {
+      await withRetry(
+        "generate-book-meta",
+        () => stepGenerateBookMeta(ctx, db, generateBookMetaDeps),
+        ctx,
+      );
+    }
+
+    // "Cover AI cuối" — bake the fresh meta title/subtitle + brand onto the clean
+    // cover illustration (reuses generateCoverDeps: it already carries
+    // generateAiCover + resolveR2Url, a superset of FinalizeCoverDeps).
+    if (!ctx.isDone("finalize-cover")) {
+      await withRetry(
+        "finalize-cover",
+        () => stepFinalizeCover(ctx, db, generateCoverDeps),
         ctx,
       );
     }

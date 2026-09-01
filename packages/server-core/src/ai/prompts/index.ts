@@ -45,3 +45,10 @@ export {
   CAMERA_VIEWS,
   type CameraView,
 } from "./redesign-prompts";
+
+export {
+  KDP_FRAME_INSTRUCTION,
+  REMOVE_FRAME_INSTRUCTION,
+  isFrameEnabled,
+  frameInstruction,
+} from "./frame";

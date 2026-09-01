@@ -6,7 +6,6 @@ import { COLORING_BASE as B } from "../../components/shell/nav-config";
 const CARDS: HubCard[] = [
   { icon: "store", title: "Etsy listings", sub: "Đang bán · sync", href: `${B}/etsy` },
   { icon: "wallet", title: "Chi phí AI & logs", sub: "Ngân sách generation", href: `${B}/system/ai-cost` },
-  { icon: "shield", title: "Người dùng & quyền", sub: "Tài khoản, vai trò", href: `${B}/system/users` },
   { icon: "settings", title: "Cài đặt hệ thống", sub: "Model AI, ngân sách, Etsy, PDF", href: `${B}/system/settings` },
 ];
 

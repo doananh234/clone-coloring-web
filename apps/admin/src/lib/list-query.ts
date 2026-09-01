@@ -17,6 +17,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Prisma delegate args are
    model-specific; the runners are typed at each call site instead. */
 import { NextRequest, NextResponse } from "next/server";
+import { ci } from "@vx/db";
 
 export interface EntityListRunners<T> {
   findMany: (args: any) => Promise<T[]>;
@@ -50,7 +51,7 @@ export async function listEntity<T>(
     q && opts.searchFields?.length
       ? {
           OR: opts.searchFields.map((f) => ({
-            [f]: { contains: q, mode: "insensitive" as const },
+            [f]: ci(q),
           })),
         }
       : undefined;

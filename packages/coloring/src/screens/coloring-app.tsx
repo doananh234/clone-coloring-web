@@ -16,7 +16,6 @@ import { LibraryScreen } from "./hubs/library-screen";
 import { SystemScreen } from "./hubs/system-screen";
 import { CharactersScreen, LocationsScreen, BrandsScreen, CategoriesListScreen, BwStylesScreen, ColorStylesScreen } from "./hubs/entity-lists";
 import { ExtractStyleScreen } from "./hubs/extract-style-screen";
-import { UsersScreen } from "./system/users-screen";
 import { AiCostScreen } from "./system/ai-cost-screen";
 import { SettingsScreen } from "./system/settings-screen";
 import { FontsScreen } from "./system/fonts-screen";
@@ -58,7 +57,6 @@ function screenFor(slug: string[], title: string) {
   if (top === "styles" && sub === "extractbw") return <ExtractStyleScreen kind="art-styles" />;
   if (top === "styles" && sub === "extractcolor") return <ExtractStyleScreen kind="coloring-styles" />;
   if (top === "styles" && !sub) return <StylesScreen />;
-  if (top === "system" && sub === "users") return <UsersScreen />;
   if (top === "system" && sub === "ai-cost") return <AiCostScreen />;
   if (top === "system" && sub === "settings") return <SettingsScreen />;
   if (top === "system" && !sub) return <SystemScreen />;

@@ -24,7 +24,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "interiorPageId and titleSafe are required" }, { status: 400 });
     // Only the two operator-selectable backends; anything else falls back to the
     // worker's IMAGE_PROVIDER default (payload provider left undefined).
-    const chosenProvider = provider === "kingcong" || provider === "diaflow" ? provider : undefined;
+    const chosenProvider =
+      provider === "kingcong" || provider === "diaflow" || provider === "litellm" || provider === "azure"
+        ? provider
+        : undefined;
 
     const book = await prisma.book.findUnique({ where: { id: bookId } });
     if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });

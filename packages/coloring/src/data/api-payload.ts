@@ -12,7 +12,15 @@ import type { EntityRecord } from "./use-entity";
 
 const BOOK_COLS = new Set([
   "title", "subtitle", "description", "price", "originalPrice", "discount",
-  "category", "categoryId", "badge", "backgroundColor", "isPublic",
+  "category", "categoryId", "badge", "backgroundColor", "tryoutPage",
+  "coverUrl", "pdfUrl", "thumbnailUrl", "squareThumbnailUrl", "niche", "isPublic",
+]);
+
+// Not Book columns — merged into Book.data (non-destructively) by the PUT route.
+const BOOK_DATA_FIELDS = new Set([
+  "isPremium", "isConverted", "isRedesigned", "isEditionConverted",
+  "tags", "primaryColor", "secondaryColor", "themeStyle", "holiday", "occasion",
+  "specifications", "etsyListing",
 ]);
 
 const ENTITY_COLS: Record<string, string[]> = {
@@ -36,8 +44,21 @@ export function droppedKeys(kind: "book" | string, patch: Record<string, unknown
   return Object.keys(patch).filter((k) => !cols.has(k));
 }
 
+/**
+ * Split a book patch into real columns (top-level) + a `data` object holding the
+ * blob fields. The PUT route merges `data` into the existing Book.data without
+ * clobbering keys we didn't touch.
+ */
 export function toBookPayload(patch: BookPatch): Record<string, unknown> {
-  return pick(patch as Record<string, unknown>, BOOK_COLS);
+  const out: Record<string, unknown> = {};
+  const data: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    if (BOOK_COLS.has(k)) out[k] = v;
+    else if (BOOK_DATA_FIELDS.has(k)) data[k] = v;
+  }
+  if (Object.keys(data).length > 0) out.data = data;
+  return out;
 }
 
 export function toEntityPayload(kind: string, patch: EntityRecord): Record<string, unknown> {

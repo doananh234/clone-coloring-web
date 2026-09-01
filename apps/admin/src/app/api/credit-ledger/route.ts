@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@vx/db";
+import { prisma, ci } from "@vx/db";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -10,9 +10,9 @@ export async function GET(req: NextRequest) {
   const where = search
     ? {
         OR: [
-          { userId: { contains: search, mode: "insensitive" as const } },
-          { type: { contains: search, mode: "insensitive" as const } },
-          { description: { contains: search, mode: "insensitive" as const } },
+          { userId: ci(search) },
+          { type: ci(search) },
+          { description: ci(search) },
         ],
       }
     : {};

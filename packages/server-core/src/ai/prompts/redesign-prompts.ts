@@ -5,6 +5,8 @@
  * here so routes/UI never hardcode prompt text.
  */
 
+import { KDP_FRAME_INSTRUCTION, isFrameEnabled } from "./frame";
+
 export const CAMERA_VIEWS = ["close-up", "medium", "wide", "bird's-eye", "low-angle"] as const;
 export type CameraView = (typeof CAMERA_VIEWS)[number];
 
@@ -104,7 +106,6 @@ ${poseLine}
 - Position of props within the scene (rearrange layout)
 - Individual props can be swapped for similar items
   (e.g. teapot → kettle, tulip → daisy, book → notepad)
-- No border, no frame, full-bleed composition, edge-to-edge content
 DO NOT:
 - Add any color, shading, or gradients
 - Add interior texture, stippling, dots, crosshatching, hatching lines,
@@ -119,5 +120,5 @@ DO NOT:
 - Subdivide large shapes with extra decorative lines
 - Change the line thickness or drawing technique
 - Replace the character with a different species
-- Break the coloring-book outline aesthetic`;
+- Break the coloring-book outline aesthetic${isFrameEnabled() ? `\n\n${KDP_FRAME_INSTRUCTION}` : ""}`;
 }

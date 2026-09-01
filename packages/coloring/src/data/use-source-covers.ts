@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { httpGet, httpPost, httpPatch, httpDel } from "@vx/core-uikit/api";
 import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
 import type { SourceCover, TitleSafePosition } from "./source-covers";
+import type { ImageProvider } from "../components/provider-select";
 
 const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (staging).";
 
@@ -20,7 +21,7 @@ export function useSourceCovers(bookId: string) {
       interiorPageId: string,
       titleSafe: TitleSafePosition,
       promptOverride?: string,
-      provider?: "kingcong" | "diaflow",
+      provider?: ImageProvider,
     ) => {
       guard();
       // A non-empty promptOverride lets operators tune the prompt in the dialog
