@@ -14,6 +14,8 @@ const require = createRequire(import.meta.url);
 
 import { resolveR2Url as normalizeImageUrl } from "../r2";
 import { getLangfuse } from "../langfuse";
+import { litellmFetch } from "./litellm-dispatcher";
+import { jsonrepair } from "jsonrepair";
 
 export type LLMMessage = {
   role: "system" | "user" | "assistant";
@@ -53,37 +55,76 @@ function getConfig() {
   return { endpoint, apiKey, deployment, apiVersion };
 }
 
+function getLiteLLMConfig() {
+  const baseUrl = process.env.LITELLM_BASE_URL?.replace(/\/$/, "");
+  const apiKey = process.env.LITELLM_API_KEY;
+  const model = process.env.LITELLM_TEXT_MODEL || "saigon";
+
+  if (!baseUrl || !apiKey) {
+    throw new Error("LLM not configured. Set LITELLM_BASE_URL and LITELLM_API_KEY.");
+  }
+
+  return { baseUrl, apiKey, model };
+}
+
 /**
- * Send a chat completion request to Azure OpenAI.
+ * Send a chat completion request to the active text backend.
+ * Azure OpenAI by default; LiteLLM (OpenAI-compatible) when LLM_PROVIDER=litellm.
  */
 export async function chatCompletion(
   messages: LLMMessage[],
   options: LLMOptions = {},
 ): Promise<LLMResponse> {
-  const { endpoint, apiKey, deployment, apiVersion } = getConfig();
   const { maxTokens = 2048, temperature = 0.7, jsonMode = false } = options;
+  const useLiteLLM = process.env.LLM_PROVIDER === "litellm";
 
-  const body: Record<string, unknown> = {
-    messages,
-    max_completion_tokens: maxTokens,
-    temperature,
-  };
+  let res: Response;
+  let modelLabel: string;
 
-  if (jsonMode) {
-    body.response_format = { type: "json_object" };
-  }
-
-  const res = await fetch(
-    `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`,
-    {
+  if (useLiteLLM) {
+    const { baseUrl, apiKey, model } = getLiteLLMConfig();
+    modelLabel = model;
+    const body: Record<string, unknown> = {
+      model,
+      messages,
+      // saigon and friends are reasoning models — use the OpenAI-standard field.
+      max_tokens: maxTokens,
+      temperature,
+    };
+    if (jsonMode) {
+      body.response_format = { type: "json_object" };
+    }
+    res = await litellmFetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "api-key": apiKey,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
-    },
-  );
+    });
+  } else {
+    const { endpoint, apiKey, deployment, apiVersion } = getConfig();
+    modelLabel = deployment;
+    const body: Record<string, unknown> = {
+      messages,
+      max_completion_tokens: maxTokens,
+      temperature,
+    };
+    if (jsonMode) {
+      body.response_format = { type: "json_object" };
+    }
+    res = await fetch(
+      `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": apiKey,
+        },
+        body: JSON.stringify(body),
+      },
+    );
+  }
 
   if (!res.ok) {
     const err = await res.text();
@@ -111,7 +152,7 @@ export async function chatCompletion(
     });
     trace.generation({
       name: "chatCompletion",
-      model: deployment,
+      model: modelLabel,
       input: messages,
       output: content,
       usage: {
@@ -227,6 +268,37 @@ export async function recheckOneShotSession(sessionId: string): Promise<{
 }
 
 /**
+ * Parse JSON returned by an LLM defensively. Models (incl. LiteLLM/Azure-proxied
+ * ones) intermittently wrap the payload in ```json fences, add prose around it,
+ * or leave a trailing comma — a raw JSON.parse then throws and the whole request
+ * 500s. We strip fences, extract the outermost object/array, and (as a last
+ * resort) run jsonrepair before parsing; only a genuinely broken payload throws.
+ */
+export function parseLlmJson<T = unknown>(raw: string): T {
+  let s = (raw ?? "").trim();
+  const fence = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fence) s = fence[1].trim();
+  // Trim leading prose / trailing prose around the JSON body.
+  const start = s.search(/[{[]/);
+  if (start > 0) s = s.slice(start);
+  const end = Math.max(s.lastIndexOf("}"), s.lastIndexOf("]"));
+  if (end >= 0 && end < s.length - 1) s = s.slice(0, end + 1);
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    // Reasoning models behind LiteLLM (e.g. "saigon") reliably emit malformed
+    // JSON — missing commas, trailing commas, single quotes — even in
+    // json_object mode. jsonrepair fixes these structurally.
+    try {
+      return JSON.parse(jsonrepair(s)) as T;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`LLM returned invalid JSON (${msg}). First 300 chars: ${s.slice(0, 300)}`);
+    }
+  }
+}
+
+/**
  * Vision analyze with structured JSON response.
  */
 export async function visionAnalyzeJSON<T = unknown>(
@@ -247,5 +319,5 @@ export async function visionAnalyzeJSON<T = unknown>(
     ...options,
     jsonMode: true,
   });
-  return JSON.parse(content) as T;
+  return parseLlmJson<T>(content);
 }

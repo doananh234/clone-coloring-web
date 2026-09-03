@@ -1,8 +1,8 @@
 /**
  * Image Provider — unified facade for image generation and editing.
  *
- * Delegates to Azure OpenAI, Google Gemini, Vertex AI, Diaflow, or KingCong based on IMAGE_PROVIDER env var.
- * Default: "azure". e.g. IMAGE_PROVIDER=diaflow | kingcong.
+ * Delegates to Azure OpenAI, Google Gemini, Vertex AI, Diaflow, KingCong, or LiteLLM based on IMAGE_PROVIDER env var.
+ * Default: "azure". e.g. IMAGE_PROVIDER=diaflow | kingcong | litellm.
  *
  * All callers import from this file — never from provider-specific files.
  */
@@ -63,6 +63,11 @@ function getProvider(override?: string): ImageProviderInterface {
   if (provider === "gemini") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./image-provider-gemini").geminiImageProvider;
+  }
+
+  if (provider === "litellm") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./image-provider-litellm").litellmImageProvider;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
