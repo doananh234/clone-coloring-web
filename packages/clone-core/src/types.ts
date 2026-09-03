@@ -7,7 +7,9 @@ export type CloneStep =
   | "reproduce"
   | "fill-interior"
   | "create-book"
-  | "generate-cover";
+  | "generate-cover"
+  | "generate-book-meta"
+  | "finalize-cover";
 
 export const STEP_ORDER: readonly CloneStep[] = [
   "download",
@@ -19,6 +21,8 @@ export const STEP_ORDER: readonly CloneStep[] = [
   "fill-interior",
   "create-book",
   "generate-cover",
+  "generate-book-meta",
+  "finalize-cover",
 ] as const;
 
 export interface RetryRecord {
