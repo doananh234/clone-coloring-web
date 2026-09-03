@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "SWC_NODE_PROJECT=tsconfig.json node --watch --import @swc-node/register/esm-register src/main.ts",
-    "start": "SWC_NODE_PROJECT=tsconfig.json node --import @swc-node/register/esm-register src/main.ts",
+    "dev": "SWC_NODE_PROJECT=tsconfig.json node --env-file-if-exists=.env --env-file-if-exists=.env.local --watch --import @swc-node/register/esm-register src/main.ts",
+    "start": "SWC_NODE_PROJECT=tsconfig.json node --env-file-if-exists=.env --env-file-if-exists=.env.local --import @swc-node/register/esm-register src/main.ts",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
     "test:watch": "vitest"

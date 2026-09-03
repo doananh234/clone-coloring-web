@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma, Prisma } from "@vx/db";
+import { prisma, Prisma, ci, jsonPath } from "@vx/db";
 import { getOperatorFromRequest } from "@/lib/auth/require-operator";
 
 export async function GET(req: NextRequest) {
@@ -19,9 +19,9 @@ export async function GET(req: NextRequest) {
     // trigger, so this no longer detoasts data.nicheLower per row.
     and.push({
       OR: [
-        { title: { contains: q, mode: "insensitive" } },
-        { subtitle: { contains: q, mode: "insensitive" } },
-        { niche: { contains: q, mode: "insensitive" } },
+        { title: ci(q) },
+        { subtitle: ci(q) },
+        { niche: ci(q) },
       ],
     });
   }
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   // (book.data.etsyListing present & non-null). Low-traffic screen, so a JSONB
   // path predicate is acceptable here; denormalize to a scalar if it grows.
   const etsy = (searchParams.get("etsy") || "").trim();
-  if (etsy === "1") and.push({ data: { path: ["etsyListing"], not: Prisma.AnyNull } });
+  if (etsy === "1") and.push({ data: { path: jsonPath(["etsyListing"]), not: Prisma.AnyNull } });
 
   // "Interior > 40" filter. `interiorPages` is a denormalized scalar column
   // (coloringPages length), maintained by the book_denorm_perf DB trigger, so

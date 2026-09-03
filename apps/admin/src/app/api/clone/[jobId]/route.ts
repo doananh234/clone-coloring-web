@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@vx/db";
+import { prisma, jsonPath } from "@vx/db";
 import { getR2Config, createR2Client, resolveR2Url } from "@vx/server-core/r2";
 import { DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import type { S3Client } from "@aws-sdk/client-s3";
@@ -7,7 +7,6 @@ import { removeQueuedCloneJob } from "@vx/clone-core/queue-enqueue";
 import { cloneQueue } from "@/lib/queue/clone-queue";
 import { withQueueTimeout, isQueueTimeout } from "@/lib/queue/queue-timeout";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
-import { STEP_ORDER, type CloneStep } from "@vx/clone-core/types";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
@@ -59,16 +58,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       ...extra,
     };
 
-    // Has this job's AI call already happened? Same rule the worker applies via
-    // `ctx.isDone("reproduce")`, computed here so the gate UI does not have to
-    // mirror STEP_ORDER — mirroring the routing inputs client-side is what let
-    // the Lane 2 banner promise a free park on rows that had already paid.
-    const cursor = STEP_ORDER.indexOf(extra.currentStep as CloneStep);
-    const alreadySpent = cursor >= 0 && cursor >= STEP_ORDER.indexOf("reproduce");
-
     return NextResponse.json({
       success: true,
-      job: { ...job, pages: resolvedPages, alreadySpent },
+      job: { ...job, pages: resolvedPages },
     });
   } catch (error) {
     console.error("[clone/get] Error:", error);
@@ -158,7 +150,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     if (row.resultBookId) bookIds.add(row.resultBookId);
     try {
       const linked = await prisma.book.findMany({
-        where: { data: { path: ["cloneJobId"], equals: jobId } },
+        where: { data: { path: jsonPath(["cloneJobId"]), equals: jobId } },
         select: { id: true },
       });
       linked.forEach((b) => bookIds.add(b.id));

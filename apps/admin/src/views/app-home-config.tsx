@@ -5,7 +5,7 @@ import { appApi } from "@vx/core-uikit/api";
 import { SortableList, ItemPickerDialog, Button, Badge } from "@vx/core-uikit/components";
 import { notify } from "@vx/core-uikit/notifications";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus, faTrash, faFloppyDisk, faRotate } from "@fortawesome/pro-regular-svg-icons";
+import { faPlus, faTrash, faFloppyDisk, faRotate, faCloudArrowUp } from "@fortawesome/pro-regular-svg-icons";
 import { CollapsibleSection } from "./collapsible-section";
 import { usePickerHandlers } from "./app-home-picker-handlers";
 import type {
@@ -95,6 +95,7 @@ function AppHomeConfigPage() {
   const [freePages, setFreePages] = useState<AppHomeFreeColoringPage[]>([]);
   const [saving, setSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState<"newArrival" | "trending" | "category" | "freePage" | null>(null);
 
   // Populate from loaded doc
@@ -163,7 +164,7 @@ function AppHomeConfigPage() {
                 const data = await res.json();
                 if (data.success) {
                   notify.success(
-                    `Synced: ${data.synced.categories} categories, ${data.synced.newArrivalBooks} arrivals, ${data.synced.trendingBooks} trending`,
+                    `Synced: ${data.synced.categories} categories, ${data.synced.newArrivalBooks} arrivals, ${data.synced.trendingBooks} trending, ${data.synced.freeColoringPages} free`,
                   );
                   queryClient.invalidateQueries({ queryKey: ["app-home"] });
                 } else {
@@ -178,6 +179,32 @@ function AppHomeConfigPage() {
           >
             <FontAwesomeIcon icon={faRotate} spin={isSyncing} className="mr-1.5 h-3.5 w-3.5" />
             {isSyncing ? "Syncing..." : "Sync All"}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={isPublishing}
+            title="Đẩy app/home hiện tại lên Firestore prod (đúng schema, merge an toàn)"
+            onClick={async () => {
+              setIsPublishing(true);
+              try {
+                const res = await fetch("/api/app-home/sync-firebase", { method: "POST" });
+                const data = await res.json();
+                if (data.success) {
+                  notify.success(
+                    `Published → Firebase (${data.projectId}): ${data.pushed.newArrivalBooks} arrivals, ${data.pushed.trendingBooks} trending, ${data.pushed.freeColoringPages} free`,
+                  );
+                } else {
+                  notify.error(data.error || "Publish failed");
+                }
+              } catch {
+                notify.error("Publish failed");
+              } finally {
+                setIsPublishing(false);
+              }
+            }}
+          >
+            <FontAwesomeIcon icon={faCloudArrowUp} spin={isPublishing} className="mr-1.5 h-3.5 w-3.5" />
+            {isPublishing ? "Publishing..." : "Publish → Firebase"}
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             <FontAwesomeIcon icon={faFloppyDisk} className="mr-2 size-4" />

@@ -7,13 +7,16 @@ import {
   resolveR2Url,
 } from "@vx/server-core/r2";
 import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
-import { copyPdfPages } from "@vx/server-core/pdf-trim";
 import { visionAnalyzeJSON, cloneOneShot, recheckOneShotSession } from "@vx/server-core/ai/llm-provider";
 import {
   CLONE_EXTRACTION_PROMPT,
   buildReproductionPrompt,
   buildRedesignPrompt,
 } from "@vx/server-core/ai/prompts";
+import {
+  buildBookMetaPrompt,
+  type BookMetaGenerationResult,
+} from "@vx/server-core/ai/prompts/book-meta-prompt";
 import {
   generateCharacterReference,
   generateLocationReference,
@@ -106,7 +109,6 @@ async function generatePage(args: {
 
 export const downloadDeps = { fetchPdf, uploadToR2 };
 export const renderDeps = { readPdfFromR2, renderPdfToImages, uploadToR2 };
-export const trimPdfDeps = { readPdfFromR2, copyPdfPages, uploadToR2 };
 export const analyzeDeps = { analyzePage, resolveR2Url };
 export const extractEntitiesDeps = {
   generateCharacterReference: (prompt: string, opts: { sourceImageUrl?: string; characterName: string; characterInfo?: string }) =>
@@ -175,3 +177,21 @@ export const oneShotDeps = {
 // Re-exported from the shared @vx/server-core module (see import above) so
 // existing worker imports of `generateCoverDeps` keep working unchanged.
 export { generateCoverDeps };
+
+// Full AI book-meta generation from the cover image (parity with the admin's
+// /api/generate/book-meta). Injected into stepGenerateBookMeta.
+export const generateBookMetaDeps = {
+  resolveR2Url,
+  generateBookMeta: async (
+    coverImageUrl: string,
+    categories: { id: string; displayName: string }[],
+  ): Promise<BookMetaGenerationResult> => {
+    const { systemPrompt, userPrompt } = buildBookMetaPrompt(categories);
+    return visionAnalyzeJSON<BookMetaGenerationResult>(coverImageUrl, userPrompt, {
+      systemPrompt,
+      maxTokens: 4096,
+      temperature: 0.7,
+      trace: { caller: "clone/generate-book-meta", entityType: "book" },
+    });
+  },
+};

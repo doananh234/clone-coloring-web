@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@vx/db";
+import { prisma, jsonPath } from "@vx/db";
 import { removeVariant } from "@vx/clone-core";
 
 /**
@@ -46,7 +46,7 @@ export async function DELETE(
     // Ref guard: books pin an exact variant via data.coverMeta.coloringVariantId.
     // Warn (block without force) so the operator knows the ref will be orphaned.
     const inUseBy = await prisma.book.count({
-      where: { data: { path: ["coverMeta", "coloringVariantId"], equals: variantId } },
+      where: { data: { path: jsonPath(["coverMeta", "coloringVariantId"]), equals: variantId } },
     });
     if (inUseBy > 0 && !force) {
       return NextResponse.json({ error: "in-use", inUseBy }, { status: 409 });

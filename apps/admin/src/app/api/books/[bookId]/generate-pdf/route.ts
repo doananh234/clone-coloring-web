@@ -74,14 +74,22 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ bo
     const pdfDoc = await PDFDocument.create();
     const errors: string[] = [];
 
+    // Uniform page size for the WHOLE book — an 8.5"×8.5" square KDP trim
+    // (72pt/inch). Images come in mixed sizes (1024/2048, cover vs interior), so
+    // sizing each page to its image made the PDF pages inconsistent. Instead every
+    // page is the SAME square and each image is contain-fit + centered (square
+    // images fill it exactly; any stray non-square letterboxes on white).
+    const PAGE = 8.5 * 72; // 612 pt
+
     for (const item of items) {
       const image = await embedImage(pdfDoc, item, errors);
       if (!image) continue;
 
-      // Page size matches image native dimensions — no scaling, no margins.
-      const { width, height } = image;
-      const pdfPage = pdfDoc.addPage([width, height]);
-      pdfPage.drawImage(image, { x: 0, y: 0, width, height });
+      const scale = Math.min(PAGE / image.width, PAGE / image.height);
+      const dw = image.width * scale;
+      const dh = image.height * scale;
+      const pdfPage = pdfDoc.addPage([PAGE, PAGE]);
+      pdfPage.drawImage(image, { x: (PAGE - dw) / 2, y: (PAGE - dh) / 2, width: dw, height: dh });
     }
 
     if (pdfDoc.getPageCount() === 0) {

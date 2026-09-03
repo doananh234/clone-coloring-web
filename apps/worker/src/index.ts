@@ -1,6 +1,7 @@
 import pino from "pino";
 import { createWorker, createGenerationWorker } from "./queue";
 import "./db";
+import { reconcileOnBoot } from "./env";
 import { processCloneJob } from "./processor/clone-job-processor";
 import { processGenerationJob } from "./processor/generation-job-processor";
 import { reconcileStaleJobs } from "./reconciler";
@@ -10,13 +11,17 @@ const logger = pino({ transport: { target: "pino-pretty" } });
 async function main() {
   logger.info("worker booting");
 
-  try {
-    const recon = await reconcileStaleJobs();
-    if (recon.recovered.length) {
-      logger.info({ recovered: recon.recovered }, "reconciler re-enqueued stale jobs");
+  if (reconcileOnBoot) {
+    try {
+      const recon = await reconcileStaleJobs();
+      if (recon.recovered.length) {
+        logger.info({ recovered: recon.recovered }, "reconciler re-enqueued stale jobs");
+      }
+    } catch (err) {
+      logger.error({ err }, "reconciler failed at boot — continuing");
     }
-  } catch (err) {
-    logger.error({ err }, "reconciler failed at boot — continuing");
+  } else {
+    logger.info("reconciler skipped at boot (set RECONCILE_ON_BOOT=true to enable in dev)");
   }
 
   const worker = createWorker(async (job) => {

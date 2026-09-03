@@ -12,7 +12,10 @@ export async function POST(req: NextRequest) {
       artStyle?: { referenceImageUrls: string[]; generationDirective: string };
       provider?: string;
     };
-    const provider = providerRaw === "kingcong" || providerRaw === "diaflow" ? providerRaw : undefined;
+    const provider =
+      providerRaw === "kingcong" || providerRaw === "diaflow" || providerRaw === "litellm" || providerRaw === "azure"
+        ? providerRaw
+        : undefined;
 
     if (!prompt) {
       return NextResponse.json({ error: "prompt required" }, { status: 400 });

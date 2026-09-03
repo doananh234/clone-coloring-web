@@ -4,7 +4,7 @@ import { editImage } from "@vx/server-core/ai";
 import { buildRedesignPrompt } from "@vx/server-core/ai/prompts";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import { flushLangfuse } from "@vx/server-core/langfuse";
-import { planFillInterior, isDroppedFromClone, DEFAULT_TARGET_INTERIOR } from "@vx/clone-core";
+import { planFillInterior, DEFAULT_TARGET_INTERIOR } from "@vx/clone-core";
 import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
 
 export const maxDuration = 300;
@@ -66,7 +66,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     // final interior count never exceeds target (created images beyond room are
     // discarded — wasted, but correctness over the rare concurrent double-fill).
     const isInterior = (p: CloneJobPage) => p.pageType !== "cover" && p.pageType !== "interiorIntro";
-    const baseInterior = base.filter((p) => isInterior(p) && !isDroppedFromClone(p)).length;
+    const baseInterior = base.filter((p) => isInterior(p) && !p.excluded).length;
     const room = Math.max(0, target - baseInterior);
     const toAppend = created.slice(0, room);
     if (toAppend.length > 0) {

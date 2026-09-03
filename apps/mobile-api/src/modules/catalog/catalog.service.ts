@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@vx/db";
+import { Prisma, ci } from "@vx/db";
 
 import { PrismaService } from "../../prisma/prisma.service";
 import { parseListQuery, parseSort, toPage, type Paginated } from "../../common/pagination";
@@ -15,8 +15,8 @@ export function buildBookWhere(params: BookListParams, extra: Prisma.BookWhereIn
   if (params.search && params.search.trim().length > 0) {
     const q = params.search.trim();
     where.OR = [
-      { title: { contains: q, mode: "insensitive" } },
-      { subtitle: { contains: q, mode: "insensitive" } },
+      { title: ci(q) },
+      { subtitle: ci(q) },
     ];
   }
   const min = params.minPrice ? Math.round(Number(params.minPrice) * 100) : undefined;

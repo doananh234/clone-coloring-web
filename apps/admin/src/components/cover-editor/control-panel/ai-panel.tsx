@@ -41,8 +41,18 @@ interface PreviewState {
  *
  * Client: user picks a brand name, hits Generate, previews, accepts or discards.
  */
+// Image model choices for cover generation. "" = Auto (provider default,
+// LITELLM_IMAGE_MODEL). gpt-image-2 lays out top/mid/bottom text more reliably
+// than gemini-3.1-flash-image, so operators can pick per-cover.
+const COVER_MODELS: { label: string; value: string }[] = [
+  { label: "Auto (mặc định)", value: "" },
+  { label: "gpt-image-2", value: "gpt-image-2" },
+  { label: "Gemini 3.1", value: "gemini-3.1-flash-image" },
+];
+
 export function AiPanel(props: AiPanelProps) {
   const [brand, setBrand] = useState(props.defaultBrandName);
+  const [model, setModel] = useState("");
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +83,7 @@ export function AiPanel(props: AiPanelProps) {
           backgroundImageUrl: props.backgroundImageUrl,
           brandName: brand.trim(),
           aiBlend: true,
+          ...(model ? { model } : {}),
         }),
       });
       if (!res.ok) {
@@ -118,6 +129,19 @@ export function AiPanel(props: AiPanelProps) {
           onChange={(e) => setBrand(e.target.value)}
           placeholder="e.g. iroly"
         />
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-[10px] text-muted-foreground">Image model</Label>
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+        >
+          {COVER_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
       </div>
 
       {props.currentAiCoverUrl && !preview && (

@@ -9,13 +9,10 @@ import {
   stepCreateBook,
   stepOneShot,
   stepGenerateCover,
+  stepGenerateBookMeta,
+  stepFinalizeCover,
   stepFillInterior,
-  stepTrimPdf,
-  decideGateOutcome,
-  type GateOutcome,
-  type SelectablePage,
 } from "@vx/clone-core";
-import { resolveOneShotPollTimeoutSec } from "@vx/server-core/ai/image-provider-diaflow";
 import { db } from "../db";
 import { notifySuccess, notifyFailure } from "../notify/telegram";
 import {
@@ -27,18 +24,13 @@ import {
   createBookDeps,
   oneShotDeps,
   generateCoverDeps,
+  generateBookMetaDeps,
   fillInteriorDeps,
-  trimPdfDeps,
 } from "./step-deps";
 
 // silence unused-import warnings for the manually-triggered extract step.
 void stepExtractEntities;
 void extractEntitiesDeps;
-
-// The gate decision itself lives in @vx/clone-core (next to planPageSelection,
-// the pure router it calls) so it is testable without this file's env/DB
-// import chain. Re-exported here for existing importers.
-export { decideGateOutcome, type GateOutcome };
 
 export async function processCloneJob(jobId: string): Promise<void> {
   // A job can be stashed between enqueue and pickup (stash removes the BullMQ
@@ -77,95 +69,58 @@ export async function processCloneJob(jobId: string): Promise<void> {
       }
     }
 
-    // Render the source PDF into per-page PNGs ourselves and mirror to R2.
-    // This gives us permanent `imageUrl` values for each page's original —
-    // Diaflow's `loop_N_output` URLs are signed and expire, and the field is
-    // not always present. Shared by both pipelines below.
-    if (!ctx.isDone("render")) await withRetry("render", () => stepRender(ctx, db, renderDeps), ctx);
-
-    // ---- Gate: everything above is free, everything below costs money. ----
-    // Applies to BOTH pipelines (one-shot and legacy multi-step) — hoisted
-    // above the branch so neither path can reach an AI-calling step without
-    // passing it. Resumed by POST /api/clone/[jobId]/classify with
-    // { confirm: true }, which sets classifyConfirmed and re-enqueues the job —
-    // on the second run download/render are already `isDone`, so the worker
-    // skips straight back to this check (now passing) and continues.
-    const gateRow = await db.cloneJob.findUnique({
-      where: { id: jobId },
-      select: { data: true, pages: true },
-    });
-    const gateData = (gateRow?.data as { classifyConfirmed?: boolean } | null | undefined) ?? {};
-    const gatePages = (gateRow?.pages as SelectablePage[] | null | undefined) ?? [];
-    // `ctx.isDone("reproduce")` = this job's AI call already happened. The gate
-    // re-evaluates on every pass, so without this the Lane 2 park would fire on
-    // jobs whose money is already spent — rows created before the gate moved
-    // ahead of `reproduce` were confirmed downstream of the Diaflow call, and
-    // parking one in `awaiting-fill` strands purchased work with nothing to
-    // un-park it. The park is a pre-spend decision only.
-    const decision = decideGateOutcome(
-      gatePages,
-      gateData.classifyConfirmed === true,
-      ctx.isDone("reproduce"),
-    );
-
-    if (decision.outcome === "await-classify") {
-      await db.cloneJob.updateMany({
-        where: { id: jobId },
-        data: { status: "awaiting-classify" },
-      });
-      console.log(`[worker] clone job ${jobId} paused at classify gate (pre-spend)`);
-      return;
-    }
-
-    await db.cloneJob.updateMany({
-      where: { id: jobId },
-      data: {
-        data: {
-          ...gateData,
-          interiorCount: decision.interiorCount,
-          lane: decision.lane,
-        } as never,
-      },
-    });
-
-    if (decision.outcome === "await-fill") {
-      await db.cloneJob.updateMany({
-        where: { id: jobId },
-        data: { status: "awaiting-fill" },
-      });
-      console.log(
-        `[worker] clone job ${jobId} parked in lane 2 ` +
-          `(interior=${decision.interiorCount} < 40) — no AI spend`,
-      );
-      return;
-    }
-
-    if (decision.lane === 2) {
-      console.log(
-        `[worker] clone job ${jobId} is lane 2 (interior=${decision.interiorCount} < 40) ` +
-          `but its AI spend is already complete — continuing to create-book rather than parking`,
-      );
-    }
-
     if (useMultiStep) {
+      if (!ctx.isDone("render"))           await withRetry("render",           () => stepRender(ctx, db, renderDeps),                     ctx);
       if (!ctx.isDone("analyze"))          await withRetry("analyze",          () => stepAnalyze(ctx, db, analyzeDeps),                   ctx);
       if (!ctx.isDone("extract-entities")) await ctx.markStepComplete("extract-entities");
       if (!ctx.isDone("reproduce"))        await withRetry("reproduce",        () => stepReproduce(ctx, db, reproduceDeps),               ctx);
     } else {
-      // Default one-shot path: Diaflow one-shot handles the redesign + analyze
-      // JSON. stepOneShot merges its output into the pages that stepRender
-      // already seeded, preserving `imageUrl` and adding `redesignedUrl` +
-      // `rawData`. stepTrimPdf runs first so Diaflow only sees kept pages.
-      if (!ctx.isDone("trim-pdf"))
-        await withRetry("trim-pdf", () => stepTrimPdf(ctx, db, trimPdfDeps), ctx);
-      if (!ctx.isDone("reproduce"))
-        // budgetSec gives the job screen a denominator for its clock. Without
-        // it a 40-minute one-shot shows no progress of any kind and reads as a
-        // hang. Pulled from the provider so it cannot drift from the real
-        // timeout the poll loop applies.
-        await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx, {
-          budgetSec: resolveOneShotPollTimeoutSec(),
-        });
+      // Default one-shot path:
+      //   1. Render the source PDF into per-page PNGs ourselves and mirror to
+      //      R2. This gives us permanent `imageUrl` values for each page's
+      //      original — Diaflow's `loop_N_output` URLs are signed and expire,
+      //      and the field is not always present.
+      //   2. Diaflow one-shot handles the redesign + analyze JSON. stepOneShot
+      //      merges its output into the pages that stepRender already seeded,
+      //      preserving `imageUrl` and adding `redesignedUrl` + `rawData`.
+      if (!ctx.isDone("render"))    await withRetry("render",    () => stepRender(ctx, db, renderDeps),    ctx);
+      if (!ctx.isDone("reproduce")) await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx);
+    }
+
+    // D2 gate — pause for the operator's classification review before building
+    // the Book. The default one-shot pipeline has already reproduced the pages
+    // by this point (spec §4.4), so the gate lands here: after reproduce,
+    // before create-book. Resumed by PATCH /api/clone/[jobId]/classify with
+    // { confirm: true }, which sets classifyConfirmed and re-enqueues the job —
+    // on the second run download/render/reproduce are all `isDone`, so the
+    // worker skips straight back to this check (now passing) and continues.
+    //
+    // Auto-classify: set CLONE_AUTO_CLASSIFY=true (env) or job.data.autoClassify
+    // to skip the manual review entirely — the job flows straight through to
+    // create-book → generate-cover → generate-book-meta → finalize-cover, so a
+    // cloned book ships with full AI meta without any manual step.
+    const gateRow = await db.cloneJob.findUnique({
+      where: { id: jobId },
+      select: { data: true },
+    });
+    const gateData =
+      (gateRow?.data as { classifyConfirmed?: boolean; autoClassify?: boolean } | null | undefined) ?? {};
+    const autoClassify = process.env.CLONE_AUTO_CLASSIFY === "true" || gateData.autoClassify === true;
+    if (!gateData.classifyConfirmed && !autoClassify) {
+      await db.cloneJob.updateMany({
+        where: { id: jobId },
+        data: { status: "awaiting-classify" },
+      });
+      console.log(`[worker] clone job ${jobId} paused at classify gate`);
+      return;
+    }
+    if (!gateData.classifyConfirmed && autoClassify) {
+      // Persist the auto-pass so a later resume/reconcile also treats it confirmed.
+      await db.cloneJob.updateMany({
+        where: { id: jobId },
+        data: { data: { ...(gateRow?.data as Record<string, unknown> | null ?? {}), classifyConfirmed: true } as never },
+      });
+      console.log(`[worker] clone job ${jobId} auto-passed classify gate (CLONE_AUTO_CLASSIFY)`);
     }
 
     // D3 — reach the configured interior target by cloning source interiors.
@@ -185,6 +140,28 @@ export async function processCloneJob(jobId: string): Promise<void> {
       await withRetry(
         "generate-cover",
         () => stepGenerateCover(ctx, db, generateCoverDeps),
+        ctx,
+      );
+    }
+
+    // Full AI book meta (title/subtitle/description, tags, Etsy, colors, badge,
+    // price, category, specs…) generated FROM the cover — parity with the manual
+    // "Sinh meta AI" button, so every cloned book ships complete.
+    if (!ctx.isDone("generate-book-meta")) {
+      await withRetry(
+        "generate-book-meta",
+        () => stepGenerateBookMeta(ctx, db, generateBookMetaDeps),
+        ctx,
+      );
+    }
+
+    // "Cover AI cuối" — bake the fresh meta title/subtitle + brand onto the clean
+    // cover illustration (reuses generateCoverDeps: it already carries
+    // generateAiCover + resolveR2Url, a superset of FinalizeCoverDeps).
+    if (!ctx.isDone("finalize-cover")) {
+      await withRetry(
+        "finalize-cover",
+        () => stepFinalizeCover(ctx, db, generateCoverDeps),
         ctx,
       );
     }

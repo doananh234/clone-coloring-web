@@ -29,6 +29,8 @@ export function usePickerHandlers(
             title: (book?.title as string) ?? "",
             coverUrl: (book?.coverUrl as string) ?? "",
             price: (book?.price as string) ?? "",
+            subtitle: (book?.subtitle as string) || undefined,
+            backgroundColor: (book?.backgroundColor as string) || undefined,
           } satisfies AppHomeNewArrivalBook;
         });
       setNewArrivals((prev) => [...prev, ...toAdd]);

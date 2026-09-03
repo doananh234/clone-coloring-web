@@ -7,6 +7,7 @@ export type AppHomeNewArrivalBook = {
   price?: string;
   subtitle?: string;
   order?: number;
+  backgroundColor?: string;
 };
 
 export type AppHomeTrendingBook = {

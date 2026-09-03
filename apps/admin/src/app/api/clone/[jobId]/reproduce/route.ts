@@ -132,6 +132,7 @@ async function reproduceSinglePage(
   newAngle: boolean,
   apply: boolean,
   changePercent: number,
+  preserveStyle: boolean,
 ): Promise<NextResponse> {
   const jobPages = (row.pages as CloneJobPage[]) || [];
   const jobPage = jobPages[pageIndex];
@@ -175,6 +176,10 @@ async function reproduceSinglePage(
       traceEntityId: jobId,
       cameraView,
       changePercent,
+      // When the caller asked to keep the nét vẽ (book page Regen with NO chosen
+      // B&W style) → faithful clone of the page's own line-art. Job-compare regen
+      // omits this flag, so it keeps the "redesign variation" behavior.
+      preserveStyle,
       r2Client,
       r2Config,
     });
@@ -339,11 +344,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
     const body = await req.json().catch(() => ({}));
-    const { pageIndex, newAngle, apply, changePercent } = body as {
+    const { pageIndex, newAngle, apply, changePercent, preserveStyle } = body as {
       pageIndex?: number;
       newAngle?: boolean;
       apply?: boolean;
       changePercent?: number;
+      preserveStyle?: boolean;
     };
     // Clamp to a sane 5–95% range; fall back to the legacy 30% default.
     const pct = Math.min(95, Math.max(5, Number(changePercent) || 30));
@@ -354,7 +360,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     if (pageIndex !== undefined) {
-      return reproduceSinglePage(jobId, row, pageIndex, !!newAngle, !!apply, pct);
+      return reproduceSinglePage(jobId, row, pageIndex, !!newAngle, !!apply, pct, !!preserveStyle);
     }
     return reproducePendingPages(jobId, row);
   } catch (error) {

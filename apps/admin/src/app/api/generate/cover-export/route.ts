@@ -19,6 +19,11 @@ interface RequestBody {
   aiBlend?: boolean;
   /** Required when aiBlend=true. Verbatim brand line to appear at the bottom. */
   brandName?: string;
+  /**
+   * Optional image model override (LiteLLM model id, e.g. "gpt-image-2"). Only
+   * used when aiBlend=true. Empty → provider default (LITELLM_IMAGE_MODEL).
+   */
+  model?: string;
 }
 
 const r2Config = getR2Config();
@@ -33,7 +38,7 @@ function stripDataUrlPrefix(input: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as RequestBody;
-    const { bookId, imageBase64, backgroundImageUrl, aiBlend, brandName } = body;
+    const { bookId, imageBase64, backgroundImageUrl, aiBlend, brandName, model } = body;
 
     if (!bookId) {
       return NextResponse.json({ error: "bookId is required" }, { status: 400 });
@@ -65,6 +70,7 @@ export async function POST(req: NextRequest) {
       const output = await generateAiCover({
         cleanImageUrl: backgroundImageUrl as string,
         brandName: brandName ?? "",
+        ...(typeof model === "string" && model.trim() ? { model: model.trim() } : {}),
         r2Key: `assets/books/${bookId}/cover-ai.png`,
         trace: {
           caller: "admin/cover-export/ai-typography",

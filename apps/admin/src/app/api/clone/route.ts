@@ -22,18 +22,7 @@ export async function GET(req: NextRequest) {
     // dedicated counts request drives the tab badges without flashing empty.
     const wantCounts = url.searchParams.get("counts") !== "0";
 
-    // A queue tab groups several raw statuses under one label (e.g. "Queue" =
-    // pending + queued + uploading + extracted). The client passes them
-    // comma-separated so the LISTED rows match the badge COUNT, which sums the
-    // same set. Without this, a just-started job (status flips pending→queued)
-    // is counted but shown in no tab. Single value keeps the equality filter.
-    const statuses =
-      status && status !== "all" ? status.split(",").filter(Boolean) : null;
-    const where = statuses
-      ? statuses.length === 1
-        ? { status: statuses[0] }
-        : { status: { in: statuses } }
-      : undefined;
+    const where = status && status !== "all" ? { status } : undefined;
 
     // Terminal states are sorted by when they became terminal (updatedAt), so
     // the latest finish/failure is visible at the top. Non-terminal states
@@ -75,9 +64,6 @@ export async function GET(req: NextRequest) {
         bookId: row.bookId || null,
         sourceBookId: extra.sourceBookId ?? null,
         currentStep: extra.currentStep ?? null,
-        runningStep: extra.runningStep ?? null,
-        runningSince: extra.runningSince ?? null,
-        runningBudgetSec: extra.runningBudgetSec ?? null,
         failedStep: extra.failedStep ?? null,
         // Surface the failure reason in the list (badge tooltip / inline note),
         // not just on the detail screen.

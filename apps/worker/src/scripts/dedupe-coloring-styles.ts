@@ -20,6 +20,7 @@
  * Requires AZURE_OPENAI_* env (loaded from apps/worker/.env / .env.prod).
  */
 import { readFileSync, writeFileSync } from "node:fs";
+import { jsonPath } from "@vx/db";
 import { db } from "../db";
 import { textPrompt } from "@vx/server-core/ai/llm-provider";
 import {
@@ -176,7 +177,7 @@ async function apply() {
     for (const oldId of ids) {
       const variantId = styleIdToVariantId.get(oldId)!;
       const books = await db.book.findMany({
-        where: { data: { path: ["coverMeta", "coloringStyleId"], equals: oldId } },
+        where: { data: { path: jsonPath(["coverMeta", "coloringStyleId"]), equals: oldId } },
         select: { id: true, data: true },
       });
       for (const b of books) {
@@ -191,7 +192,7 @@ async function apply() {
       }
 
       const brands = await db.brand.findMany({
-        where: { data: { path: ["coloringStyleId"], equals: oldId } },
+        where: { data: { path: jsonPath(["coloringStyleId"]), equals: oldId } },
         select: { id: true, data: true },
       });
       for (const br of brands) {

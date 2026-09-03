@@ -44,13 +44,6 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     currentStep: _dropStep,
     failedStep: _dropFailed,
     finishedAt: _dropFinished,
-    // A re-run wipes `pages` and re-renders them unclassified, so the operator's
-    // previous classification no longer describes anything. Leaving
-    // classifyConfirmed set would let the job walk through the pre-spend gate
-    // without review and pay for a full redesign of every page.
-    classifyConfirmed: _dropConfirmed,
-    interiorCount: _dropInteriorCount,
-    lane: _dropLane,
     ...keptData
   } = prevData;
 
@@ -63,9 +56,6 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
       const {
         oneShotSessionId: _sbSession,
         oneShotPages: _sbPages,
-        // Part of the same cache record: it says which original pages
-        // oneShotPages covers, so it must not outlive them.
-        oneShotKeptPageNumbers: _sbKept,
         ...sbKept
       } = ((sb.data as Record<string, unknown> | null | undefined) ?? {});
       await prisma.sourceBook.update({

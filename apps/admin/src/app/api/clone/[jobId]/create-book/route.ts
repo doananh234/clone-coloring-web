@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
-import { isDroppedFromClone } from "@vx/clone-core";
 import { moveCloneJobImageToBook } from "@/lib/move-clone-page-to-book";
 import { extractSourceStyleFromCover } from "./extract-source-style";
 
@@ -44,10 +43,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // Partition by D2 pageType — mirrors the worker's stepCreateBook partition
     // so worker-created and hand-created books are interchangeable downstream.
-    // Pages the operator dropped at the pre-spend gate (back covers / blanks /
-    // junk) never enter the clone Book. Read through the shared helper so this
-    // route and stepCreateBook cannot drift on which flag counts.
-    const kept = allPages.filter((p) => !isDroppedFromClone(p) && p.imageUrl);
+    // Excluded pages (operator-toggled back covers / blanks / junk) are dropped.
+    const kept = allPages.filter((p) => !p.excluded && p.imageUrl);
     const coverPage = kept.find((p) => p.pageType === "cover");
     const introPages = kept.filter((p) => p.pageType === "interiorIntro");
     const interiorPages = kept

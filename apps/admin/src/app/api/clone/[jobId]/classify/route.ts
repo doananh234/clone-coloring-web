@@ -4,16 +4,11 @@ import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { cloneQueue } from "@/lib/queue/clone-queue";
 import { enqueueCloneJob } from "@vx/clone-core/queue-enqueue";
 import { withQueueTimeout, isQueueTimeout, queueUnavailableResponse } from "@/lib/queue/queue-timeout";
-import { planPageSelection } from "@vx/clone-core/steps";
 
 export const dynamic = "force-dynamic";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
-type Edit = {
-  pageNumber: number;
-  pageType?: CloneJobPage["pageType"];
-  excludedFromClone?: boolean;
-};
+type Edit = { pageNumber: number; pageType?: CloneJobPage["pageType"]; excluded?: boolean };
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const { jobId } = await params;
@@ -32,26 +27,19 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     return {
       ...p,
       ...(e.pageType !== undefined ? { pageType: e.pageType } : {}),
-      ...(e.excludedFromClone !== undefined
-        ? { excludedFromClone: e.excludedFromClone }
-        : {}),
+      ...(e.excluded !== undefined ? { excluded: e.excluded } : {}),
     };
   });
 
-  const { interiorCount, lane } = planPageSelection(pages);
   const prevData = (row.data as Record<string, unknown> | null) ?? {};
-
   await prisma.cloneJob.update({
     where: { id: jobId },
     data: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       pages: pages as any,
       ...(confirm
-        ? {
-            status: "queued",
-            data: { ...prevData, classifyConfirmed: true, interiorCount, lane } as never,
-          }
-        : { data: { ...prevData, interiorCount, lane } as never }),
+        ? { status: "queued", data: { ...prevData, classifyConfirmed: true } as never }
+        : {}),
     },
   });
 

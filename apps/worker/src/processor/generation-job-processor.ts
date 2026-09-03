@@ -12,7 +12,9 @@ type SourceCoverPayload = {
   prompt?: string;
   sourceImageUrl?: string;
   /** Operator-chosen image backend; undefined → worker's IMAGE_PROVIDER default. */
-  provider?: "kingcong" | "diaflow";
+  provider?: "kingcong" | "diaflow" | "litellm" | "azure";
+  /** Operator-chosen LiteLLM model id (e.g. "gpt-image-2"); undefined → LITELLM_IMAGE_MODEL. */
+  model?: string;
 };
 type SourceCover = {
   id: string;
@@ -56,7 +58,15 @@ export async function processGenerationJob(generationJobId: string): Promise<voi
 }
 
 async function runSourceCover(genJobId: string, bookId: string, payload: SourceCoverPayload): Promise<void> {
-  const { interiorPageId, titleSafe, prompt, provider } = payload;
+  const { interiorPageId, titleSafe, prompt, provider, model } = payload;
+  // gpt-image-2 is an Azure image-EDIT model. LiteLLM's proxy can't forward the
+  // multipart /images/edits call to Azure (it routes to the JSON-only
+  // generations endpoint → 400 unsupported_content_type), so route this model
+  // straight to the `azure` provider, which hits Azure's edits endpoint directly
+  // (AZURE_IMAGE_DEPLOYMENT_NAME=gpt-image-2). Other models keep their provider.
+  const isAzureImageModel = /gpt-image/i.test(model ?? "");
+  const effectiveProvider = isAzureImageModel ? "azure" : provider;
+  const effectiveModel = isAzureImageModel ? undefined : model;
 
   const book = await prisma.book.findUnique({ where: { id: bookId } });
   if (!book) throw new Error("Book not found");
@@ -69,7 +79,7 @@ async function runSourceCover(genJobId: string, bookId: string, payload: SourceC
   const img = await generateCoverSourceBW(
     resolveR2Url(interior.url),
     titleSafe,
-    { provider, trace: { caller: "worker/generation/source-cover", entityId: genJobId } },
+    { provider: effectiveProvider, ...(effectiveModel ? { model: effectiveModel } : {}), trace: { caller: "worker/generation/source-cover", entityId: genJobId } },
     prompt && prompt.trim() ? prompt : undefined,
   );
 
