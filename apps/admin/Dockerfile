@@ -18,6 +18,8 @@ RUN yarn install --immutable
 # --- build ---
 FROM base AS build
 COPY --from=deps /app /app
+# LiteLLM CA cert (resolved at /app/certs by litellm-dispatcher when LLM_PROVIDER=litellm).
+COPY certs certs
 COPY apps/admin apps/admin
 # NEXT_PUBLIC_* are inlined at build time. Default 0 (writes gated); prod sets 1
 # via docker-compose.prod.yml build args to enable real write actions.

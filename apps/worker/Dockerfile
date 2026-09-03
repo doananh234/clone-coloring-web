@@ -18,6 +18,8 @@ RUN yarn install --immutable
 # --- build ---
 FROM base AS build
 COPY --from=deps /app /app
+# LiteLLM CA cert (resolved at /app/certs by litellm-dispatcher when LLM_PROVIDER=litellm).
+COPY certs certs
 # Worker source pulls in admin's lib helpers via relative imports — must copy admin src.
 COPY apps/admin/src apps/admin/src
 COPY apps/admin/tsconfig.json apps/admin/tsconfig.json

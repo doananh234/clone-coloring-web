@@ -21,6 +21,8 @@ RUN yarn install --immutable
 # --- build ---
 FROM base AS build
 COPY --from=deps /app /app
+# LiteLLM CA cert (resolved at /app/certs by litellm-dispatcher when LLM_PROVIDER=litellm).
+COPY certs certs
 COPY apps/mobile-api apps/mobile-api
 RUN yarn workspace @vx/db prisma generate
 
