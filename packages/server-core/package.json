@@ -28,11 +28,14 @@
     "./pdf-trim": "./src/pdf-trim.ts",
     "./langfuse": "./src/langfuse.ts",
     "./text-overlay": "./src/text-overlay/index.ts",
-    "./text-overlay/server": "./src/text-overlay/server.ts"
+    "./text-overlay/server": "./src/text-overlay/server.ts",
+    "./firestore": "./src/firestore/index.ts",
+    "./home": "./src/home/build-app-home.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
     "@aws-sdk/s3-request-presigner": "^3.1053.0",
+    "firebase-admin": "^13.9.0",
     "ioredis": "^5.4.0",
     "jsonrepair": "^3.15.0",
     "jszip": "^3.10.1",

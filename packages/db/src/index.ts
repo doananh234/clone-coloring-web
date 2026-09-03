@@ -58,3 +58,4 @@ export {
   syncCloneJobStatusCounts,
   readCloneJobStatusCounts,
 } from "./clone-status-counts";
+export { dbProvider, isSqlite, ci, cieq, jsonPath } from "./sql-compat";

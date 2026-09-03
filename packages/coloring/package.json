@@ -9,10 +9,12 @@
     "./screens": "./src/screens/index.ts",
     "./data/page-variants": "./src/data/page-variants.ts",
     "./data/additional-pages": "./src/data/additional-pages.ts",
+    "./data/page-type": "./src/data/page-type.ts",
     "./data/cover-candidates": "./src/data/cover-candidates.ts",
     "./data/source-covers": "./src/data/source-covers.ts",
     "./data/tags": "./src/data/tags.ts",
-    "./styles.css": "./src/styles/motio.css"
+    "./styles.css": "./src/styles/motio.css",
+    "./styles/components.css": "./src/styles/components.css"
   },
   "scripts": {
     "test": "vitest run",

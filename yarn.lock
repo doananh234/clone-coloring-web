@@ -8914,6 +8914,7 @@ __metadata:
     "@aws-sdk/client-s3": "npm:^3.1045.0"
     "@aws-sdk/s3-request-presigner": "npm:^3.1053.0"
     "@vx/tsconfig": "workspace:*"
+    firebase-admin: "npm:^13.9.0"
     ioredis: "npm:^5.4.0"
     jsonrepair: "npm:^3.15.0"
     jszip: "npm:^3.10.1"
