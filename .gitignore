@@ -8,6 +8,8 @@ dist
 .env.production
 .env.*.local
 .env*.bak
+.env.txt
+.env*.txt
 *.bak
 .DS_Store
 service-account*.json

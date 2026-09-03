@@ -28,7 +28,8 @@
  *   KINGCONG_USER_DATA_DIR    persistent Playwright profile (default .kingcong-profile)
  *   KINGCONG_RELOGIN_ENABLED  "true"|"false" (default true; file-mode only)
  *   KINGCONG_POLL_INTERVAL    seconds (default 3)
- *   KINGCONG_POLL_TIMEOUT     seconds (default 180)
+ *   KINGCONG_POLL_TIMEOUT     seconds (default 500 — img2img runs ~80s/page and
+ *                             can spike well past 180s under load)
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -76,7 +77,7 @@ function getConfig(): KingCongConfig {
     userDataDir: resolve(process.env.KINGCONG_USER_DATA_DIR || ".kingcong-profile"),
     reloginEnabled: (process.env.KINGCONG_RELOGIN_ENABLED || "true") !== "false",
     pollInterval: Number(process.env.KINGCONG_POLL_INTERVAL) || 3,
-    pollTimeout: Number(process.env.KINGCONG_POLL_TIMEOUT) || 180,
+    pollTimeout: Number(process.env.KINGCONG_POLL_TIMEOUT) || 500,
   };
 }
 

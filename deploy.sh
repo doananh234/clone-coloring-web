@@ -90,6 +90,7 @@ SYNC_EXCLUDES=(
     '.git' 'node_modules' '.turbo' '.next' 'dist' '*.tsbuildinfo'
     '.superpowers' '.claude' 'backups'
     '011-detail' '012-detail-scroll' '026-detail-scrolled' 'detail-scroll' '*.png'
+    '.env.txt' '*.env.txt'
     'apps/admin/.env.local' 'apps/admin/.env'
     'apps/worker/.env.local' 'apps/worker/.env'
 )

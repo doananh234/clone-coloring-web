@@ -97,7 +97,8 @@ Files:
 
 ## Prod ops — cookie qua host volume (đang chạy)
 - Worker prod: `IMAGE_PROVIDER=kingcong`, `LLM_PROVIDER=diaflow`, `KINGCONG_POLL_TIMEOUT=600`
-  (EC2 sinh ảnh ~200–360s, mặc định 180s bị timeout), `KINGCONG_POLL_INTERVAL=5`.
+  (EC2 sinh ảnh ~200–360s), `KINGCONG_POLL_INTERVAL=5`. Default provider giờ là **500s**
+  (trước là 180s — img2img ~80s/page nhưng spike qua 180s dưới tải); prod vẫn override 600s.
 - **KHÔNG** để `KINGCONG_COOKIE` trong `.env.prod` — docker-compose env_file không parse được
   cookie (có `g_state={...}` với `"` `;` `{}`) → `docker compose up` fail.
 - Cookie nằm trên **host volume**: `docker-compose.prod.yml` bind-mount **thư mục**
