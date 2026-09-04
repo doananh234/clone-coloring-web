@@ -1,7 +1,6 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 import { normalizeRawData } from "./book-page-meta";
-import { isDroppedFromClone } from "./plan-page-selection";
 
 /**
  * stepCreateBook — writes the final Book row from a finished CloneJob.
@@ -46,7 +45,6 @@ interface JobPage {
   error?: string;
   pageType?: "cover" | "interiorIntro" | "interior";
   excluded?: boolean;
-  excludedFromClone?: boolean;
   origin?: "original" | "additional";
   parentPageNumber?: number;
 }
@@ -100,14 +98,10 @@ export async function stepCreateBook(
     niche = sourceBook?.niche?.trim() || null;
   }
 
-  // A page is usable if it isn't an error page and has an image. Pages the
-  // operator dropped at the gate never reach the clone Book. `excluded` is the
-  // legacy name for the same mark and is still honoured on pre-existing rows.
+  // A page is usable if it isn't an error page and has an image. Excluded
+  // pages (operator-toggled back covers / blanks / junk) are dropped entirely.
   const usablePages = pages.filter(
-    (p) =>
-      p.status !== "error" &&
-      !isDroppedFromClone(p) &&
-      (p.redesignedUrl || p.imageUrl),
+    (p) => p.status !== "error" && !p.excluded && (p.redesignedUrl || p.imageUrl),
   );
 
   // Partition by D2 pageType. Legacy pages (no pageType) count as interior so

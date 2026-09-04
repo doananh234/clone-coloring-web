@@ -10,15 +10,6 @@ const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (staging).";
 const isInterior = (p: CloneJobPage): boolean =>
   p.pageType !== "cover" && p.pageType !== "interiorIntro";
 
-/**
- * Local copy of the canonical drop-flag read. The canonical helper is
- * `isDroppedFromClone` in `@vx/clone-core/steps/plan-page-selection.ts`;
- * @vx/coloring deliberately does not depend on @vx/clone-core, so the rule is
- * inlined here. Keep the two in lockstep: `excludedFromClone ?? excluded ?? false`.
- */
-const isDropped = (p: CloneJobPage): boolean =>
-  p.excludedFromClone ?? p.excluded ?? false;
-
 export interface AdditionalMeta {
   isAdditional: boolean;
   displayNumber: string;
@@ -41,9 +32,9 @@ export function deriveAdditionalMeta(page: CloneJobPage, allPages: CloneJobPage[
   };
 }
 
-/** Interior page count, drops excluded — the numerator of the progress header. */
+/** Interior (!excluded) page count — the numerator of the progress header. */
 export function interiorProgress(pages: CloneJobPage[]): { count: number } {
-  return { count: pages.filter((p) => isInterior(p) && !isDropped(p)).length };
+  return { count: pages.filter((p) => isInterior(p) && !p.excluded).length };
 }
 
 /** D3 write actions (all behind the staging write flag). */

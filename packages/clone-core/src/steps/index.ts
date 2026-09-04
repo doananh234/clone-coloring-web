@@ -44,13 +44,3 @@ export {
   type RemoveVariantResult,
   type VariantMirror,
 } from "./remove-coloring-style-variant";
-export {
-  planPageSelection,
-  isDroppedFromClone,
-  LANE1_MIN_INTERIOR,
-  type DroppablePage,
-  type SelectablePage,
-  type PageSelection,
-} from "./plan-page-selection";
-export { decideGateOutcome, type GateOutcome } from "./gate-decision";
-export { stepTrimPdf, type TrimPdfDeps } from "./trim-pdf";

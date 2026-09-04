@@ -7,10 +7,7 @@ export type ExportPageLike = {
   coloredUrl?: string;
   imageUrl?: string;
   pageType?: string;
-  /** Legacy D2 flag. No longer read here — Main book keeps every page. */
   excluded?: boolean;
-  /** Operator drop mark. No longer read here — Main book keeps every page. */
-  excludedFromClone?: boolean;
 };
 
 export interface ExportInput {
@@ -54,15 +51,13 @@ export function collectExportPlan(input: ExportInput): ExportPlan {
   // --- Main book = the ORIGINAL source (source CloneJob), split by pageType. ---
   if (input.cloneJobPages) {
     const jobPages = input.cloneJobPages;
-    // Main book is the archived ORIGINAL source book. It is NOT filtered by the
-    // clone-drop flag: a page the operator kept out of the clone must still be
-    // present here, or the archive silently loses pages from the source.
-    let coverPages = jobPages.filter((p) => p.pageType === "cover");
-    if (coverPages.length === 0 && jobPages[0]) coverPages = [jobPages[0]];
-    const introPages = jobPages.filter((p) => p.pageType === "interiorIntro");
+    const included = jobPages.filter((p) => !p.excluded);
+    let coverPages = included.filter((p) => p.pageType === "cover");
+    if (coverPages.length === 0 && included[0]) coverPages = [included[0]];
+    const introPages = included.filter((p) => p.pageType === "interiorIntro");
     const coverSet = new Set(coverPages);
     const introSet = new Set(introPages);
-    const interiorPages = jobPages.filter((p) => !coverSet.has(p) && !introSet.has(p));
+    const interiorPages = included.filter((p) => !coverSet.has(p) && !introSet.has(p));
     push("Main book/Book cover", toEntries(coverPages, "imageUrl"));
     push("Main book/Book intro", toEntries(introPages, "imageUrl"));
     push("Main book/Book interior", toEntries(interiorPages, "imageUrl"));

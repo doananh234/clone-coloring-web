@@ -16,8 +16,6 @@ import { JobPipelineTab } from "./job-pipeline-tab";
 import { JobCompareTab } from "./job-compare-tab";
 import { JobClassifyTab } from "./job-classify-tab";
 import { metaFor } from "../../data/status";
-import { describeRunningStep } from "../../data/describe-running-step";
-import { useNow } from "../../data/use-now";
 import { useQueueActions, rowActionFor } from "../../data/use-queue-actions";
 import { resolveImg } from "../../data/img";
 import type { CloneJobDetail, CloneJobPage, CloneRetryRecord } from "../../data/types";
@@ -167,12 +165,6 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
     }
   }, [job?.status]);
 
-  // MUST stay above the early returns below: a hook called after a conditional
-  // return runs on some renders and not others, which React rejects with
-  // "Rendered more hooks than during the previous render". Ticks locally
-  // between the 5s status polls, and only while a step is actually in flight.
-  const now = useNow(Boolean(job?.runningStep));
-
   if (!localJob && isLoading) {
     return (
       <Card>
@@ -196,11 +188,6 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
   const meta = metaFor(job.status);
   const isLocal = Boolean(localJob);
   const pct = job.totalPages > 0 ? Math.round((job.analyzedPages / job.totalPages) * 100) : meta.bucket === "done" ? 100 : 0;
-  const running = describeRunningStep(job.runningStep, job.runningSince, job.runningBudgetSec, now);
-  const etaLabel =
-    running && running.budgetSec !== null && running.elapsedSec !== null && !running.overBudget
-      ? `còn ~${Math.max(0, Math.ceil((running.budgetSec - running.elapsedSec) / 60))} phút`
-      : "—";
   // Same status-driven action as the list row (e.g. a completed/"reproduced" job → "Chạy lại" regen).
   const rowAction = isLocal ? null : rowActionFor(job.status);
 
@@ -259,25 +246,9 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
 
       <Card>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 16, alignItems: "center" }}>
-          <Stat
-            label={running ? "Đang chạy" : "Bước hiện tại"}
-            value={
-              running ? (
-                <div>
-                  <div style={{ fontSize: 18 }}>{running.label}</div>
-                  {running.percent !== null && (
-                    <div style={{ marginTop: 6 }}>
-                      <Progress value={running.percent} tone={running.overBudget ? "danger" : "volt"} />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                job.currentStep || meta.label
-              )
-            }
-          />
+          <Stat label="Bước hiện tại" value={job.currentStep || meta.label} />
           <Stat label="Trang đã xử lý" value={`${job.analyzedPages}/${job.totalPages}`} />
-          <Stat label="ETA" value={etaLabel} />
+          <Stat label="ETA" value="—" />
           <div style={{ minWidth: 160 }}>
             <div style={{ ...capLabel, marginBottom: 8 }}>Tiến độ tổng</div>
             <Progress value={pct} tone={meta.bucket === "error" ? "danger" : "volt"} />
@@ -287,14 +258,8 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
 
       <Tabs<"classify" | "pipeline" | "pages" | "info">
         items={[
-          ...(job.status === "awaiting-classify" || job.status === "awaiting-fill"
-            ? [{
-                key: "classify" as const,
-                label:
-                  job.status === "awaiting-fill"
-                    ? "Phân loại trang · thiếu trang ruột"
-                    : "Phân loại trang · chờ duyệt",
-              }]
+          ...(job.status === "awaiting-classify"
+            ? [{ key: "classify" as const, label: "Phân loại trang · chờ duyệt" }]
             : []),
           { key: "pages", label: `So sánh & chọn trang · ${job.pages.length}` },
           { key: "pipeline", label: "Pipeline & xác nhận" },

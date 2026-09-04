@@ -55,43 +55,6 @@ describe("planFillInterior", () => {
     expect(planFillInterior(pages, 40)).toHaveLength(30);
   });
 
-  // Regression: `excludedFromClone` is the operator's drop mark at the
-  // pre-spend gate. Counting a dropped page as an existing interior
-  // under-reports `need`, and pooling it hands stepFillInterior a page the
-  // operator explicitly dropped — paying to clone exactly the junk this
-  // pipeline exists to skip.
-  it("excludes excludedFromClone pages from the existing-interior count", () => {
-    const pages = interiors(12).map((p, i) => (i < 2 ? { ...p, excludedFromClone: true } : p));
-    // existing interior !dropped = 10 → need 30
-    expect(planFillInterior(pages, 40)).toHaveLength(30);
-  });
-
-  it("never pools an excludedFromClone page as a clone source", () => {
-    const pages: FillInteriorPage[] = [
-      ...interiors(3),
-      {
-        pageNumber: 4,
-        imageUrl: "/dropped.png",
-        pageType: "interior",
-        origin: "original",
-        excludedFromClone: true,
-      },
-    ];
-    // existing = 3 (page 4 dropped), target 6 → 3 tasks, none sourced from page 4
-    const tasks = planFillInterior(pages, 6);
-    expect(tasks).toHaveLength(3);
-    expect(tasks.some((t) => t.parentPageNumber === 4)).toBe(false);
-    expect(tasks.some((t) => t.sourceImageUrl === "/dropped.png")).toBe(false);
-  });
-
-  it("lets excludedFromClone: false override a stale legacy excluded: true", () => {
-    const pages = interiors(12).map((p, i) =>
-      i < 2 ? { ...p, excluded: true, excludedFromClone: false } : p,
-    );
-    // all 12 count → need 28
-    expect(planFillInterior(pages, 40)).toHaveLength(28);
-  });
-
   it("never picks an additional page as a source", () => {
     const pages: FillInteriorPage[] = [
       ...interiors(3),

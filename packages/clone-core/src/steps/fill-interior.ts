@@ -1,6 +1,5 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
-import { isDroppedFromClone } from "./plan-page-selection";
 
 export const DEFAULT_TARGET_INTERIOR = 40;
 export const FILL_CHANGE_BASE = 40;
@@ -11,9 +10,6 @@ export interface FillInteriorPage {
   pageNumber: number;
   imageUrl?: string;
   pageType?: "cover" | "interiorIntro" | "interior";
-  /** Operator drop mark from the pre-spend gate. */
-  excludedFromClone?: boolean;
-  /** Legacy name for the same mark. */
   excluded?: boolean;
   origin?: "original" | "additional";
 }
@@ -34,8 +30,8 @@ const isInterior = (p: FillInteriorPage): boolean =>
  * total interior pages. Pure + deterministic given `opts.shuffle` (defaults to
  * identity so tests are stable; the worker injects a real shuffle at runtime).
  *
- * - need = max(0, target - existing interior pages not dropped at the gate)
- * - pool = ORIGINAL, non-dropped interior pages with an imageUrl
+ * - need = max(0, target - existing interior !excluded)
+ * - pool = ORIGINAL interior !excluded pages with an imageUrl
  * - pick round-robin: distinct sources until the pool is exhausted, then a new
  *   shuffled pass. Each full pass ("round") bumps change-% by FILL_CHANGE_STEP
  *   (capped) so repeated clones of the same source diverge.
@@ -46,10 +42,10 @@ export function planFillInterior(
   opts: { shuffle?: <T>(a: T[]) => T[] } = {},
 ): FillTask[] {
   const shuffle = opts.shuffle ?? (<T,>(a: T[]) => a);
-  const existing = pages.filter((p) => isInterior(p) && !isDroppedFromClone(p)).length;
+  const existing = pages.filter((p) => isInterior(p) && !p.excluded).length;
   const need = Math.max(0, target - existing);
   const pool = pages.filter(
-    (p) => p.origin !== "additional" && isInterior(p) && !isDroppedFromClone(p) && !!p.imageUrl,
+    (p) => p.origin !== "additional" && isInterior(p) && !p.excluded && !!p.imageUrl,
   );
   if (need === 0 || pool.length === 0) return [];
 

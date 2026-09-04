@@ -16,6 +16,8 @@ export function resolvePageTitle(slug: string[]): string {
       if (slug[2] === "colorize") return "Tô màu AI";
       if (slug[2] === "cover") return "Cover editor";
       return "Chi tiết sách";
+    case "home":
+      return "Home";
     case "story":
       return "Story";
     case "library": {

@@ -34,6 +34,7 @@ export const NAV: NavSection[] = [
   {
     section: "Nhóm quản lý",
     items: [
+      { id: "home", label: "Home", href: `${COLORING_BASE}/home`, icon: "layout-grid", adminOnly: true },
       { id: "storyhub", label: "Story", href: `${COLORING_BASE}/story`, icon: "pen-line", adminOnly: true },
       { id: "libhub", label: "Thư viện", href: `${COLORING_BASE}/library`, icon: "folder", adminOnly: true },
       { id: "stylehub", label: "Phong cách", href: `${COLORING_BASE}/styles`, icon: "palette" },

@@ -69,10 +69,6 @@ export function addLocalJob(input: NewLocalJobInput): LocalJob {
     status: "queued",
     totalPages: input.totalPages ?? 0,
     analyzedPages: 0,
-    // A local draft is never picked up by the worker, so no step is ever running.
-    runningStep: null,
-    runningSince: null,
-    runningBudgetSec: null,
     bookId: null,
     sourceBookId: input.sourceFileName ?? null,
     currentStep: input.mode ? `Chờ xử lý · ${input.mode}` : "Chờ xử lý",

@@ -4,8 +4,10 @@ import { useState } from "react";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { ColoringStylePickerModal, type StyleSelection } from "../../components/ui/coloring-style-picker-modal";
+import { Select } from "../../components/ui/form-controls";
 import { usePageActions } from "../../data/use-page-actions";
 import { usePageAdditional, type RegenAddOpts } from "../../data/use-page-additional";
+import { useEntityList } from "../../data/use-entity-list";
 import { useCoverCandidates } from "../../data/use-cover-candidates";
 import { useSourceCovers } from "../../data/use-source-covers";
 import { resolveImg } from "../../data/img";
@@ -15,6 +17,8 @@ interface Candidate {
   url: string;
   cameraView?: string;
   kind: "regen" | "angle";
+  /** true = generated via the clone job; false = regenerated from the current image. */
+  viaJob: boolean;
 }
 
 export function PageActionsRow({
@@ -57,6 +61,12 @@ export function PageActionsRow({
   // Regen/Đổi góc generate a candidate WITHOUT applying → user previews + chooses.
   const [cand, setCand] = useState<Candidate | null>(null);
   const [zoom, setZoom] = useState(false);
+  // Optional B&W style to guide Regen / Đổi góc (its refs + directive are followed).
+  const [regenStyleId, setRegenStyleId] = useState("");
+  const { items: bwStyles } = useEntityList("art-styles");
+  // Regen modal: lets the user type extra edit instructions before generating.
+  const [regenModal, setRegenModal] = useState<{ newAngle: boolean } | null>(null);
+  const [regenInstr, setRegenInstr] = useState("");
 
   const disabled = !actions.enabled;
 
@@ -73,26 +83,29 @@ export function PageActionsRow({
     }
   };
 
-  const doGen = (newAngle: boolean) => async () => {
+  const runGen = async (newAngle: boolean, instructions: string) => {
     setBusy(newAngle ? "angle" : "regen");
     setErr(null);
     setZoom(false);
     try {
-      const r = await actions.genCandidate(pageIndex, newAngle);
-      setCand({ url: r.url, cameraView: r.cameraView, kind: newAngle ? "angle" : "regen" });
+      const r = await actions.genCandidate(pageIndex, newAngle, page.id, regenStyleId || undefined, instructions || undefined);
+      setCand({ url: r.url, cameraView: r.cameraView, kind: newAngle ? "angle" : "regen", viaJob: r.viaJob });
+      setRegenModal(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Tạo bản mới thất bại");
     } finally {
       setBusy(null);
     }
   };
+  const openRegen = (newAngle: boolean) => () => { setRegenInstr(""); setRegenModal({ newAngle }); };
 
   const applyCand = async () => {
     if (!cand) return;
     setBusy("apply");
     setErr(null);
     try {
-      await actions.applyCandidate(pageIndex, cand.kind);
+      if (cand.viaJob) await actions.applyCandidate(pageIndex, cand.kind);
+      else await actions.applyImageCandidate(pages, page.id, cand.url);
       setCand(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Áp dụng thất bại");
@@ -137,10 +150,15 @@ export function PageActionsRow({
         </Button>
         {!isSC && actions.canRegen && (
           <>
-            <Button variant="outline" size="sm" disabled={disabled || busy !== null || pageIndex < 0} title="Tạo bản vẽ lại (giữ nguyên góc) để xem trước" onClick={doGen(false)}>
+            {bwStyles.length > 0 && (
+              <div style={{ minWidth: 150, maxWidth: 190 }} title="Chọn B&W style để regen bám theo (ảnh tham chiếu + directive)">
+                <Select value={regenStyleId} onChange={setRegenStyleId} options={bwStyles.map((s) => ({ label: s.name, value: s.id }))} placeholder="B&W style (tùy chọn)" />
+              </div>
+            )}
+            <Button variant="outline" size="sm" disabled={disabled || busy !== null || pageIndex < 0} title="Vẽ lại (giữ góc) — có thể nhập yêu cầu thêm" onClick={openRegen(false)}>
               <Icon name="sparkles" size={15} /> {busy === "regen" ? "Đang tạo…" : "Regen"}
             </Button>
-            <Button variant="outline" size="sm" disabled={disabled || busy !== null || pageIndex < 0} title="Tạo bản với góc camera mới để xem trước" onClick={doGen(true)}>
+            <Button variant="outline" size="sm" disabled={disabled || busy !== null || pageIndex < 0} title="Đổi góc camera — có thể nhập yêu cầu thêm" onClick={openRegen(true)}>
               <Icon name="sparkles" size={15} /> {busy === "angle" ? "Đang tạo…" : "Đổi góc"}
             </Button>
           </>
@@ -168,6 +186,16 @@ export function PageActionsRow({
         <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={run("pub", () => isSC ? sourceCovers.togglePublic(sourceCover!.id) : actions.togglePublic(pages, page.id))}>
           {page.isPublic ? "Ẩn" : "Công khai"}
         </Button>
+        {!isSC && (
+          <Button variant="outline" size="sm" disabled={disabled || busy !== null}
+            title="Tạo video 'tự vẽ' (MP4 9:16) cho trang này — cần chạy service @vx/motion"
+            onClick={run("anim", async () => { await actions.animate(page.id, { format: "9:16", durationSec: 6 }); })}>
+            <Icon name="sparkles" size={15} /> {busy === "anim" ? "Đang tạo…" : page.animationUrl ? "Tạo lại MP4" : "Tạo animation"}
+          </Button>
+        )}
+        {!isSC && page.animationUrl && (
+          <a href={resolveImg(page.animationUrl)} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, alignSelf: "center", color: "var(--info)", textDecoration: "underline" }}>Xem MP4</a>
+        )}
         <Button variant="danger" size="sm" disabled={disabled || busy !== null} onClick={run("del", () => isSC ? sourceCovers.remove(sourceCover!.id) : actions.removePage(pages, page.id), onRemoved)}>
           <Icon name="x" size={15} /> Xóa
         </Button>
@@ -176,10 +204,12 @@ export function PageActionsRow({
       {!isSC && regenOpen && (
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: 10, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", background: "var(--neutral-100)" }}>
           <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 6 }}>Nguồn
-            <select value={regenOpts.source} onChange={(e) => setRegenOpts((o) => ({ ...o, source: e.target.value as "A" | "B" }))}
+            <select value={regenOpts.source} onChange={(e) => setRegenOpts((o) => ({ ...o, source: e.target.value as "A" | "B" | "story" | "character" }))}
               style={{ padding: "4px 8px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)" }}>
               <option value="A">A · New Source</option>
               <option value="B">B · + Prompt gốc</option>
+              <option value="story">Story · giữ nhân vật, nối truyện</option>
+              <option value="character">Character · extract nhân vật, scene mới đa dạng</option>
             </select>
           </label>
           <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 6 }}>Số bản
@@ -213,7 +243,7 @@ export function PageActionsRow({
             <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Bấm ảnh để phóng to. “Áp dụng” để dùng cho trang này, “Tạo lại” để thử bản khác.</div>
           </div>
           <Button size="sm" disabled={busy !== null} onClick={applyCand}>{busy === "apply" ? "Đang áp dụng…" : "Áp dụng"}</Button>
-          <Button variant="outline" size="sm" disabled={busy !== null} onClick={doGen(cand.kind === "angle")}>{busy === "regen" || busy === "angle" ? "Đang tạo…" : "Tạo lại"}</Button>
+          <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => runGen(cand.kind === "angle", regenInstr.trim())}>{busy === "regen" || busy === "angle" ? "Đang tạo…" : "Tạo lại"}</Button>
           <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => setCand(null)}>Bỏ</Button>
         </div>
       )}
@@ -235,6 +265,37 @@ export function PageActionsRow({
       )}
 
       <ColoringStylePickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={setSel} referenceThumb={resolveImg(page.coloredUrl || page.url)} />
+
+      {regenModal && (
+        <div
+          onClick={() => busy === null && setRegenModal(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", zIndex: 1000, padding: 16 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--card, #fff)", borderRadius: "var(--radius-lg, 14px)", padding: 20, width: "min(540px, 94vw)", boxShadow: "0 12px 44px rgba(0,0,0,.28)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <Icon name="sparkles" size={18} />
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{regenModal.newAngle ? "Đổi góc — yêu cầu thêm" : "Regen — yêu cầu thêm"}</h3>
+            </div>
+            <p style={{ fontSize: 12.5, color: "var(--muted-foreground)", margin: "0 0 10px" }}>
+              Nhập chỉ dẫn bổ sung (tuỳ chọn) — muốn xoá / đổi / thêm gì ở bản vẽ lại. Để trống = vẽ lại như thường.
+            </p>
+            <textarea
+              className="mo-input"
+              value={regenInstr}
+              onChange={(e) => setRegenInstr(e.target.value)}
+              autoFocus
+              placeholder="VD: xoá cái mũ; đổi nền thành khu vườn; thêm một chú mèo nhỏ ở góc phải…"
+              style={{ width: "100%", minHeight: 92, padding: "10px 12px", lineHeight: 1.6, resize: "vertical" }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+              <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => setRegenModal(null)}>Huỷ</Button>
+              <Button size="sm" disabled={busy !== null} onClick={() => runGen(regenModal.newAngle, regenInstr.trim())}>
+                <Icon name="sparkles" size={15} /> {busy !== null ? "Đang tạo…" : "Tạo bản xem trước"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

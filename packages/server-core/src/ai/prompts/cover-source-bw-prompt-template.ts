@@ -1556,8 +1556,51 @@ illustration to be redesigned.
 Generate ONE strictly 1:1 premium black-and-white coloring-book
 BOTTOM COVER.`;
 
-export function buildCoverSourceBWPrompt(titleSafe: TitleSafePosition): string {
-  // Each title-safe position has its own dedicated, user-tuned prompt.
+/** Where the clear title band sits, per position — used by the override below. */
+const TITLE_BAND_LABEL: Record<TitleSafePosition, string> = {
+  top: "the UPPER ~25% of the canvas",
+  middle: "a horizontal band across the MIDDLE ~25% of the canvas",
+  bottom: "the LOWER ~25% of the canvas",
+};
+
+/**
+ * Overriding "clear title band" rule appended to every cover prompt. The
+ * dedicated per-position prompts were tuned to preserve composition and
+ * explicitly AVOID an empty band (e.g. "not an artificially empty band",
+ * "decoration may enter the typography region"), which left no usable space for
+ * the title to be added later. This block flips that for the title band ONLY:
+ * keep it genuinely clear of DECORATION (real open space for typography) while
+ * never moving or removing the main source characters/artwork to make room.
+ * Cover-generation only.
+ */
+function titleClearspaceOverride(pos: TitleSafePosition): string {
+  return `
+
+==================================================
+TITLE CLEARSPACE — OVERRIDING RULE (HIGHEST PRIORITY)
+==================================================
+
+This rule OVERRIDES any earlier guidance that allows decoration inside the
+title region or that says the title area must not be empty.
+
+Keep ${TITLE_BAND_LABEL[pos]} as a genuinely CLEAR, usable title band — real,
+uncluttered open negative space where a large TITLE and a smaller SUBTITLE can
+be added later and read comfortably.
+
+- Keep DECORATION OUT of this band: no clouds, stars, flowers, hearts, dots,
+  sparkles, or other motifs inside it. It must read as open space.
+- Do NOT draw any box, rectangle, banner, ribbon, panel, frame, or border
+  around it. Keep the edges organic — it is open space, not a container.
+- Source fidelity still comes first: do NOT move, shrink, rearrange, or remove
+  the main source characters, objects, or their structural connections to
+  create this band. If the original composition naturally reaches into the
+  band, keep the source art and remove only DECORATION, holding generous
+  breathing room around the future title.
+- Still NO literal text, letters, numbers, or placeholder typography.`;
+}
+
+/** Returns the dedicated, user-tuned prompt for a title position. */
+function coverPromptFor(titleSafe: TitleSafePosition): string {
   switch (titleSafe) {
     case "top":
       return TOP_COVER_PROMPT;
@@ -1568,11 +1611,18 @@ export function buildCoverSourceBWPrompt(titleSafe: TitleSafePosition): string {
   }
 }
 
-/** Per-position title-area rule for the compact variant. */
+export function buildCoverSourceBWPrompt(titleSafe: TitleSafePosition): string {
+  // Dedicated per-position prompt + a shared clear-title-band override so a
+  // usable (decoration-free) title space is actually preserved.
+  return `${coverPromptFor(titleSafe)}${titleClearspaceOverride(titleSafe)}`;
+}
+
+/** Per-position title-area rule for the compact variant. Must keep a genuinely
+ * CLEAR band (real open space for the title added later), decoration OUT. */
 const COMPACT_TITLE_ZONE: Record<TitleSafePosition, string> = {
-  top: "Keep a clean, calm TOP-CENTER band as the title/subtitle area and place the artwork in the lower-to-middle area with generous, usable top breathing room.",
-  middle: "Reserve a calm, usable title area around the MIDDLE of the composition — visually clean but a natural part of the artwork, not an artificially empty band.",
-  bottom: "Reserve a calm, usable title area in the LOWER portion; let decoration thin out gradually toward the bottom rather than stopping abruptly.",
+  top: "Keep the UPPER ~25% of the canvas as a genuinely CLEAR, usable title band — real open negative space for a large title + subtitle. Keep decoration OUT of it.",
+  middle: "Keep a horizontal band across the MIDDLE ~25% of the canvas as a genuinely CLEAR, usable title area — real open negative space. Keep decoration OUT of it.",
+  bottom: "Keep the LOWER ~25% of the canvas as a genuinely CLEAR, usable title band — real open negative space for a large title + subtitle. Keep decoration OUT of it.",
 };
 
 /**
@@ -1589,7 +1639,7 @@ PRESERVE THE SOURCE (highest priority): keep all characters, objects, poses, pro
 
 PRESERVE STRUCTURAL CONNECTIONS: keep every rope, string, cable, handle, strap, stem, support and connecting line attached to the correct objects. Never turn a structural line into decoration, and never let clouds/flowers/stars/hearts interrupt or attach to structural elements.
 
-TITLE AREA: ${COMPACT_TITLE_ZONE[titleSafe]} Preserve the original composition first — do not push characters away just to make room.
+TITLE AREA: ${COMPACT_TITLE_ZONE[titleSafe]} Source fidelity first — do NOT move, shrink or remove the main characters to make room; if source art reaches into the band, keep it and clear only DECORATION, holding breathing room around the future title. No text.
 
 DECORATION: add only a small amount of cute, on-theme decoration (clouds, stars, flowers, hearts, dots, sparkles) in the existing negative space. Keep it sparse, irregular, non-grid, secondary to the artwork, with generous calm negative space. Decoration must always yield to the source.
 

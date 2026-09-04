@@ -8919,7 +8919,6 @@ __metadata:
     jsonrepair: "npm:^3.15.0"
     jszip: "npm:^3.10.1"
     langfuse: "npm:^3.38.20"
-    pdf-lib: "npm:^1.17.1"
     sharp: "npm:^0.34.5"
     typescript: "npm:^5.8.0"
     vitest: "npm:^3.0.0"

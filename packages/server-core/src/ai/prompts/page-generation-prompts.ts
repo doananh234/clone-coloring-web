@@ -2,6 +2,8 @@
  * Page Generation Prompts — prompts for generating coloring book pages.
  */
 
+import { KDP_FRAME_INSTRUCTION, isFrameEnabled } from "./frame";
+
 export function buildSubtitlePrompt(title: string, description?: string): string {
   return `Generate a short, catchy subtitle (under 10 words) for a coloring book titled "${title}"${description ? `. Description: ${description}` : ""}. Return only the subtitle text, no quotes.`;
 }
@@ -71,5 +73,5 @@ ${scenePrompt}
 - All lines must be clean, smooth, and of consistent weight
 - If any object implies color (e.g., glowing, magical, screen effects), represent it using line shapes only
 
-CONFLICT RESOLUTION: If the reference images suggest bold, thick outlines different from the style rules, disregard those modifiers. Execute only the content and character likeness using the style format specified above.`;
+${isFrameEnabled() ? `${KDP_FRAME_INSTRUCTION}\n\n` : ""}CONFLICT RESOLUTION: If the reference images suggest bold, thick outlines different from the style rules, disregard those modifiers. Execute only the content and character likeness using the style format specified above.`;
 }

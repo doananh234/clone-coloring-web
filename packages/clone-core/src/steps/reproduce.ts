@@ -1,6 +1,5 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
-import { isDroppedFromClone } from "./plan-page-selection";
 
 interface JobPage {
   pageNumber: number;
@@ -8,8 +7,6 @@ interface JobPage {
   status: string;
   rawData?: { reproductionPrompt?: string };
   redesignedUrl?: string;
-  excludedFromClone?: boolean;
-  excluded?: boolean;
 }
 
 export interface ReproduceDeps {
@@ -37,9 +34,6 @@ export async function stepReproduce(
     const page = updatedPages[i];
     if (page.redesignedUrl) continue;
     if (!page.imageUrl) continue;
-    // Pages the operator dropped at the pre-spend gate are filtered out again
-    // by stepCreateBook, so generating them is money spent on a discard.
-    if (isDroppedFromClone(page)) continue;
     // prompt is no longer required — generatePage uses buildRedesignPrompt(30)
     // and ignores the passed-in prompt. We still pass it for signature compat.
     const prompt = page.rawData?.reproductionPrompt ?? "";

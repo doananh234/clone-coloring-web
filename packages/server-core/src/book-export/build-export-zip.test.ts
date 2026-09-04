@@ -30,12 +30,8 @@ describe("collectExportPlan", () => {
 
     expect(byPath["Main book/Book cover"].map((e) => e.url)).toEqual(["/assets/src/p1.png"]);
     expect(byPath["Main book/Book intro"].map((e) => e.url)).toEqual(["/assets/src/p2.png"]);
-    // Main book is the archived ORIGINAL: it keeps every source page,
-    // including ones the operator dropped from cloning.
-    expect(byPath["Main book/Book interior"].map((e) => e.url)).toEqual([
-      "/assets/src/p3.png",
-      "/assets/src/p4.png",
-    ]);
+    // interior excludes the cover, the intro, and the excluded page
+    expect(byPath["Main book/Book interior"].map((e) => e.url)).toEqual(["/assets/src/p3.png"]);
 
     expect(byPath["Clone book/Book cover"].map((e) => e.name)).toEqual(["cover-01", "cover-02"]);
     expect(byPath["Clone book/Book intro"].map((e) => e.url)).toEqual(["/assets/b/intro-1.png"]);
@@ -56,16 +52,16 @@ describe("collectExportPlan", () => {
     expect(cover.entries.map((e) => e.url)).toEqual(["/assets/src/a.png"]);
   });
 
-  it("cover fallback takes the first source page even if it was dropped from cloning", () => {
+  it("cover fallback skips an excluded first source page", () => {
     const plan = collectExportPlan({
       ...baseInput,
       cloneJobPages: [
-        { imageUrl: "/assets/src/dropped.png", excludedFromClone: true },
-        { imageUrl: "/assets/src/second.png" },
+        { imageUrl: "/assets/src/excluded.png", excluded: true },
+        { imageUrl: "/assets/src/first-included.png" },
       ],
     });
     const cover = plan.folders.find((f) => f.path === "Main book/Book cover")!;
-    expect(cover.entries.map((e) => e.url)).toEqual(["/assets/src/dropped.png"]);
+    expect(cover.entries.map((e) => e.url)).toEqual(["/assets/src/first-included.png"]);
   });
 
   it("omits Main book folders when there is no source clone job", () => {

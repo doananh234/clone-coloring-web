@@ -14,7 +14,6 @@ export { CoverEditorScreen } from "./books/cover-editor-screen";
 export { StylesScreen } from "./hubs/styles-screen";
 export { LibraryScreen } from "./hubs/library-screen";
 export { SystemScreen } from "./hubs/system-screen";
-export { UsersScreen } from "./system/users-screen";
 export { AiCostScreen } from "./system/ai-cost-screen";
 export { SettingsScreen } from "./system/settings-screen";
 export { EntityDetailScreen } from "./entity/entity-detail-screen";

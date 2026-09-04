@@ -42,15 +42,10 @@ export function isRateLimitError(err: unknown): boolean {
 interface RetryDeps {
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
-  /** Wall-clock budget for this step, surfaced to the UI as a denominator. */
-  budgetSec?: number;
 }
 
 interface RetryCtx {
   recordRetry(step: CloneStep, attempt: number, error: unknown): Promise<void>;
-  /** Publish "this step is running now" so the UI can show it with a clock. */
-  markStepRunning(step: CloneStep, budgetSec?: number): Promise<void>;
-  clearStepRunning(): Promise<void>;
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -65,12 +60,8 @@ export async function withRetry<T>(
   const random = deps.random ?? Math.random;
 
   let lastErr: unknown;
-  try {
   for (let attempt = 1; attempt <= RETRY_POLICY.maxAttempts; attempt++) {
     try {
-      // Re-marked per attempt: a retry starts the work over, so the clock the
-      // operator sees must restart with it.
-      await ctx.markStepRunning(step, deps.budgetSec);
       const result = await fn();
       await sleep(RETRY_POLICY.interStepCooldownMs);
       return result;
@@ -93,9 +84,4 @@ export async function withRetry<T>(
     }
   }
   throw new StepFailedError(step, lastErr);
-  } finally {
-    // Always clears — on success, on give-up, and on a non-retryable throw.
-    // A stale runningStep would leave the UI counting up forever.
-    await ctx.clearStepRunning();
-  }
 }

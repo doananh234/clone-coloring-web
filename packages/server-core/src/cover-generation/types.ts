@@ -23,6 +23,13 @@ export interface CoverInput {
   /** Optional subtitle hint. Same semantic as titleHint. */
   subtitleHint?: string;
   /**
+   * Optional per-call image model override (LiteLLM model id, e.g. "gpt-image-2"
+   * or "gemini-3.1-flash-image"). Lets an operator pick the model that renders
+   * the title/subtitle/brand layout best for this cover. Empty/undefined → the
+   * provider's default (LITELLM_IMAGE_MODEL).
+   */
+  model?: string;
+  /**
    * Full R2 object key to upload the generated cover to. Example:
    *   "assets/clone-jobs/{jobId}/cover/cover-ai.png"
    *   "assets/books/{bookId}/cover-ai.png"

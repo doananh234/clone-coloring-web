@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@vx/db";
+import { cieq } from "@vx/db";
 import { buildColoringStyleRowInput } from "./build-coloring-style-row-input";
 import {
   buildColoringStyleVariant,
@@ -41,7 +42,7 @@ export async function upsertColoringStyleWithVariant(
   const now = new Date().toISOString();
 
   const existing = await db.coloringStyle.findFirst({
-    where: { name: { equals: name, mode: "insensitive" } },
+    where: { name: cieq(name) },
     orderBy: { createdAt: "asc" },
     select: { id: true, variants: true, colorPalette: true, thumbnailUrl: true, colorizationDirective: true },
   });

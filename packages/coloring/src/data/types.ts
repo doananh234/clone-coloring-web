@@ -16,13 +16,6 @@ export interface CloneJobRow {
   bookId: string | null;
   sourceBookId: string | null;
   currentStep: string | null;
-  /**
-   * The step executing right now — as opposed to `currentStep`, which is the
-   * last step to FINISH. Null when the worker is between steps.
-   */
-  runningStep: string | null;
-  runningSince: string | null;
-  runningBudgetSec: number | null;
   failedStep: string | null;
   /** Failure reason message (from CloneJob.error). Null unless the job errored. */
   error: string | null;
@@ -45,10 +38,7 @@ export interface CloneJobPage {
   status: string;
   /** D2 classification fields (set during gate review). */
   pageType?: "cover" | "interiorIntro" | "interior";
-  /** Legacy drop flag. Superseded by excludedFromClone; still read for old rows. */
   excluded?: boolean;
-  /** Operator drop mark from the pre-spend gate: page is not sent for redesign. */
-  excludedFromClone?: boolean;
   /** D3 lineage fields (set by stepFillInterior / fill route). */
   origin?: "original" | "additional";
   parentPageNumber?: number;
@@ -88,19 +78,6 @@ export interface CloneJobDetail {
   sourcePdfUrl?: string;
   brand?: string | null;
   currentStep?: string | null;
-  /**
-   * The step executing right now — as opposed to `currentStep`, which is the
-   * last step to FINISH. Null when the worker is between steps.
-   */
-  runningStep?: string | null;
-  runningSince?: string | null;
-  runningBudgetSec?: number | null;
-  /**
-   * Server-computed: the job's Diaflow call already ran (worker's
-   * `ctx.isDone("reproduce")`). The gate's Lane 2 park is suppressed on these,
-   * so the classify banner must not promise a free park.
-   */
-  alreadySpent?: boolean;
   error?: string;
   /** Which pipeline step failed (from CloneJob.data.failedStep). */
   failedStep?: string | null;
@@ -124,6 +101,25 @@ export interface EtsyListingInfo {
   priceSuggestionUsd?: number;
 }
 
+/** Full Etsy listing block (lives in Book.data.etsyListing). */
+export interface BookEtsyListing {
+  etsyTitle?: string;
+  etsyDescription?: string;
+  materials?: string[];
+  etsyCategory?: string;
+  subcategory?: string;
+  priceSuggestionUsd?: number;
+  priceNotes?: string;
+  section?: string;
+}
+
+/** Print/product specs (lives in Book.data.specifications). */
+export interface BookSpecifications {
+  pages?: number;
+  dimensions?: string;
+  ageRange?: string;
+}
+
 /** Shape returned by GET /api/books (subset we render). */
 export interface BookRow {
   id: string;
@@ -133,6 +129,8 @@ export interface BookRow {
   thumbnailUrl?: string | null;
   squareThumbnailUrl?: string | null;
   category?: string | null;
+  /** Book UI tint — denormalized onto home new-arrival cards on sync. */
+  backgroundColor?: string | null;
   /** Denormalized source niche (from CloneJob → SourceBook), shown as a tag. */
   niche?: string | null;
   /** Operator id this book is assigned to (null = unassigned). */
@@ -203,6 +201,8 @@ export interface BookColoringPage {
   url: string;
   isPublic?: boolean;
   coloredUrl?: string;
+  /** "Self-drawing" animation MP4 (from the @vx/motion service). */
+  animationUrl?: string;
   coloringStyleId?: string;
   /** Reproduction/redesign prompt copied from the source clone job. */
   prompt?: string;
@@ -236,11 +236,18 @@ export interface BookDetail extends BookRow {
   originalPrice?: string | null;
   discount?: string | null;
   badge?: string | null;
+  /** Real columns (top-level in the API response). */
+  categoryId?: string | null;
+  backgroundColor?: string | null;
+  tryoutPage?: string | null;
   updatedAt?: string;
   tags?: string[];
   coloringPages?: BookColoringPage[];
   summaryPages?: { id: string; url: string; isPublic?: boolean; sourcePageNumber?: number }[];
-  specifications?: { pages?: number; dimensions?: string; ageRange?: string } | null;
-  /** Raw JSON blob; coverMeta.sourceThumbnailUrl = clean illustration (no text). */
+  specifications?: BookSpecifications | null;
+  /** Raw JSON blob; coverMeta.sourceThumbnailUrl = clean illustration (no text).
+   *  Also holds fields that aren't Book columns: specifications, etsyListing,
+   *  tags, isPremium, isConverted/isRedesigned/isEditionConverted, primaryColor,
+   *  secondaryColor, themeStyle, holiday, occasion. */
   data?: Record<string, unknown> | null;
 }

@@ -9,6 +9,7 @@ import { useSourceCovers } from "../../data/use-source-covers";
 import type { SourceCover, TitleSafePosition } from "../../data/source-covers";
 import type { BookColoringPage } from "../../data/types";
 import { InteriorPickerModal } from "./interior-picker-modal";
+import type { ImageProvider } from "../../components/provider-select";
 
 const LABEL: Record<TitleSafePosition, string> = { top: "Top", middle: "Middle", bottom: "Bottom" };
 
@@ -28,11 +29,11 @@ export function SourceCoverSection({
   // Queue one background job per selected interior page, then close the dialog.
   // Each sc.gen() only enqueues (returns fast) — progress shows in the header
   // queue drawer, so the operator can keep working.
-  const doGen = async (interiorPageIds: string[], promptOverride: string, provider: "kingcong" | "diaflow") => {
+  const doGen = async (interiorPageIds: string[], promptOverride: string, provider: ImageProvider, model: string) => {
     if (!pickFor || interiorPageIds.length === 0) return;
     setBusy(true); setErr(null);
     try {
-      for (const id of interiorPageIds) await sc.gen(id, pickFor, promptOverride, provider);
+      for (const id of interiorPageIds) await sc.gen(id, pickFor, promptOverride, provider, model);
       setPickFor(null);
     }
     catch (e) { setErr(e instanceof Error ? e.message : "Tạo source cover thất bại"); }

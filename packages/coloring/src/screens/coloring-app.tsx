@@ -16,7 +16,6 @@ import { LibraryScreen } from "./hubs/library-screen";
 import { SystemScreen } from "./hubs/system-screen";
 import { CharactersScreen, LocationsScreen, BrandsScreen, CategoriesListScreen, BwStylesScreen, ColorStylesScreen } from "./hubs/entity-lists";
 import { ExtractStyleScreen } from "./hubs/extract-style-screen";
-import { UsersScreen } from "./system/users-screen";
 import { AiCostScreen } from "./system/ai-cost-screen";
 import { SettingsScreen } from "./system/settings-screen";
 import { FontsScreen } from "./system/fonts-screen";
@@ -25,6 +24,7 @@ import { OperatorsScreen } from "./system/operators-screen";
 import { EntityDetailScreen } from "./entity/entity-detail-screen";
 import { EntityEditScreen } from "./entity/entity-edit-screen";
 import { EtsyScreen } from "./etsy/etsy-screen";
+import { HomeScreen } from "./home/home-screen";
 import { ComingSoonScreen } from "./coming-soon-screen";
 import { resolvePageTitle, resolveCrumbs } from "./page-map";
 
@@ -36,6 +36,7 @@ export interface ColoringAppProps {
 function screenFor(slug: string[], title: string) {
   const [top, sub] = slug;
   if (slug.length === 0) return <OverviewScreen />;
+  if (top === "home") return <HomeScreen />;
   if (top === "jobs" && !sub) return <JobsScreen />;
   if (top === "jobs" && sub === "new") return <NewJobScreen />;
   if (top === "jobs" && sub) return <JobDetailScreen jobId={sub} />;
@@ -58,7 +59,6 @@ function screenFor(slug: string[], title: string) {
   if (top === "styles" && sub === "extractbw") return <ExtractStyleScreen kind="art-styles" />;
   if (top === "styles" && sub === "extractcolor") return <ExtractStyleScreen kind="coloring-styles" />;
   if (top === "styles" && !sub) return <StylesScreen />;
-  if (top === "system" && sub === "users") return <UsersScreen />;
   if (top === "system" && sub === "ai-cost") return <AiCostScreen />;
   if (top === "system" && sub === "settings") return <SettingsScreen />;
   if (top === "system" && !sub) return <SystemScreen />;

@@ -19,7 +19,8 @@ interface OperatorsResponse {
 export function useOperators(enabled: boolean): OperatorLite[] {
   const query = useQuery({
     queryKey: ["coloring", "operators"],
-    queryFn: () => httpGet<OperatorsResponse>(`${COLORING_API_BASE}/operators`),
+    // Local admin accounts — same-origin /api (see use-operators.ts), not the upstream.
+    queryFn: () => httpGet<OperatorsResponse>("/api/operators"),
     enabled,
     retry: false,
   });

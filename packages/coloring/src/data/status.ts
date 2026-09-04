@@ -23,7 +23,6 @@ export const STATUS_META: Record<string, StatusMeta> = {
   confirmed: { bucket: "confirm", label: "Chờ xác nhận", tone: "warning" },
   entities_ready: { bucket: "confirm", label: "Chờ xác nhận", tone: "warning" },
   "awaiting-classify": { bucket: "running", label: "Chờ phân loại", tone: "warning", dot: true },
-  "awaiting-fill": { bucket: "queue", label: "Chờ bổ sung trang", tone: "carbon" },
   reproduced: { bucket: "done", label: "Hoàn thành", tone: "neutral" },
   error: { bucket: "error", label: "Lỗi", tone: "danger" },
 };
@@ -48,14 +47,10 @@ export interface StatusTab {
 
 export const STATUS_TABS: StatusTab[] = [
   { key: "all", label: "Tất cả", filter: "", countKeys: ["all"], barColor: "var(--neutral-400)" },
-  // `filter` must list EVERY status in countKeys (comma-separated) so the rows
-  // shown match the badge count. A single status here would hide the others —
-  // e.g. a just-started job flips pending→queued and vanished from every tab.
-  { key: "pending", label: "Queue", filter: "pending,queued,uploading,extracted", countKeys: ["pending", "queued", "uploading", "extracted"], barColor: "var(--info)" },
-  { key: "running", label: "Đang chạy", filter: "running,analyzing", countKeys: ["running", "analyzing"], barColor: "var(--volt-500)" },
+  { key: "pending", label: "Queue", filter: "pending", countKeys: ["pending", "queued", "uploading", "extracted"], barColor: "var(--info)" },
+  { key: "running", label: "Đang chạy", filter: "running", countKeys: ["running", "analyzing"], barColor: "var(--volt-500)" },
   { key: "gate", label: "Chờ duyệt", filter: "awaiting-classify", countKeys: ["awaiting-classify"], barColor: "var(--warning)" },
-  { key: "awaiting-fill", label: "Chờ bổ sung trang", filter: "awaiting-fill", countKeys: ["awaiting-fill"], barColor: "var(--carbon-700)" },
-  { key: "analyzed", label: "Chờ xác nhận", filter: "analyzed,confirmed,entities_ready", countKeys: ["analyzed", "confirmed", "entities_ready"], barColor: "var(--warning)" },
+  { key: "analyzed", label: "Chờ xác nhận", filter: "analyzed", countKeys: ["analyzed", "confirmed", "entities_ready"], barColor: "var(--warning)" },
   { key: "reproduced", label: "Hoàn thành", filter: "reproduced", countKeys: ["reproduced"], barColor: "var(--success)" },
   { key: "stashed", label: "Tạm hoãn", filter: "stashed", countKeys: ["stashed"], barColor: "var(--carbon-700)" },
   { key: "error", label: "Lỗi", filter: "error", countKeys: ["error"], barColor: "var(--danger)" },

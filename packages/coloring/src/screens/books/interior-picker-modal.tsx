@@ -3,12 +3,20 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
-import { ProviderSelect, useProviderPreference } from "../../components/provider-select";
+import { ProviderSelect, useProviderPreference, type ImageProvider } from "../../components/provider-select";
 import { thumbImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
 import type { TitleSafePosition } from "../../data/source-covers";
 
 const promptKey = (ts: TitleSafePosition) => `sourceCoverPrompt:${ts}`;
+
+// Image model choices (LiteLLM only). "" = Auto (LITELLM_IMAGE_MODEL). gpt-image-2
+// lays out the top/middle/bottom title-safe area more reliably than gemini-3.1.
+const COVER_MODELS: { label: string; value: string }[] = [
+  { label: "Model: Auto", value: "" },
+  { label: "gpt-image-2", value: "gpt-image-2" },
+  { label: "Gemini 3.1", value: "gemini-3.1-flash-image" },
+];
 
 /** Max interior pages selectable for a single Gen Cover action. */
 const MAX_SELECT = 3;
@@ -24,17 +32,13 @@ export function InteriorPickerModal({
   busy: boolean;
   /** Fired on "Gen (N)": the chosen interior ids + the (possibly edited) prompt
    *  (empty string = server default). One background job is queued per id. */
-  onConfirm: (interiorPageIds: string[], promptOverride: string, provider: "kingcong" | "diaflow") => void;
+  onConfirm: (interiorPageIds: string[], promptOverride: string, provider: ImageProvider, model: string) => void;
   onClose: () => void;
   fetchDefaultPrompt: (titleSafe: TitleSafePosition) => Promise<string>;
 }) {
   const [provider, setProvider] = useProviderPreference();
+  const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");
-  // The server's built-in default for this position. Used to detect whether the
-  // operator actually customized the prompt — if not, we send an empty override
-  // so the worker builds its own provider-aware default (compact for KingCong,
-  // full for Diaflow) instead of the full prompt being sent verbatim.
-  const [defaultPrompt, setDefaultPrompt] = useState("");
   const [showPrompt, setShowPrompt] = useState(false);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
   // Transient status line (Copy/Xóa/Apply feedback). Cleared after a moment.
@@ -42,25 +46,17 @@ export function InteriorPickerModal({
   // Selected interior page ids (order preserved), capped at MAX_SELECT.
   const [selected, setSelected] = useState<string[]>([]);
 
-  // On open (or position change): always fetch the server default (to compare
-  // against on submit), then show the saved per-position edit if present,
-  // otherwise the default.
+  // On open (or position change): use the saved per-position edit if present,
+  // otherwise prefill from the server's built-in default for that position.
   useEffect(() => {
     if (!open || !titleSafe) return;
     const saved = typeof window !== "undefined" ? window.localStorage.getItem(promptKey(titleSafe)) : null;
+    if (saved != null) { setPrompt(saved); return; }
     let cancelled = false;
     setLoadingPrompt(true);
     fetchDefaultPrompt(titleSafe)
-      .then((d) => {
-        if (cancelled) return;
-        setDefaultPrompt(d);
-        setPrompt(saved != null ? saved : d);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setDefaultPrompt("");
-        setPrompt(saved != null ? saved : "");
-      })
+      .then((d) => { if (!cancelled) setPrompt(d); })
+      .catch(() => { if (!cancelled) setPrompt(""); })
       .finally(() => { if (!cancelled) setLoadingPrompt(false); });
     return () => { cancelled = true; };
   }, [open, titleSafe, fetchDefaultPrompt]);
@@ -85,12 +81,7 @@ export function InteriorPickerModal({
 
   const confirmGen = () => {
     if (busy || selected.length === 0) return;
-    // Only send a prompt override when the operator actually customized it.
-    // Unedited → send "" so the worker builds its provider-aware default: the
-    // compact prompt for KingCong (avoids the 4000-char cap) or the full prompt
-    // for Diaflow. Sending the full prefill verbatim would defeat both.
-    const edited = prompt.trim() !== "" && prompt.trim() !== defaultPrompt.trim();
-    onConfirm(selected, edited ? prompt : "", provider);
+    onConfirm(selected, prompt, provider, model);
   };
 
   // Copy Prompt — put the current text on the clipboard.
@@ -217,6 +208,17 @@ export function InteriorPickerModal({
           <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Đã chọn {selected.length}/{MAX_SELECT}</span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <ProviderSelect value={provider} onChange={setProvider} disabled={busy} />
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={busy}
+              title="Image model (chỉ áp dụng cho provider LiteLLM)"
+              style={{ fontSize: 12.5, padding: "5px 8px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)", color: "var(--foreground)" }}
+            >
+              {COVER_MODELS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
             <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Đóng</Button>
             <Button size="sm" onClick={confirmGen} disabled={busy || selected.length === 0}>
               <Icon name="sparkles" size={14} /> Gen ({selected.length})

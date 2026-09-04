@@ -59,19 +59,37 @@ export interface GeneratedCover {
   base64: string;
 }
 
+export interface GenerateCoverInput {
+  title: string;
+  /** One or more source illustrations to build the cover from. */
+  imageUrls: string[];
+  /** Brand/author line to print on the cover (optional). */
+  brand?: string;
+  /** Coloring/art style name to steer the look (optional). */
+  style?: string;
+  /** Title placement: "top" | "center" | "bottom" | "corner" (optional). */
+  layout?: string;
+}
+
 /**
- * AI cover generation via /generate/compose-cover. The backend composes the book's
- * colored pages + title into one cover image and returns a base64 PNG. Any extra
- * prompt is folded into the title (the endpoint only takes { title, imageDataUrls }).
+ * AI cover generation via /generate/compose-cover. The backend composes the
+ * chosen illustration(s) + title into ONE cover image and returns a base64 PNG.
+ * Brand / style / layout steer the generated prompt.
  */
 export function useGenerateCover() {
   return {
     enabled: COLORING_WRITE_ENABLED,
-    generate: async (title: string, imageUrls: string[]): Promise<GeneratedCover> => {
+    generate: async (input: GenerateCoverInput): Promise<GeneratedCover> => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL);
       const res = await httpPost<{ success?: boolean; previewUrl?: string; base64?: string }>(
         `${COLORING_API_BASE}/generate/compose-cover`,
-        { title, imageDataUrls: imageUrls },
+        {
+          title: input.title,
+          imageDataUrls: input.imageUrls,
+          brand: input.brand,
+          style: input.style,
+          layout: input.layout,
+        },
       );
       if (!res?.base64) throw new Error("Gen bìa AI thất bại (thiếu ảnh trả về).");
       return { previewUrl: res.previewUrl || `data:image/png;base64,${res.base64}`, base64: res.base64 };

@@ -28,8 +28,7 @@
  *   KINGCONG_USER_DATA_DIR    persistent Playwright profile (default .kingcong-profile)
  *   KINGCONG_RELOGIN_ENABLED  "true"|"false" (default true; file-mode only)
  *   KINGCONG_POLL_INTERVAL    seconds (default 3)
- *   KINGCONG_POLL_TIMEOUT     seconds (default 500 — img2img runs ~80s/page and
- *                             can spike well past 180s under load)
+ *   KINGCONG_POLL_TIMEOUT     seconds (default 180)
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -77,7 +76,7 @@ function getConfig(): KingCongConfig {
     userDataDir: resolve(process.env.KINGCONG_USER_DATA_DIR || ".kingcong-profile"),
     reloginEnabled: (process.env.KINGCONG_RELOGIN_ENABLED || "true") !== "false",
     pollInterval: Number(process.env.KINGCONG_POLL_INTERVAL) || 3,
-    pollTimeout: Number(process.env.KINGCONG_POLL_TIMEOUT) || 500,
+    pollTimeout: Number(process.env.KINGCONG_POLL_TIMEOUT) || 180,
   };
 }
 
@@ -325,40 +324,16 @@ function mapSize(size: ImageGenerationOptions["size"]): { aspect: string; resolu
 // shared prompts (cover-source, style) run 17k–28k chars — far longer than
 // Diaflow/Vertex need. These prompts front-load the core directive, so keep the
 // head and cut at a clean paragraph/line boundary under the limit.
-//
-// CRITICAL: KingCong counts a newline as CRLF (\n = 2 chars) when enforcing the
-// limit, so the budget is on `length + newlineCount`, NOT raw string length. A
-// line-heavy prompt trips 4000 while `.length` still reads under it (prod bug:
-// 3960 chars + 132 newlines = 4092 → rejected). Cap on the CRLF-adjusted length
-// with a small safety margin below the hard limit.
 const KINGCONG_MAX_PROMPT_CHARS = 4000;
-const KINGCONG_SAFE_PROMPT_CHARS = 3900;
 
-/** CRLF-adjusted length: what KingCong counts (each \n costs 2). */
-function crlfLength(s: string): number {
-  let extra = 0;
-  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10 /* \n */) extra++;
-  return s.length + extra;
-}
-
-export function capPrompt(prompt: string): string {
-  if (crlfLength(prompt) <= KINGCONG_SAFE_PROMPT_CHARS) return prompt;
-  // Walk forward, spending the CRLF budget (newline = 2), to find the longest
-  // prefix that fits — then back up to a clean paragraph/line boundary.
-  let end = 0;
-  let budget = KINGCONG_SAFE_PROMPT_CHARS;
-  while (end < prompt.length) {
-    const cost = prompt.charCodeAt(end) === 10 ? 2 : 1;
-    if (budget - cost < 0) break;
-    budget -= cost;
-    end++;
-  }
-  const head = prompt.slice(0, end);
+function capPrompt(prompt: string): string {
+  if (prompt.length <= KINGCONG_MAX_PROMPT_CHARS) return prompt;
+  const head = prompt.slice(0, KINGCONG_MAX_PROMPT_CHARS);
   const lastBreak = Math.max(head.lastIndexOf("\n\n"), head.lastIndexOf("\n"));
-  const cut = lastBreak > end * 0.6 ? head.slice(0, lastBreak) : head;
+  const cut = lastBreak > KINGCONG_MAX_PROMPT_CHARS * 0.6 ? head.slice(0, lastBreak) : head;
   const capped = cut.trimEnd();
   console.warn(
-    `[KingCong] prompt ${prompt.length} chars / ${crlfLength(prompt)} CRLF > ${KINGCONG_SAFE_PROMPT_CHARS} — cắt còn ${capped.length} chars / ${crlfLength(capped)} CRLF (giữ phần đầu).`,
+    `[KingCong] prompt ${prompt.length} chars > ${KINGCONG_MAX_PROMPT_CHARS} — cắt còn ${capped.length} (giữ phần đầu).`,
   );
   return capped;
 }

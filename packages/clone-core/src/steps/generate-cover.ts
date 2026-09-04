@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@vx/db";
+import { cieq } from "@vx/db";
 import type { JobContext } from "../job-context";
 import type { CoverMeta } from "@vx/server-core/text-overlay";
 import { upsertColoringStyleWithVariant } from "./upsert-coloring-style-with-variant";
@@ -116,7 +117,7 @@ export async function stepGenerateCover(
       // and we compare against the trimmed snapshot so leading/trailing
       // whitespace in the CSV doesn't defeat it either.
       const row = await db.brand.findFirst({
-        where: { name: { equals: snapshotBrandName, mode: "insensitive" } },
+        where: { name: cieq(snapshotBrandName) },
       });
       if (row) {
         brand = { id: row.id, name: row.name, data: (row.data as Record<string, unknown> | null | undefined) ?? {} };

@@ -7,11 +7,13 @@ import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Tabs } from "../../components/ui/tabs";
-import { Select, Switch } from "../../components/ui/form-controls";
+import { Select } from "../../components/ui/form-controls";
 import { LoadingRows, ErrorState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useBook } from "../../data/use-book";
 import { useEntityList } from "../../data/use-entity-list";
+import { ColoringStylePickerModal, type StyleSelection } from "../../components/ui/coloring-style-picker-modal";
+import type { SourceCover } from "../../data/source-covers";
 import { useSaveCover, useGenerateCover, type GeneratedCover } from "../../data/use-cover-actions";
 import { useCoverDesign, type CoverStylePack } from "../../data/use-cover-design";
 import { useCoverTextOverlays } from "../../data/use-cover-text-overlays";
@@ -20,10 +22,17 @@ import { CoverFabricEditor, type CoverEditorHandle } from "./cover-fabric-editor
 import { CoverElementPanel } from "./cover-element-panel";
 import { defaultCoverDoc, normalizeCoverDoc, applyExtractedStyles, docToOverlayElements, type CoverDoc, type CoverElement, type CoverElementKey, type CoverElementStyleSeeds } from "../../lib/cover-doc";
 
+const LAYOUT_OPTIONS = [
+  { value: "top", label: "Tiêu đề trên" },
+  { value: "center", label: "Tiêu đề giữa" },
+  { value: "bottom", label: "Tiêu đề dưới" },
+  { value: "corner", label: "Tiêu đề góc" },
+];
+
 export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const router = useRouter();
   const { book, isLoading, isError } = useBook(bookId);
-  const { items: styles } = useEntityList("coloring-styles");
+  const { items: brands } = useEntityList("brands");
   const saveCover = useSaveCover(bookId);
   const genCover = useGenerateCover();
   const coverDesign = useCoverDesign();
@@ -41,11 +50,14 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
   // AI tab
   const [prompt, setPrompt] = useState("");
-  const [aiStyle, setAiStyle] = useState("");
-  const [keepText, setKeepText] = useState(true);
+  const [aiStyleSel, setAiStyleSel] = useState<StyleSelection | null>(null);
+  const [stylePickerOpen, setStylePickerOpen] = useState(false);
+  const [aiBrandId, setAiBrandId] = useState("");
+  const [aiLayout, setAiLayout] = useState("top");
+  const [aiImage, setAiImage] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
-  const [aiResults, setAiResults] = useState<GeneratedCover[]>([]);
+  const [aiResult, setAiResult] = useState<GeneratedCover | null>(null);
 
   // Seed the cover doc once the book loads (badge = page count, seeded from the
   // pack auto-extracted at create-book time). Restores from book.data.coverLayout
@@ -99,10 +111,20 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
   const cleanBase = resolveImg(activeBaseRaw);
   // Cover (with text) is only the "current" reference in the AI tab.
   const cover = resolveImg(book.coverUrl || book.squareThumbnailUrl || book.thumbnailUrl);
-  const styleOptions = styles.map((s) => ({ label: s.name, value: s.id }));
-  // Candidate background images for the thumbnail strip: current cover sources +
-  // the book's colored pages (falls back to line art when no colored version).
+  // Generated source covers (title-safe top/middle/bottom) — the primary picks
+  // for a cover base. Prefer the colorized version; keep a position label for the
+  // thumbnail badge.
+  const sourceCovers = (book.data?.sourceCovers ?? []) as SourceCover[];
+  const SRC_POS_LABEL: Record<string, string> = { top: "Top", middle: "Giữa", bottom: "Dưới" };
+  const srcCoverPos = new Map<string, string>();
+  for (const s of sourceCovers) {
+    const u = s.coloredUrl || s.url;
+    if (u) srcCoverPos.set(u, SRC_POS_LABEL[s.titleSafe] ?? String(s.titleSafe));
+  }
+  // Candidate background images for the thumbnail strip: source covers FIRST, then
+  // current cover sources + the book's colored pages (falls back to line art).
   const bgCandidates = [...new Set([
+    ...sourceCovers.map((s) => s.coloredUrl || s.url),
     coverMeta.sourceThumbnailUrl, book.squareThumbnailUrl, book.thumbnailUrl,
     ...(book.coloringPages ?? []).map((p) => p.coloredUrl || p.url),
   ].filter((u): u is string => Boolean(u)))];
@@ -191,18 +213,28 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
     finally { setBusy(null); }
   };
 
-  // AI cover: compose the book's colored pages + title into 3 candidate covers.
+  // AI cover: generate ONE cover from the chosen illustration + title, steered by
+  // the selected brand / coloring style / title layout.
   const doGenAi = async () => {
-    setAiErr(null); setAiResults([]); setAiBusy(true);
+    setAiErr(null); setAiResult(null);
+    const chosen = aiImage || cleanBase;
+    if (!chosen) { setAiErr("Chọn 1 tranh để làm bìa."); return; }
+    setAiBusy(true);
     try {
       const genTitle = `${book.title || "Coloring Book"}${prompt.trim() ? ` — ${prompt.trim()}` : ""}`;
-      const pageImgs = (book.coloringPages ?? [])
-        .map((p) => resolveImg(p.coloredUrl || p.url))
-        .filter((u): u is string => Boolean(u))
-        .slice(0, 6);
-      const imgs = pageImgs.length ? pageImgs : cleanBase ? [cleanBase] : [];
-      const out = await Promise.all([0, 1, 2].map(() => genCover.generate(genTitle, imgs)));
-      setAiResults(out);
+      const brandRec = brands.find((b) => b.id === aiBrandId);
+      const brandName =
+        brandRec?.displayName || brandRec?.name ||
+        (typeof book.data?.brand === "string" ? book.data.brand : undefined) || undefined;
+      const styleName = aiStyleSel?.styleName || undefined;
+      const out = await genCover.generate({
+        title: genTitle,
+        imageUrls: [chosen],
+        brand: brandName,
+        style: styleName,
+        layout: aiLayout,
+      });
+      setAiResult(out);
     } catch (e) { setAiErr(e instanceof Error ? e.message : "Gen bìa AI thất bại."); }
     finally { setAiBusy(false); }
   };
@@ -254,7 +286,7 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
             </div>
             {bgCandidates.length > 0 && (
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Ảnh nền bìa — chọn trang để làm nền</div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Ảnh nền bìa — source cover (Top/Giữa/Dưới) hoặc trang để làm nền</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {bgCandidates.map((u) => {
                     const active = u === activeBaseRaw;
@@ -279,6 +311,9 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={thumbImg(u, 128)} alt="Ảnh nền" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        {srcCoverPos.has(u) && (
+                          <span style={{ position: "absolute", left: 2, bottom: 2, background: "var(--carbon-950, #0b0d0c)", color: "#fff", fontSize: 8.5, fontWeight: 700, padding: "1px 4px", borderRadius: 4, letterSpacing: ".02em" }}>{srcCoverPos.get(u)}</span>
+                        )}
                         {active && (
                           <span style={{ position: "absolute", right: 2, top: 2, background: "var(--volt-500)", color: "#fff", borderRadius: 99, width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <Icon name="check" size={12} />
@@ -331,13 +366,62 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
           <div style={{ flex: "1 1 320px", minWidth: 280 }}>
             <Card title="Cấu hình gen">
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <Select label="Bố cục bìa" value={aiLayout} onChange={setAiLayout} options={LAYOUT_OPTIONS} />
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Tranh làm bìa</div>
+                  {bgCandidates.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {bgCandidates.map((u) => {
+                        const resolved = resolveImg(u) || u;
+                        const active = (aiImage || cleanBase) === resolved;
+                        return (
+                          <button
+                            key={u}
+                            type="button"
+                            onClick={() => setAiImage(resolved)}
+                            title={active ? "Đang chọn" : "Dùng tranh này làm bìa"}
+                            style={{ position: "relative", width: 64, height: 64, padding: 0, borderRadius: "var(--radius-md)", border: active ? "2px solid var(--volt-500)" : "1px solid var(--border)", background: "var(--neutral-100)", overflow: "hidden", cursor: "pointer", flexShrink: 0 }}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={thumbImg(u, 128)} alt="Tranh bìa" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                            {active && (
+                              <span style={{ position: "absolute", right: 2, top: 2, background: "var(--volt-500)", color: "#fff", borderRadius: 99, width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <Icon name="check" size={12} />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Chưa có tranh để chọn.</div>
+                  )}
+                </div>
+                <Select label="Brand" value={aiBrandId} onChange={setAiBrandId} options={brands.map((b) => ({ label: b.displayName || b.name, value: b.id }))} placeholder="Không có brand" />
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Coloring style</div>
+                  <button
+                    type="button"
+                    onClick={() => setStylePickerOpen(true)}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--neutral-100)", cursor: "pointer", textAlign: "left" }}
+                  >
+                    {aiStyleSel?.thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={aiStyleSel.thumb} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover", border: "1px solid var(--border)", flexShrink: 0 }} />
+                    ) : (
+                      <span style={{ width: 32, height: 32, borderRadius: 6, background: "var(--neutral-200, #eee)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", flexShrink: 0 }}><Icon name="palette" size={16} /></span>
+                    )}
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: aiStyleSel ? 600 : 400, color: aiStyleSel ? "var(--foreground)" : "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {aiStyleSel ? aiStyleSel.styleName : "Chọn coloring style…"}
+                    </span>
+                    <Icon name="chevron-down" size={16} />
+                  </button>
+                </div>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Prompt bổ sung</div>
-                  <textarea className="mo-input" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Mô tả bố cục bìa mong muốn…" style={{ minHeight: 70, padding: "12px 14px", lineHeight: 1.65, resize: "vertical" }} />
+                  <textarea className="mo-input" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Mô tả thêm cho bìa (tuỳ chọn)…" style={{ minHeight: 60, padding: "12px 14px", lineHeight: 1.65, resize: "vertical" }} />
                 </div>
-                <Select label="Coloring style" value={aiStyle} onChange={setAiStyle} options={styleOptions} placeholder="Chọn style" />
-                <Switch label="Giữ bố cục chữ hiện tại" checked={keepText} onChange={setKeepText} />
-                <Button disabled={!genCover.enabled || aiBusy} onClick={doGenAi} style={{ width: "100%" }}><Icon name="sparkles" size={18} /> {aiBusy ? "Đang gen…" : "Gen 3 phương án"}</Button>
+                <Button disabled={!genCover.enabled || aiBusy} onClick={doGenAi} style={{ width: "100%" }}><Icon name="sparkles" size={18} /> {aiBusy ? "Đang gen…" : "Gen 1 phương án"}</Button>
                 {!genCover.enabled && <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Gen AI cần bật ghi thật (staging) + backend.</div>}
                 {aiErr && <div style={{ fontSize: 12, color: "var(--danger)" }}>{aiErr}</div>}
               </div>
@@ -358,33 +442,35 @@ export function CoverEditorScreen({ bookId }: { bookId: string }) {
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted-foreground)", textAlign: "center", marginTop: 6 }}>Bìa hiện tại</div>
                 </div>
-                {["A", "B", "C"].map((v, i) => {
-                  const r = aiResults[i];
-                  return (
-                    <div key={v}>
-                      <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", border: r ? "1px solid var(--border)" : "1px dashed var(--neutral-300)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", background: "var(--neutral-100)" }}>
-                        {r ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={r.previewUrl} alt={`Phương án ${v}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        ) : (
-                          <Icon name="sparkles" size={20} />
-                        )}
-                      </div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted-foreground)", textAlign: "center", marginTop: 6 }}>Phương án {v}</div>
-                      {r && (
-                        <Button size="sm" style={{ width: "100%", marginTop: 6 }} disabled={busy !== null || !saveCover.enabled} onClick={() => applyAiCover(r.base64)}>
-                          {busy === "save" ? "Đang lưu…" : "Lưu làm bìa"}
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
+                <div>
+                  <div style={{ aspectRatio: "1 / 1", borderRadius: "var(--radius-md)", border: aiResult ? "1px solid var(--border)" : "1px dashed var(--neutral-300)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", background: "var(--neutral-100)" }}>
+                    {aiResult ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={aiResult.previewUrl} alt="Bìa AI" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <Icon name="sparkles" size={20} />
+                    )}
+                  </div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted-foreground)", textAlign: "center", marginTop: 6 }}>Bìa AI</div>
+                  {aiResult && (
+                    <Button size="sm" style={{ width: "100%", marginTop: 6 }} disabled={busy !== null || !saveCover.enabled} onClick={() => applyAiCover(aiResult.base64)}>
+                      {busy === "save" ? "Đang lưu…" : "Lưu làm bìa"}
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 12 }}>Bấm “Gen 3 phương án” để tạo bìa mới từ tiêu đề + trang màu (dùng backend AI). Prompt bổ sung được ghép vào tiêu đề.</div>
+              <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 12 }}>Chọn bố cục, tranh, brand, style rồi bấm “Gen 1 phương án” để tạo bìa mới (backend AI). Prompt bổ sung ghép vào tiêu đề.</div>
             </Card>
           </div>
         </div>
       )}
+
+      <ColoringStylePickerModal
+        open={stylePickerOpen}
+        onClose={() => setStylePickerOpen(false)}
+        onSelect={(sel) => { setAiStyleSel(sel); setStylePickerOpen(false); }}
+        referenceThumb={cleanBase}
+      />
     </div>
   );
 }

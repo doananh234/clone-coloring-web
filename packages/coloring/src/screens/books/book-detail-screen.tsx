@@ -16,6 +16,10 @@ import { useBook } from "../../data/use-book";
 import { useBookJob } from "../../data/use-book-job";
 import { getBookPatch } from "../../data/local-books";
 import { useGeneratePdf, useGenerateSubtitle, useReclone, useDeleteBook, useApproveBook } from "../../data/use-book-actions";
+import { usePageAdditional, DEFAULT_INTERIOR_TARGET } from "../../data/use-page-additional";
+import { usePageActions } from "../../data/use-page-actions";
+import { useSetPageType } from "../../data/use-set-page-type";
+import { derivePageType, type BookPageType, type BookPagesState } from "../../data/page-type";
 import { PageActionsRow } from "./page-actions-row";
 import { CoverCandidatesStrip } from "./cover-candidates-strip";
 import { BookInformationTab } from "./book-info-tab";
@@ -120,10 +124,17 @@ function AnalyzePanel({ scene }: { scene: ParsedScene }) {
   );
 }
 
-function PageThumb({ page, displayNumber, tone, onClick }: { page: BookColoringPage; displayNumber: string; tone: BookPageTone; onClick?: () => void }) {
+/** Optional per-thumb type classifier (Cover/Intro/Interior), like the job classify card. */
+interface PageTypeSelect {
+  value: BookPageType;
+  onChange: (type: BookPageType) => void;
+  disabled?: boolean;
+}
+
+function PageThumb({ page, displayNumber, tone, onClick, typeSelect }: { page: BookColoringPage; displayNumber: string; tone: BookPageTone; onClick?: () => void; typeSelect?: PageTypeSelect }) {
   const src = thumbImg(page.coloredUrl || page.url, 400);
   const t = TONE_STYLE[tone];
-  return (
+  const thumb = (
     <div onClick={onClick} className="mo-bookthumb" style={{ cursor: onClick ? "pointer" : "default", aspectRatio: "1 / 1", borderRadius: "var(--radius-sm)", background: t.bg ?? "var(--neutral-100)", border: `1px solid ${t.border}`, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neutral-400)", overflow: "hidden" }}>
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -133,6 +144,23 @@ function PageThumb({ page, displayNumber, tone, onClick }: { page: BookColoringP
       )}
       <span style={{ position: "absolute", left: 6, bottom: 4, ...mono, fontSize: 10, color: "#fff", background: "rgba(11,13,12,.6)", padding: "0 4px", borderRadius: 4 }}>{displayNumber}</span>
       {page.coloredUrl && <span style={{ position: "absolute", right: 5, top: 5, background: "var(--volt-500)", color: "var(--carbon-950)", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 99 }}>MÀU</span>}
+    </div>
+  );
+  if (!typeSelect) return thumb;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {thumb}
+      <select
+        value={typeSelect.value}
+        disabled={typeSelect.disabled}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => { e.stopPropagation(); typeSelect.onChange(e.target.value as BookPageType); }}
+        style={{ fontSize: 11.5, padding: "3px 5px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)", color: "var(--foreground)" }}
+      >
+        <option value="cover">Cover</option>
+        <option value="intro">Intro</option>
+        <option value="interior">Interior</option>
+      </select>
     </div>
   );
 }
@@ -178,6 +206,14 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const reclone = useReclone(bookId);
   const deleteBook = useDeleteBook(bookId);
   const approveBook = useApproveBook(bookId);
+  const additional = usePageAdditional(bookId);
+  const pageActions = usePageActions(bookId);
+  const setPageType = useSetPageType(bookId);
+  // Drag-drop reorder of interior pages (staged locally, saved on demand).
+  const [reorderMode, setReorderMode] = useState(false);
+  const [ordered, setOrdered] = useState<BookColoringPage[]>([]);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
   const { jobId: relatedJobId } = useBookJob(bookId);
   const searchParams = useSearchParams();
   // Deep-link support: `?tab=pages` (e.g. from the generation queue drawer) opens
@@ -189,6 +225,8 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const [tab, setTab] = useState<"info" | "meta" | "pages" | "select">(initialTab);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
+  const [filling, setFilling] = useState(false);
+  const [fillProg, setFillProg] = useState("");
   const [preview, setPreview] = useState<Omit<PreviewModalProps, "open" | "onClose"> | null>(null);
   const [previewPage, setPreviewPage] = useState<BookColoringPage | null>(null);
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
@@ -206,6 +244,30 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
     catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); }
     finally { setBusy(false); }
   };
+
+  const doFill = async () => {
+    setFilling(true); setMsg(null); setFillProg("");
+    try {
+      await additional.fillToTarget({
+        target: DEFAULT_INTERIOR_TARGET,
+        source: "character",
+        onProgress: (cur, target) => setFillProg(`${cur}/${target}`),
+      });
+      setMsg({ ok: `Đã fill tới ${DEFAULT_INTERIOR_TARGET} trang interior.` });
+    } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Fill thất bại" }); }
+    finally { setFilling(false); setFillProg(""); }
+  };
+
+  const doPurge = async () => {
+    if (!window.confirm("Xoá TẤT CẢ trang bổ sung (origin=additional) của sách này? Các trang gốc/clone được giữ nguyên.")) return;
+    setFilling(true); setMsg(null);
+    try {
+      const removed = await additional.purgeAdditional();
+      setMsg({ ok: `Đã xoá ${removed} trang bổ sung.` });
+    } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Xoá thất bại" }); }
+    finally { setFilling(false); }
+  };
+
 
   if (isLoading) return <Card><LoadingRows rows={6} /></Card>;
   if (isError || !book) {
@@ -226,6 +288,19 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   // removed — the Info tab now shows only the Cover candidates.)
   const coverMetaObj = (b.data?.coverMeta ?? {}) as { sourceThumbnailUrl?: string };
   const pages = b.coloringPages ?? [];
+  // State the classify select derives each page's current type from + writes to.
+  const pageTypeState: BookPagesState = {
+    coverUrl: b.coverUrl ?? "",
+    summaryPages: (b.summaryPages ?? []) as BookColoringPage[],
+    coloringPages: pages as BookColoringPage[],
+  };
+  const changePageType = async (pageId: string, type: BookPageType) => {
+    setBusy(true); setMsg(null);
+    try { await setPageType(pageId, type); setMsg({ ok: "Đã đổi loại trang." }); }
+    catch (e) { setMsg({ err: e instanceof Error ? e.message : "Đổi loại trang thất bại" }); }
+    finally { setBusy(false); }
+  };
+  const additionalCount = pages.filter((p) => (p as { origin?: string }).origin === "additional").length;
   const cloneJobId = typeof b.data?.cloneJobId === "string" ? b.data.cloneJobId : undefined;
   const colored = pages.filter((p) => p.coloredUrl).length;
   // D4c cover candidates (each "Push to Cover" appends one). The Cover section in
@@ -239,6 +314,24 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   // result), while the Interior section still lists EVERY page as B&W line-art.
   // Keep each page's ORIGINAL index (for labels + preview prev/next via openPageAt).
   const coloredPages = pages.map((p, i) => ({ p, i })).filter((x) => Boolean(x.p.coloredUrl));
+
+  const startReorder = () => { setOrdered(pages); setDragIdx(null); setOverIdx(null); setReorderMode(true); };
+  const dropAt = (to: number) => {
+    setOrdered((cur) => {
+      if (dragIdx === null || dragIdx === to) return cur;
+      const next = [...cur];
+      const [moved] = next.splice(dragIdx, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setDragIdx(null); setOverIdx(null);
+  };
+  const saveOrder = async () => {
+    setBusy(true); setMsg(null);
+    try { await pageActions.reorderPages(ordered); setMsg({ ok: "Đã lưu thứ tự trang." }); setReorderMode(false); }
+    catch (e) { setMsg({ err: e instanceof Error ? e.message : "Lưu thứ tự thất bại" }); }
+    finally { setBusy(false); }
+  };
   const specs = b.specifications;
   const edited = Boolean(getBookPatch(bookId));
 
@@ -383,10 +476,39 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
           <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/edit`)}><Icon name="pen-line" size={16} /> Sửa thông tin</Button>
           <Button variant="outline" size="sm" onClick={nav(`${B}/books/${bookId}/cover`)}><Icon name="image" size={16} /> Cover editor</Button>
           <Button variant="outline" size="sm" onClick={makePdf} disabled={busy}><Icon name="file-text" size={16} /> {busy ? "Đang tạo…" : b.pdfUrl ? "Tạo lại PDF" : "Tạo PDF"}</Button>
+          <Button variant="outline" size="sm" onClick={doFill}
+            disabled={!COLORING_WRITE_ENABLED || busy || filling || pages.length >= DEFAULT_INTERIOR_TARGET}
+            title={pages.length >= DEFAULT_INTERIOR_TARGET ? `Đã đủ ${DEFAULT_INTERIOR_TARGET} trang` : `Sinh thêm trang (giữ nhân vật, đổi cảnh) tới đủ ${DEFAULT_INTERIOR_TARGET}`}>
+            <Icon name="sparkles" size={16} /> {filling ? `Đang fill… ${fillProg}` : `Fill đủ ${DEFAULT_INTERIOR_TARGET} (${pages.length}/${DEFAULT_INTERIOR_TARGET})`}
+          </Button>
+          {additionalCount > 0 && (
+            <Button variant="outline" size="sm" onClick={doPurge}
+              disabled={!COLORING_WRITE_ENABLED || busy || filling}
+              title="Xoá tất cả trang bổ sung đã sinh (giữ trang gốc)">
+              <Icon name="trash-2" size={16} /> Xoá {additionalCount} trang bổ sung
+            </Button>
+          )}
           {resolveImg(b.pdfUrl) && (
             <Button variant="outline" size="sm" onClick={() => window.open(resolveImg(b.pdfUrl)!, "_blank", "noopener")}><Icon name="download" size={16} /> Tải PDF</Button>
           )}
           <ExportLinkButton bookId={bookId} exportInfo={exportInfo} />
+          <Button variant="outline" size="sm" disabled={busy}
+            title="Đẩy sách này lên Firebase (prod) — giữ nguyên cấu trúc doc"
+            onClick={async () => {
+              if (!window.confirm("Đẩy sách này lên Firebase (prod)?")) return;
+              setBusy(true); setMsg(null);
+              try {
+                // Local admin route (reads dev.db) — NOT the coloring-api upstream.
+                const res = await fetch(`/api/books/${bookId}/sync-firebase`, { method: "POST" });
+                const data = await res.json();
+                if (data.success) setMsg({ ok: `Đã sync lên Firebase [${data.projectId}]` });
+                else setMsg({ err: data.error || "Sync Firebase thất bại" });
+              } catch (e) {
+                setMsg({ err: e instanceof Error ? e.message : "Sync Firebase thất bại" });
+              } finally { setBusy(false); }
+            }}>
+            <Icon name="upload" size={16} /> Sync lên Firebase
+          </Button>
           <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED || busy} title={COLORING_WRITE_ENABLED ? undefined : "Cần bật ghi thật (staging)"}
             onClick={async () => { setBusy(true); setMsg(null); try { await genSubtitle(); setMsg({ ok: "Đã sinh phụ đề" }); } catch (e) { setMsg({ err: e instanceof Error ? e.message : "Thất bại" }); } finally { setBusy(false); } }}>
             <Icon name="sparkles" size={16} /> Sinh phụ đề AI
@@ -550,28 +672,67 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                           displayNumber={s.sourcePageNumber != null ? `#${s.sourcePageNumber}` : `#${i + 1}`}
                           tone="intro"
                           onClick={() => { setPreviewPage(null); setPreview({ title: `Intro ${i + 1}`, imageSrc: resolveImg(s.url) }); }}
+                          typeSelect={{
+                            value: derivePageType(pageTypeState, { id: s.id, url: s.url } as BookColoringPage),
+                            onChange: (t) => changePageType(s.id, t),
+                            disabled: !COLORING_WRITE_ENABLED || busy,
+                          }}
                         />
                       ))}
                     </PageSection>
                   )}
                   {pages.length > 0 && (
-                    <PageSection tone="interior" count={pages.length}>
-                      {pages.map((p, i) => {
-                        const label = deriveBookPageLabel(p, i, pages);
-                        return (
-                          <PageThumb
-                            key={p.id || i}
-                            // Interior always shows the B&W line-art (strip coloredUrl so the
-                            // thumb falls back to page.url + hides the "MÀU" badge). Colorized
-                            // pages still appear here as B&W AND in the Colored section.
-                            page={{ ...p, coloredUrl: undefined }}
-                            displayNumber={label.displayNumber}
-                            tone={bookPageTone("interior", p)}
-                            onClick={() => openPageAt(i)}
-                          />
-                        );
-                      })}
-                    </PageSection>
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        {!reorderMode ? (
+                          <Button variant="outline" size="sm" disabled={!COLORING_WRITE_ENABLED || busy} onClick={startReorder}>
+                            <Icon name="align-left" size={15} /> Sắp xếp lại
+                          </Button>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: 12.5, color: "var(--muted-foreground)", marginRight: "auto" }}>Kéo–thả trang để đổi vị trí, rồi bấm Lưu.</span>
+                            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setReorderMode(false)}>Huỷ</Button>
+                            <Button size="sm" disabled={busy} onClick={saveOrder}><Icon name="download" size={15} /> {busy ? "Đang lưu…" : "Lưu thứ tự"}</Button>
+                          </>
+                        )}
+                      </div>
+                      <PageSection tone="interior" count={(reorderMode ? ordered : pages).length}>
+                        {(reorderMode ? ordered : pages).map((p, i) => {
+                          const list = reorderMode ? ordered : pages;
+                          const label = deriveBookPageLabel(p, i, list);
+                          const thumb = (
+                            <PageThumb
+                              // Interior always shows the B&W line-art (strip coloredUrl so the
+                              // thumb falls back to page.url + hides the "MÀU" badge). Colorized
+                              // pages still appear here as B&W AND in the Colored section.
+                              page={{ ...p, coloredUrl: undefined }}
+                              displayNumber={label.displayNumber}
+                              tone={bookPageTone("interior", p)}
+                              onClick={reorderMode ? undefined : () => openPageAt(i)}
+                              typeSelect={reorderMode ? undefined : {
+                                value: derivePageType(pageTypeState, p),
+                                onChange: (t) => changePageType(p.id, t),
+                                disabled: !COLORING_WRITE_ENABLED || busy,
+                              }}
+                            />
+                          );
+                          if (!reorderMode) return <div key={p.id || i}>{thumb}</div>;
+                          return (
+                            <div
+                              key={p.id || i}
+                              draggable
+                              onDragStart={() => setDragIdx(i)}
+                              onDragOver={(e) => { e.preventDefault(); if (overIdx !== i) setOverIdx(i); }}
+                              onDrop={(e) => { e.preventDefault(); dropAt(i); }}
+                              onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                              style={{ cursor: "grab", opacity: dragIdx === i ? 0.4 : 1, outline: overIdx === i && dragIdx !== i ? "2px dashed var(--volt-500)" : undefined, outlineOffset: 2, borderRadius: "var(--radius-sm)" }}
+                            >
+                              {thumb}
+                            </div>
+                          );
+                        })}
+                      </PageSection>
+                    </div>
                   )}
                 </div>
               )}

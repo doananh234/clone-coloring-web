@@ -7,6 +7,7 @@
  */
 
 import { createRequire } from "node:module";
+import { jsonrepair } from "jsonrepair";
 
 // ESM shim — `@vx/server-core` is "type": "module" so the bare `require()`
 // used below to lazy-load the Diaflow provider needs a CJS-compatible require.
@@ -15,7 +16,6 @@ const require = createRequire(import.meta.url);
 import { resolveR2Url as normalizeImageUrl } from "../r2";
 import { getLangfuse } from "../langfuse";
 import { litellmFetch } from "./litellm-dispatcher";
-import { jsonrepair } from "jsonrepair";
 
 export type LLMMessage = {
   role: "system" | "user" | "assistant";
@@ -39,7 +39,7 @@ export type LLMResponse = {
   usage?: { promptTokens: number; completionTokens: number };
 };
 
-function getConfig() {
+function getAzureConfig() {
   const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
   const apiKey = process.env.AZURE_OPENAI_API_KEY;
   const deployment =
@@ -103,7 +103,7 @@ export async function chatCompletion(
       body: JSON.stringify(body),
     });
   } else {
-    const { endpoint, apiKey, deployment, apiVersion } = getConfig();
+    const { endpoint, apiKey, deployment, apiVersion } = getAzureConfig();
     modelLabel = deployment;
     const body: Record<string, unknown> = {
       messages,
@@ -268,11 +268,15 @@ export async function recheckOneShotSession(sessionId: string): Promise<{
 }
 
 /**
+ * Vision analyze with structured JSON response.
+ */
+/**
  * Parse JSON returned by an LLM defensively. Models (incl. LiteLLM/Azure-proxied
  * ones) intermittently wrap the payload in ```json fences, add prose around it,
- * or leave a trailing comma — a raw JSON.parse then throws and the whole request
- * 500s. We strip fences, extract the outermost object/array, and (as a last
- * resort) run jsonrepair before parsing; only a genuinely broken payload throws.
+ * or leave a trailing comma — a raw JSON.parse then throws
+ * ("Expected double-quoted property name…") and the whole request 500s. We strip
+ * fences, extract the outermost object/array, and drop trailing commas before
+ * parsing; only a genuinely broken payload throws (with a snippet for debugging).
  */
 export function parseLlmJson<T = unknown>(raw: string): T {
   let s = (raw ?? "").trim();
@@ -287,8 +291,8 @@ export function parseLlmJson<T = unknown>(raw: string): T {
     return JSON.parse(s) as T;
   } catch {
     // Reasoning models behind LiteLLM (e.g. "saigon") reliably emit malformed
-    // JSON — missing commas, trailing commas, single quotes — even in
-    // json_object mode. jsonrepair fixes these structurally.
+    // JSON — missing commas between array/object members, trailing commas, single
+    // quotes — even in json_object mode. jsonrepair fixes these structurally.
     try {
       return JSON.parse(jsonrepair(s)) as T;
     } catch (e) {
@@ -298,9 +302,6 @@ export function parseLlmJson<T = unknown>(raw: string): T {
   }
 }
 
-/**
- * Vision analyze with structured JSON response.
- */
 export async function visionAnalyzeJSON<T = unknown>(
   imageUrl: string | string[],
   prompt: string,

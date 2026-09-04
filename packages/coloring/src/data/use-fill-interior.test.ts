@@ -44,22 +44,4 @@ describe("interiorProgress", () => {
     ];
     expect(interiorProgress(pages).count).toBe(3); // pages 3, 5, 6
   });
-
-  // Regression: the progress header must honour the operator's drop mark from
-  // the pre-spend gate, not just the legacy `excluded` flag.
-  it("counts a page dropped at the gate as dropped", () => {
-    const pages: CloneJobPage[] = [
-      p({ pageNumber: 1, pageType: "interior" }),
-      p({ pageNumber: 2, pageType: "interior", excludedFromClone: true }),
-      p({ pageNumber: 3, pageType: "interior" }),
-    ];
-    expect(interiorProgress(pages).count).toBe(2);
-  });
-
-  it("lets excludedFromClone: false override a stale legacy excluded: true", () => {
-    const pages: CloneJobPage[] = [
-      p({ pageNumber: 1, pageType: "interior", excluded: true, excludedFromClone: false }),
-    ];
-    expect(interiorProgress(pages).count).toBe(1);
-  });
 });

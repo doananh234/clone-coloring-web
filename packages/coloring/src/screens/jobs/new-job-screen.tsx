@@ -10,6 +10,7 @@ import { Stepper } from "../../components/ui/stepper";
 import { Select, RadioGroup, Switch, FileUpload, type RadioOption } from "../../components/ui/form-controls";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useCreateJob } from "../../data/use-create-job";
+import { useEntityList } from "../../data/use-entity-list";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
 
 const REDESIGN: RadioOption[] = [
@@ -17,9 +18,6 @@ const REDESIGN: RadioOption[] = [
   { value: "r30cam", label: "Redesign 30% + đổi góc camera", sub: "Khác biệt mạnh hơn, an toàn hơn về bản quyền" },
 ];
 const MODE_LABEL: Record<string, string> = { r30: "30% khác", r30cam: "30% + đổi camera" };
-const BRANDS = ["PixiPress", "DoodleNest", "SunnyPages", "MintyInk"];
-const BW_STYLES = ["Bold Outline 3px", "Fine Line 1px", "Sketchy Pencil", "Chunky Marker", "Clean Vector"];
-const CATEGORIES = ["Animals", "Fantasy", "Vehicles", "Nature", "Holidays"];
 
 const STEPS = [{ label: "Nguồn" }, { label: "Cấu hình" }, { label: "Xác nhận" }];
 
@@ -46,9 +44,10 @@ export function NewJobScreen() {
   const [step, setStep] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [redesign, setRedesign] = useState("r30cam");
-  const [brand, setBrand] = useState(BRANDS[0]);
-  const [bwStyle, setBwStyle] = useState(BW_STYLES[0]);
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const { items: brands } = useEntityList("brands");
+  const [brandId, setBrandId] = useState("");
+  const brandRec = brands.find((b) => b.id === brandId);
+  const brandName = brandRec?.displayName || brandRec?.name || "";
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [extract, setExtract] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,7 +62,7 @@ export function NewJobScreen() {
     setErr(null);
     try {
       const name = file ? file.name.replace(/\.[^.]+$/, "") : "Job nháp";
-      const { jobId, bulk } = await createJob({ file, name, brand, redesignMode: MODE_LABEL[redesign] });
+      const { jobId, bulk } = await createJob({ file, name, brand: brandName || undefined, brandId: brandId || undefined, redesignMode: MODE_LABEL[redesign] });
       router.push(bulk || !jobId ? `${B}/jobs` : `${B}/jobs/${jobId}`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Tạo job thất bại");
@@ -118,10 +117,9 @@ export function NewJobScreen() {
         <Card title="Cấu hình pipeline">
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <RadioGroup label="Chế độ redesign" value={redesign} onChange={setRedesign} options={REDESIGN} />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
-              <Select label="Brand đích" value={brand} onChange={setBrand} options={BRANDS} />
-              <Select label="B&W style" value={bwStyle} onChange={setBwStyle} options={BW_STYLES} />
-              <Select label="Danh mục" value={category} onChange={setCategory} options={CATEGORIES} />
+            <div style={{ maxWidth: 320 }}>
+              <Select label="Brand đích" value={brandId} onChange={setBrandId} options={brands.map((b) => ({ label: b.displayName || b.name, value: b.id }))} placeholder="Chọn brand" />
+              <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 6 }}>B&W style theo hình clone; danh mục tự sinh từ meta AI.</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <Switch label="Tự động confirm tạo book (bỏ duyệt thủ công)" checked={autoConfirm} onChange={setAutoConfirm} />
@@ -137,9 +135,7 @@ export function NewJobScreen() {
           <Review label="Nguồn" value={file ? file.name : "—"} />
           <Review label="Loại" value={isCsv ? "Bulk CSV" : file ? "PDF đơn" : "—"} />
           <Review label="Chế độ redesign" value={REDESIGN.find((r) => r.value === redesign)?.label} />
-          <Review label="Brand đích" value={brand} />
-          <Review label="B&W style" value={bwStyle} />
-          <Review label="Danh mục" value={category} />
+          <Review label="Brand đích" value={brandName || "—"} />
           <Review label="Tự động confirm" value={autoConfirm ? "Có" : "Không"} />
           <Review label="Extract sau tạo book" value={extract ? "Có" : "Không"} />
           {err && <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12.5 }}>{err}</div>}

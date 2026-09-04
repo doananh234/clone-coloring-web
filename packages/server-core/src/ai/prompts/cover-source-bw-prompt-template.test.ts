@@ -36,8 +36,20 @@ describe("buildCoverSourceBWPrompt", () => {
     expect(middle).toMatch(/preserve the original/);
 
     const bottom = buildCoverSourceBWPrompt("bottom").toLowerCase();
-    expect(bottom).toMatch(/bottom title area/);
+    expect(bottom).toMatch(/bottom typography staging region|lower title area/);
     expect(bottom).toMatch(/preserve the original/);
+  });
+
+  // --- clear title band override: every position reserves real, decoration-free
+  //     space for the title while never removing the source artwork ---
+  it("appends a clear title-band override to every position", () => {
+    for (const pos of ["top", "middle", "bottom"] as const) {
+      const p = buildCoverSourceBWPrompt(pos).toLowerCase();
+      expect(p).toMatch(/title clearspace|clear, usable title band/);
+      expect(p).toMatch(/keep decoration out of this band/);
+      // must not sacrifice the source characters to make the band
+      expect(p).toMatch(/do not move, shrink, rearrange, or remove/);
+    }
   });
 
   // --- top: dedicated square-cover prompt (top-center title header) ---

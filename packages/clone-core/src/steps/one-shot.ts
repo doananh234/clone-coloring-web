@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
-import type { PageType } from "./classify-page";
+import { classifyPage, type PageType } from "./classify-page";
 
 /**
  * Single-call clone step — replaces render + analyze + extract-entities +
@@ -77,23 +77,6 @@ export async function stepOneShot(
 
   const existing = (job.pages as JobPage[] | null | undefined) ?? [];
 
-  // The trimmed PDF renumbers its pages 1..N, so Diaflow's i-th result belongs
-  // to ORIGINAL page keptPageNumbers[i]. Falls back to identity for jobs that
-  // predate stepTrimPdf.
-  const jobDataForMap = (job.data as Record<string, unknown> | null | undefined) ?? {};
-  const keptPageNumbers = Array.isArray(jobDataForMap.keptPageNumbers)
-    ? (jobDataForMap.keptPageNumbers as number[])
-    : null;
-  // When the map exists it is AUTHORITATIVE: an index past its end means the
-  // provider returned more pages than were sent, and there is no original page
-  // that result belongs to. Falling back to `i + 1` there would collide with a
-  // real page number and overwrite a correct page's redesignedUrl/rawData.
-  // `i + 1` stays the fallback only for legacy jobs that predate stepTrimPdf
-  // and therefore have no map at all.
-  const originalPageNumber = (i: number): number | null =>
-    keptPageNumbers ? (keptPageNumbers[i] ?? null) : i + 1;
-  const existingByNumber = new Map(existing.map((p) => [p.pageNumber, p]));
-
   // Peek at SourceBook cache — a previous stepOneShot run mirrors the raw
   // Diaflow output there BEFORE image processing, so if it exists we can
   // skip re-calling Diaflow (~30-40min per PDF). Also used to detect the
@@ -110,42 +93,13 @@ export async function stepOneShot(
     if (Array.isArray(sbData.oneShotPages)) {
       cachedPages = sbData.oneShotPages as OneShotPageResult[];
     }
-
-    // A cache is ONLY reusable if it was produced under the same kept-page set.
-    // The cached array is fed straight through `originalPageNumber`, so a cache
-    // built from a different set attributes every result after the first
-    // divergence to the wrong original page — silently shifted artwork, no
-    // error. This is reachable today: the cache is written BEFORE the
-    // image-mirroring loop, so a job whose Diaflow call succeeded but whose R2
-    // mirroring failed keeps a full-book cache, then gets retried, gated,
-    // trimmed, and re-enters here with a SHORTER keptPageNumbers.
-    //
-    // Discard rather than remap: one re-run costs money, a silently wrong book
-    // costs more. A legacy cache with no recorded set is discarded too, because
-    // there is no way to prove which pages it covers.
-    const cachedKeptPageNumbers = Array.isArray(sbData.oneShotKeptPageNumbers)
-      ? (sbData.oneShotKeptPageNumbers as number[])
-      : null;
-    if (cachedPages && !sameNumbers(cachedKeptPageNumbers, keptPageNumbers)) {
-      console.warn(
-        `[stepOneShot] DISCARDING SourceBook one-shot cache for ${ctx.sourceBookId}: ` +
-          `it covers pages [${cachedKeptPageNumbers?.join(",") ?? "unrecorded"}] but this job now ` +
-          `keeps [${keptPageNumbers?.join(",") ?? "all (no map)"}]. Re-running Diaflow rather ` +
-          `than attributing ${cachedPages.length} cached result(s) to the wrong original pages.`,
-      );
-      cachedPages = null;
-      cachedSessionId = "";
-    }
   }
 
-  const keptExisting = keptPageNumbers
-    ? existing.filter((p) => keptPageNumbers.includes(p.pageNumber))
-    : existing;
   const expectedCount = cachedPages?.length ?? 0;
   const allDone =
-    keptExisting.length > 0 &&
-    (expectedCount === 0 || keptExisting.length >= expectedCount) &&
-    keptExisting.every((p) => p.redesignedUrl && p.status === "reproduced");
+    existing.length > 0 &&
+    (expectedCount === 0 || existing.length >= expectedCount) &&
+    existing.every((p) => p.redesignedUrl && p.status === "reproduced");
   if (allDone) {
     await markStepsComplete(ctx);
     return;
@@ -159,10 +113,7 @@ export async function stepOneShot(
     sessionId = cachedSessionId;
     pages = cachedPages;
   } else {
-    const jobData = (job.data as Record<string, unknown> | null | undefined) ?? {};
-    const trimmedPdfUrl =
-      typeof jobData.trimmedPdfUrl === "string" ? jobData.trimmedPdfUrl : job.sourcePdfUrl;
-    const pdfPublicUrl = deps.resolveR2Url(trimmedPdfUrl);
+    const pdfPublicUrl = deps.resolveR2Url(job.sourcePdfUrl);
     const brandInfo = await resolveBrandInfo(job, db);
     ({ sessionId, pages } = await deps.runOneShot(pdfPublicUrl, ctx.jobId, brandInfo));
   }
@@ -182,10 +133,6 @@ export async function stepOneShot(
             ...prevSbData,
             oneShotSessionId: sessionId,
             oneShotPages: pages,
-            // Which ORIGINAL pages this cache covers. Without it a later run
-            // under a different kept-set cannot tell that reusing the cache
-            // would misattribute every result.
-            oneShotKeptPageNumbers: keptPageNumbers,
             oneShotCompletedAt: new Date().toISOString(),
           } as never,
         },
@@ -210,26 +157,22 @@ export async function stepOneShot(
   let urlsRefreshed = false;
   const errors: Array<{ pageNumber: number; error: string }> = [];
 
+  // Pre-scan: if ANY page has isCover: true from the LLM, treat cover as
+  // already assigned so the page-1 fallback in classifyPage doesn't also
+  // claim "cover" before we reach the LLM-flagged page.
+  const llmFlaggedCover = pages.some(
+    (p) => (p.analyzeData as { isCover?: unknown } | null | undefined)?.isCover === true,
+  );
+  let coverAlreadyAssigned = llmFlaggedCover;
   const jobPages: JobPage[] = [];
-  let unmappedResults = 0;
   for (let i = 0; i < pages.length; i++) {
-    const pageNumber = originalPageNumber(i);
-    if (pageNumber === null) {
-      unmappedResults++;
-      console.warn(
-        `[stepOneShot] result #${i + 1} of ${pages.length} has no entry in ` +
-          `keptPageNumbers (length ${keptPageNumbers?.length ?? 0}) — Diaflow returned ` +
-          `more pages than were sent. Skipping it rather than guessing a page number.`,
-      );
-      continue;
-    }
+    const pageNumber = i + 1;
     const paddedPage = String(pageNumber).padStart(3, "0");
-    const existingPage = existingByNumber.get(pageNumber);
-    const renderedOriginal = existingPage?.imageUrl ?? "";
+    const renderedOriginal = existing[i]?.imageUrl ?? "";
     if (!renderedOriginal) {
       console.warn(
         `[stepOneShot] page ${pageNumber}: no rendered original found in job.pages. ` +
-          `stepRender may have failed or Diaflow returned more pages than were sent.`,
+          `stepRender may have failed or Diaflow returned more pages than the PDF rendered.`,
       );
     }
 
@@ -287,19 +230,24 @@ export async function stepOneShot(
           typeof analyze.reproductionPrompt === "string" ? analyze.reproductionPrompt : "",
       };
 
-      // Classification now comes from the operator at the pre-spend gate, so
-      // preserve it rather than re-deriving it from Diaflow's unreliable
-      // isCover/isIntro signals (absent on ~85% of pages).
-      const pageType = existingPage?.pageType;
+      const signals = analyze as { isCover?: unknown; isIntro?: unknown; isInterior?: unknown };
+      const { pageType, excluded } = classifyPage({
+        pageNumber,
+        isCover: signals.isCover === true,
+        isIntro: signals.isIntro === true,
+        isInterior: signals.isInterior === true,
+        coverAlreadyAssigned,
+      });
+      if (pageType === "cover") coverAlreadyAssigned = true;
 
       jobPages.push({
-        ...existingPage,
         pageNumber,
         imageUrl: renderedOriginal,
         redesignedUrl: redesignedR2Url,
         status: "reproduced",
         rawData,
         pageType,
+        excluded,
       });
     } catch (err) {
       // Persistent failure for this page — record it but keep going so the
@@ -309,7 +257,6 @@ export async function stepOneShot(
       console.error(`[stepOneShot] page ${pageNumber} failed: ${message}`);
       errors.push({ pageNumber, error: message });
       jobPages.push({
-        ...existingPage,
         pageNumber,
         imageUrl: renderedOriginal,
         status: "error",
@@ -321,17 +268,14 @@ export async function stepOneShot(
   // If EVERY page failed we should not commit — let withRetry surface the
   // failure and retry the whole step. A partial success is still worth
   // committing so downstream steps can proceed on the salvaged pages.
-  // Count against the pages we actually ATTEMPTED — unmapped results were
-  // skipped, not failed, and must not mask an all-failed run.
-  const attempted = pages.length - unmappedResults;
-  if (errors.length === attempted && attempted > 0) {
+  if (errors.length === pages.length && pages.length > 0) {
     throw new Error(
-      `[stepOneShot] all ${attempted} pages failed. First error: ${errors[0].error}`,
+      `[stepOneShot] all ${pages.length} pages failed. First error: ${errors[0].error}`,
     );
   }
   if (errors.length > 0) {
     console.warn(
-      `[stepOneShot] committing with ${errors.length}/${attempted} failed page(s): ` +
+      `[stepOneShot] committing with ${errors.length}/${pages.length} failed page(s): ` +
         errors.map((e) => `page ${e.pageNumber}`).join(", "),
     );
   }
@@ -396,37 +340,17 @@ export async function stepOneShot(
     }
   }
 
-  // MERGE, never replace: pages the operator dropped were not sent to Diaflow
-  // and have no entry in jobPages, but they must stay in job.pages so the
-  // exported "Main book" archive keeps the complete source book.
-  const touched = new Map(jobPages.map((p) => [p.pageNumber, p]));
-  const merged = existing.map((p) => touched.get(p.pageNumber) ?? p);
-  for (const p of jobPages) {
-    if (!existing.some((e) => e.pageNumber === p.pageNumber)) merged.push(p);
-  }
-  merged.sort((a, b) => a.pageNumber - b.pageNumber);
-
   await db.cloneJob.updateMany({
     where: { id: ctx.jobId },
     data: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      pages: merged as any,
+      pages: jobPages as any,
       analyzedPages: jobPages.length,
-      totalPages: merged.length,
+      totalPages: jobPages.length,
     },
   });
 
   await markStepsComplete(ctx);
-}
-
-/**
- * Kept-page-set equality. `null` means "no map recorded" and only matches
- * another `null` — a recorded set and an unrecorded one are never assumed
- * equivalent, because an unrecorded one could cover any pages at all.
- */
-function sameNumbers(a: number[] | null, b: number[] | null): boolean {
-  if (a === null || b === null) return a === b;
-  return a.length === b.length && a.every((n, i) => n === b[i]);
 }
 
 async function markStepsComplete(ctx: JobContext): Promise<void> {
