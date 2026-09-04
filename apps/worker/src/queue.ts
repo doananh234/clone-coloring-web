@@ -17,7 +17,9 @@ export function createWorker(processor: Processor): Worker {
   return new Worker("clone-jobs", processor, {
     connection: redis,
     concurrency: 1,
-    lockDuration: 60_000,
+    // KingCong image steps run ~150s+ each; keep the lock well above that so a
+    // slow step is never mis-flagged as stalled and re-run. (600s)
+    lockDuration: 600_000,
     stalledInterval: 30_000,
   });
 }
@@ -38,7 +40,8 @@ export function createGenerationWorker(processor: Processor): Worker {
   return new Worker("generation-jobs", processor, {
     connection: redis,
     concurrency: 2,
-    lockDuration: 300_000,
+    // 2-phase KingCong cover compose can take 300–600s; keep the lock at 600s.
+    lockDuration: 600_000,
     stalledInterval: 30_000,
   });
 }

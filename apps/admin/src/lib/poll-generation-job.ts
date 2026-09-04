@@ -17,7 +17,7 @@ export interface GenerationJob {
 const POLL_INTERVAL_MS = 3000;
 // Cover gen can take a few minutes (KingCong ~150s/call, 2-phase compose can be
 // two of them). Cap the poll so a wedged worker doesn't spin forever.
-const MAX_POLL_MS = 8 * 60 * 1000;
+const MAX_POLL_MS = 600 * 1000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
