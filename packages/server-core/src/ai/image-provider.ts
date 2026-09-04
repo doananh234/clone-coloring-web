@@ -19,6 +19,7 @@ import type {
   GeneratedImage,
   ColorizeOptions,
 } from "./image-provider-types";
+import { normalizeGeneratedImage } from "./normalize-image";
 import { buildCharacterExtractionPrompt } from "./prompts/character-extraction-prompt";
 import { buildLocationExtractionPrompt } from "./prompts/location-extraction-prompt";
 import {
@@ -38,7 +39,7 @@ function resolveProviderName(override?: string): string {
   return (override || process.env.IMAGE_PROVIDER || "azure").toLowerCase();
 }
 
-function usesCompactPrompts(override?: string): boolean {
+export function usesCompactPrompts(override?: string): boolean {
   return resolveProviderName(override) === "kingcong";
 }
 
@@ -55,6 +56,11 @@ function getProvider(override?: string): ImageProviderInterface {
     return require("./image-provider-kingcong").kingcongImageProvider;
   }
 
+  if (provider === "litellm") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./image-provider-litellm").litellmImageProvider;
+  }
+
   if (provider === "vertex") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./image-provider-vertex").vertexImageProvider;
@@ -63,11 +69,6 @@ function getProvider(override?: string): ImageProviderInterface {
   if (provider === "gemini") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./image-provider-gemini").geminiImageProvider;
-  }
-
-  if (provider === "litellm") {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("./image-provider-litellm").litellmImageProvider;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -97,7 +98,8 @@ export async function generateImage(
   prompt: string,
   options?: ImageGenerationOptions,
 ): Promise<GeneratedImage> {
-  return getProvider(options?.provider).generateImage(prompt, options);
+  const img = await getProvider(options?.provider).generateImage(prompt, options);
+  return options?.rawSize ? img : normalizeGeneratedImage(img);
 }
 
 export async function editImage(
@@ -105,7 +107,8 @@ export async function editImage(
   prompt: string,
   options?: ColorizeOptions,
 ): Promise<GeneratedImage> {
-  return getProvider(options?.provider).editImage(normalizeImageUrl(imageUrl), prompt, options);
+  const img = await getProvider(options?.provider).editImage(normalizeImageUrl(imageUrl), prompt, options);
+  return options?.rawSize ? img : normalizeGeneratedImage(img);
 }
 
 // --- Domain-specific wrappers ---

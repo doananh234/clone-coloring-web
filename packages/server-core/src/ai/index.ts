@@ -38,6 +38,7 @@ export {
   colorizeImage,
   generateCoverSource,
   generateCoverSourceBW,
+  usesCompactPrompts,
   type ImageGenerationOptions,
   type GeneratedImage,
   type CharacterExtractionOptions,

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
-import { editImage, generateCoverSource } from "@vx/server-core/ai/image-provider";
-import { buildCoverTypographyPrompt } from "@vx/server-core/cover-generation";
+import { editImage, generateCoverSource, usesCompactPrompts } from "@vx/server-core/ai/image-provider";
+import {
+  buildCoverTypographyPrompt,
+  buildCoverTypographyPromptCompact,
+} from "@vx/server-core/cover-generation";
 
 // Book covers must be a fixed square. Gemini image-to-image returns a square when
 // the source page is square (verified), and we also pass aspectRatio "1:1"; this
@@ -79,7 +82,11 @@ export async function POST(req: NextRequest) {
     // Phase 2 — overlay KDP typography (title + subtitle + brand) on the clean
     // cover source. buildCoverTypographyPrompt takes the title as a hint and
     // renders all three text roles per the shared spec.
-    const typographyPrompt = buildCoverTypographyPrompt(brand?.trim() || "", {
+    // KingCong caps prompts at 4000 chars → use the compact typography variant.
+    const buildTypography = usesCompactPrompts()
+      ? buildCoverTypographyPromptCompact
+      : buildCoverTypographyPrompt;
+    const typographyPrompt = buildTypography(brand?.trim() || "", {
       titleHint: title,
     });
     const composed = await editImage(coverSource.dataUrl, typographyPrompt, {

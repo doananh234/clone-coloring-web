@@ -1,12 +1,13 @@
-import { editImage } from "../ai";
+import { editImage, usesCompactPrompts } from "../ai";
 import { getR2Config, createR2Client, uploadToR2 } from "../r2";
-import { buildCoverTypographyPrompt } from "./prompt";
+import { buildCoverTypographyPrompt, buildCoverTypographyPromptCompact } from "./prompt";
 import type { CoverInput, CoverOutput } from "./types";
 
 // One R2 client per worker / server process. cover-export route and
 // stepGenerateCover both go through this.
 const r2Config = getR2Config();
 const r2Client = createR2Client(r2Config);
+
 
 /**
  * AI cover generation — single call, shared by every consumer.
@@ -22,15 +23,26 @@ const r2Client = createR2Client(r2Config);
  * fix propagates everywhere without a two-file sync burden.
  */
 export async function generateAiCover(input: CoverInput): Promise<CoverOutput> {
-  const prompt = buildCoverTypographyPrompt(input.brandName, {
+  // KingCong caps prompts at 4000 chars → use the compact typography variant so
+  // it isn't rejected ("Mô tả tối đa 4000 ký tự") / tail-truncated. Diaflow and
+  // the other providers keep the full spec.
+  const buildTypography = usesCompactPrompts()
+    ? buildCoverTypographyPromptCompact
+    : buildCoverTypographyPrompt;
+  const prompt = buildTypography(input.brandName, {
     titleHint: input.titleHint,
     subtitleHint: input.subtitleHint,
   });
 
+  // editImage normalizes the output to an exact 2048x2048 (aspectRatio 1:1) —
+  // see ai/normalize-image.ts — so the cover is always the fixed KDP square.
   const generated = await editImage(input.cleanImageUrl, prompt, {
+    aspectRatio: "1:1",
+    ...(input.model ? { model: input.model } : {}),
     trace: input.trace,
   });
-  const pngBuffer = Buffer.from(generated.base64, "base64");
+  const base64 = generated.base64;
+  const pngBuffer = Buffer.from(base64, "base64");
 
   const { url } = await uploadToR2({
     client: r2Client,
@@ -46,6 +58,6 @@ export async function generateAiCover(input: CoverInput): Promise<CoverOutput> {
 
   return {
     url: bustedUrl,
-    base64: generated.base64,
+    base64,
   };
 }

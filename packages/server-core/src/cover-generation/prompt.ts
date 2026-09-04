@@ -31,11 +31,15 @@ export function buildCoverTypographyPrompt(brandName: string, hints?: PromptHint
 - Use exactly this title: "${titleHint}"
 - If it doesn't quite match the illustration mood, tweak wording lightly but
   keep the same core concept and length (1–3 words).
+- Do NOT append or include the words "Coloring Book" in the title — that
+  belongs to the subtitle only.
 - Render in ALL CAPS.`
     : `TITLE
 - 1–3 words (hard max 4)
 - ALL CAPS
 - Emotional, memorable, evocative
+- Do NOT include the words "Coloring Book" in the title — that belongs to
+  the subtitle only.
 - Broad enough to cover the whole coloring book, not just this one page`;
 
   const subtitleSection = subtitleHint
@@ -57,9 +61,22 @@ You are given a coloring-book cover illustration WITHOUT ANY TEXT and a brand na
 
 Your job: analyze the illustration and add professionally designed typography.
 
-DO NOT redraw the illustration.
-DO NOT change colors, characters, or details of the artwork.
-ONLY add text on top of the existing illustration.
+===========================================
+CRITICAL — PRESERVE THE ARTWORK PIXEL-FOR-PIXEL
+===========================================
+
+The input illustration MUST come through completely unchanged. This is a
+TEXT-OVERLAY task, NOT an image-generation task.
+
+- DO NOT redraw, regenerate, reinterpret, or "improve" the illustration.
+- DO NOT change the composition, framing, zoom, crop, or aspect of the art.
+- DO NOT move, resize, re-pose, or alter the character(s) or any object.
+- DO NOT change colors, line weight, shading, or any artwork detail.
+- Keep every pixel of the original illustration identical; only NEW text
+  pixels may appear on top.
+
+If you find yourself re-drawing the scene, STOP — you are doing it wrong.
+Treat the illustration as a locked, flattened background layer.
 
 ===========================================
 CRITICAL — ONE SINGLE VIEW
@@ -72,6 +89,20 @@ artwork or add any additional panels.
 
 The input is already borderless and full-bleed. Keep it that way — do
 not add any decorative frame, page border, or colored margin.
+
+===========================================
+CRITICAL — NO BACKGROUND PLATE BEHIND TEXT
+===========================================
+
+Place the text DIRECTLY on the illustration. Do NOT add any solid or
+semi-transparent colored shape behind or around the title, subtitle, or
+brand — no band, banner, ribbon, box, rectangle, plate, header bar,
+gradient strip, or darkened/blurred region to "help readability".
+
+Readability MUST come ONLY from the text's own styling: white fill, a
+thick black outline, and an optional soft drop shadow. If any rectangular
+colored area appears behind the text, the result is WRONG — remove it and
+let the artwork show through around every letter.
 
 ===========================================
 CRITICAL — THREE TEXT ELEMENTS, ALL REQUIRED
@@ -205,11 +236,56 @@ brand) composited on top. The illustration itself must be identical to the
 input aside from the text overlays.
 
 FINAL CHECK before returning:
-  1. Is the output ONE single illustration filling the whole square? If it
+  1. Is the illustration IDENTICAL to the input (same composition, framing,
+     zoom, character pose, and colors)? If the artwork was redrawn, recropped,
+     zoomed, or altered in any way, discard and redo — overlay text only.
+  2. Is there any colored band / banner / box / plate / strip behind the
+     title, subtitle, or brand? If yes, remove it — text sits directly on the
+     artwork, readability from outline + shadow only.
+  3. Is the output ONE single illustration filling the whole square? If it
      looks like a collage / grid / diptych / before-after / multi-panel
      layout, discard and redo with a single view.
-  2. Does the output contain the brand "${brand}" at the bottom? If not,
+  4. Does the output contain the brand "${brand}" at the bottom? If not,
      add it.
-  3. Are all three text elements (title, subtitle, brand) present and
-     positioned per the spec? If any is missing, add it.`;
+  5. Are all three text elements (title, subtitle, brand) present and
+     positioned per the spec? If any is missing, add it.
+  6. Does the title avoid the words "Coloring Book"? If it includes them,
+     remove them from the title (they belong to the subtitle).`;
+}
+
+/**
+ * Compact variant of buildCoverTypographyPrompt for providers that cap the
+ * prompt length (KingCong: 4000 chars). Same contract — overlay-only, three
+ * text elements, no plate behind text — condensed to ~1.9k chars so it isn't
+ * tail-truncated (which would drop the FINAL CHECK / brand rules). Drops the
+ * full font catalog, keeping one default font per role.
+ */
+export function buildCoverTypographyPromptCompact(brandName: string, hints?: PromptHints): string {
+  const brand = brandName.trim() || "iroly";
+  const titleHint = hints?.titleHint?.trim();
+  const subtitleHint = hints?.subtitleHint?.trim();
+
+  const title = titleHint
+    ? `exactly "${titleHint}" (ALL CAPS; tweak wording only slightly if needed; never add the words "Coloring Book")`
+    : `1–3 words, ALL CAPS, evocative; never the words "Coloring Book"`;
+  const subtitle = subtitleHint
+    ? `exactly "${subtitleHint}" (Title Case)`
+    : `2–6 words, Title Case, describes the book, end with "Coloring Book" when it reads naturally`;
+
+  return `Amazon KDP coloring-book cover typographer. You get a TEXT-FREE illustration + a brand. Overlay professional typography ONLY.
+
+PRESERVE ARTWORK: text-overlay task, NOT image generation. Keep every pixel of the illustration identical — do NOT redraw, recolor, recrop, zoom, move, or re-pose anything. Only new text pixels may appear on top.
+
+SINGLE VIEW: output is ONE image, the same single illustration. No collage/grid/diptych/panels; no added frame/border/margin (keep it full-bleed).
+
+NO PLATE BEHIND TEXT: place text directly on the art. No band/banner/box/ribbon/strip/gradient behind title, subtitle, or brand. Readability comes ONLY from white fill + thick black outline (+ optional soft shadow).
+
+THREE TEXT ELEMENTS (all required — count before finishing):
+1. TITLE — top center, LARGEST text, ${title}. Style: friendly rounded/bubble display font (default Fredoka), WHITE fill + thick black outline, ~70–85% of width, never covering faces/eyes.
+2. SUBTITLE — just below title, ~40% of title height, ${subtitle}. Style: rounded sans (default Nunito), bold, WHITE with ONE keyword in warm yellow #FFC83D, thin black outline.
+3. BRAND — bottom center, small (≤8% height), exactly "${brand}" VERBATIM (no case/spelling/spacing change, never omit). Style: playful handwritten font (default Caveat), dark navy #2d2a3d, no outline.
+
+LAYOUT top→bottom: TITLE, SUBTITLE, (illustration untouched), BRAND. Generous spacing, never overlap focal points. Feel: clean, warm, bestselling KDP cover readable at thumbnail size.
+
+FINAL CHECK: artwork identical to input? no colored plate behind any text? one single full-square view? brand "${brand}" present at bottom? all three text elements present? title free of the words "Coloring Book"? Fix any that fail.`;
 }
