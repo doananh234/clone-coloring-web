@@ -40,16 +40,25 @@ describe("buildCoverSourceBWPrompt", () => {
     expect(bottom).toMatch(/preserve the original/);
   });
 
-  // --- clear title band override: every position reserves real, decoration-free
-  //     space for the title while never removing the source artwork ---
-  it("appends a clear title-band override to every position", () => {
-    for (const pos of ["top", "middle", "bottom"] as const) {
+  // --- clear title band override: middle & bottom append a shared override that
+  //     reserves real, decoration-free title space without removing the source.
+  //     TOP is self-contained (governs its own top typography region) and does
+  //     NOT get the override — see the dedicated top assertions below. ---
+  it("appends a clear title-band override to middle & bottom", () => {
+    for (const pos of ["middle", "bottom"] as const) {
       const p = buildCoverSourceBWPrompt(pos).toLowerCase();
       expect(p).toMatch(/title clearspace|clear, usable title band/);
       expect(p).toMatch(/keep decoration out of this band/);
       // must not sacrifice the source characters to make the band
       expect(p).toMatch(/do not move, shrink, rearrange, or remove/);
     }
+  });
+
+  it("top is self-contained and does NOT append the shared title-band override", () => {
+    const p = buildCoverSourceBWPrompt("top");
+    // The override block is not appended; the top prompt ends on its own.
+    expect(p).not.toMatch(/TITLE CLEARSPACE — OVERRIDING RULE/);
+    expect(p.trimEnd()).toMatch(/TOP COVER\.$/);
   });
 
   // --- top: dedicated square-cover prompt (top-center title header) ---
