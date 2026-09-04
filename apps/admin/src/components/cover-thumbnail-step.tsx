@@ -13,6 +13,7 @@ import {
 } from "@fortawesome/pro-regular-svg-icons";
 import { cn } from "@vx/core-uikit/utils";
 import { ColoringStylePicker } from "@/components/coloring-style-picker";
+import { pollGenerationJob } from "@/lib/poll-generation-job";
 import { CoverEditorModal } from "@/components/cover-editor/cover-editor-modal";
 import { DEFAULT_SLOT_STATE } from "@/components/cover-editor/types";
 import { faFont } from "@fortawesome/pro-regular-svg-icons";
@@ -171,19 +172,29 @@ export function CoverThumbnailStep({
         return;
       }
 
+      // Async: enqueue a background compose-cover GenerationJob, then poll until
+      // the worker finishes (KingCong ~150s/call → 2-phase can exceed CF's ~100s
+      // timeout, so this can no longer run inline).
       const res = await fetch("/api/generate/compose-cover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, imageDataUrls: colorizedUrls }),
+        body: JSON.stringify({ title, imageDataUrls: colorizedUrls, bookId: bookId ?? undefined }),
       });
       const data = await res.json();
-      if (data.success) {
-        setCoverPreview(data.previewUrl);
-      } else {
+      if (!res.ok || !data.jobId) {
         notify.error(data.error || "Failed to generate cover");
+        setGeneratingCover(false);
+        return;
       }
-    } catch {
-      notify.error("Failed to generate cover");
+
+      const job = await pollGenerationJob(data.jobId);
+      if (job.resultUrl) {
+        setCoverPreview(job.resultUrl);
+      } else {
+        notify.error("Failed to generate cover");
+      }
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : "Failed to generate cover");
     } finally {
       setGeneratingCover(false);
     }

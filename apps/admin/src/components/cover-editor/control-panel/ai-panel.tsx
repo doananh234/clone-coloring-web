@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Button, Input, Label } from "@vx/core-uikit/components";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSparkles, faSpinner, faCheck, faXmark } from "@fortawesome/pro-regular-svg-icons";
+import { pollGenerationJob } from "@/lib/poll-generation-job";
 
 interface AiPanelProps {
   bookId: string;
@@ -90,8 +91,13 @@ export function AiPanel(props: AiPanelProps) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `Generation failed (${res.status})`);
       }
-      const { url, base64 } = (await res.json()) as { url: string; base64: string };
-      setPreview({ previewUrl: `data:image/png;base64,${base64}`, url });
+      // Async: the route now enqueues a background ai-cover GenerationJob (the
+      // KingCong ~150s image call blew past Cloudflare's ~100s timeout / 524).
+      // Poll until the worker uploads the cover, then preview its resultUrl.
+      const { jobId } = (await res.json()) as { jobId: string };
+      const job = await pollGenerationJob(jobId);
+      if (!job.resultUrl) throw new Error(job.error || "Tạo bìa thất bại");
+      setPreview({ previewUrl: job.resultUrl, url: job.resultUrl });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -118,7 +124,7 @@ export function AiPanel(props: AiPanelProps) {
           Sends the CLEAN illustration + your brand name to the image model.
           The model analyzes the artwork, invents a title and subtitle in the
           Amazon KDP coloring-book style, and renders all three text roles
-          directly onto the cover. Takes 30–60 seconds.
+          directly onto the cover. Chạy nền — có thể mất vài phút.
         </p>
       </div>
 
@@ -158,7 +164,7 @@ export function AiPanel(props: AiPanelProps) {
         ) : (
           <FontAwesomeIcon icon={faSparkles} className="mr-2 h-3.5 w-3.5" />
         )}
-        {loading ? "Generating with AI…" : "Generate Cover with AI"}
+        {loading ? "Đang tạo bìa… (có thể mất vài phút)" : "Generate Cover with AI"}
       </Button>
 
       {error && (

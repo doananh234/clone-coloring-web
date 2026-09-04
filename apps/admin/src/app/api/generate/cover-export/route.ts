@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getR2Config, createR2Client, uploadToR2 } from "@vx/server-core/r2";
-import { generateAiCover } from "@vx/server-core/cover-generation";
 import { prisma } from "@vx/db";
+import { enqueueGenerationJob } from "@/lib/queue/generation-queue";
+import { withQueueTimeout, isQueueTimeout, queueUnavailableResponse } from "@/lib/queue/queue-timeout";
 
 interface RequestBody {
   bookId?: string;
@@ -63,22 +64,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Book ${bookId} not found` }, { status: 404 });
     }
 
-    // AI mode delegates entirely to the shared cover-generation module.
-    // Same prompt, same upload logic, same cache-bust as the worker's
-    // stepGenerateCover — a prompt tweak here propagates everywhere.
+    // AI mode is now ASYNC: generateAiCover runs a KingCong ~150s image call that
+    // blew past Cloudflare's ~100s HTTP timeout (error 524). Enqueue a background
+    // GenerationJob (type "ai-cover") — the worker calls the same shared
+    // generateAiCover (same prompt, R2 key, cache-bust) and the frontend polls
+    // GET /api/generation-jobs for the resultUrl.
     if (aiBlend) {
-      const output = await generateAiCover({
-        cleanImageUrl: backgroundImageUrl as string,
-        brandName: brandName ?? "",
-        ...(typeof model === "string" && model.trim() ? { model: model.trim() } : {}),
-        r2Key: `assets/books/${bookId}/cover-ai.png`,
-        trace: {
-          caller: "admin/cover-export/ai-typography",
-          entityType: "book",
-          entityId: bookId,
+      const job = await prisma.generationJob.create({
+        data: {
+          type: "ai-cover",
+          status: "pending",
+          bookId,
+          bookTitle: brandName?.trim() || bookId,
+          payload: {
+            bookId,
+            backgroundImageUrl: backgroundImageUrl as string,
+            brandName: brandName ?? "",
+            model: typeof model === "string" && model.trim() ? model.trim() : undefined,
+          },
         },
       });
-      return NextResponse.json(output);
+
+      try {
+        await withQueueTimeout(enqueueGenerationJob(job.id));
+      } catch (err) {
+        if (isQueueTimeout(err)) return queueUnavailableResponse({ jobId: job.id, bookId });
+        throw err;
+      }
+
+      return NextResponse.json({ success: true, jobId: job.id, bookId, status: "pending" });
     }
 
     // CLIENT-RENDERED mode: decode base64 → upload directly. WYSIWYG match

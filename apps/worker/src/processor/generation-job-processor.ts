@@ -1,7 +1,14 @@
 import crypto from "node:crypto";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { prisma } from "@vx/db";
 import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
-import { generateCoverSourceBW } from "@vx/server-core/ai";
+import {
+  generateCoverSourceBW,
+  generateCoverSource,
+  editImage,
+  usesCompactPrompts,
+} from "@vx/server-core/ai";
+import { generateAiCover, buildCoverTypographyPrompt, buildCoverTypographyPromptCompact } from "@vx/server-core/cover-generation";
 import { collectExportPlan, buildExportZip, stableExportUrl, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
 
 type Page = { id?: string; url?: string };
@@ -25,6 +32,23 @@ type SourceCover = {
   createdAt: string;
 };
 
+/** Payload for the interactive "compose cover" flow (2-phase: source → typography). */
+type ComposeCoverPayload = {
+  title: string;
+  imageDataUrls: string[];
+  brand?: string;
+  style?: string;
+  bookId: string;
+};
+
+/** Payload for the interactive "AI cover" flow (1-phase generateAiCover). */
+type AiCoverPayload = {
+  bookId: string;
+  backgroundImageUrl: string;
+  brandName?: string;
+  model?: string;
+};
+
 /**
  * Process one background GenerationJob. Sets status running → done/error and
  * stores the result. Errors are recorded on the row AND rethrown so BullMQ marks
@@ -45,6 +69,10 @@ export async function processGenerationJob(generationJobId: string): Promise<voi
       await runSourceCover(job.id, job.bookId, job.payload as unknown as SourceCoverPayload);
     } else if (job.type === "book-export") {
       await runBookExport(job.id, job.bookId);
+    } else if (job.type === "compose-cover") {
+      await runComposeCover(job.id, job.bookId, job.payload as unknown as ComposeCoverPayload);
+    } else if (job.type === "ai-cover") {
+      await runAiCover(job.id, job.bookId, job.payload as unknown as AiCoverPayload);
     } else {
       throw new Error(`Unknown generation job type: ${job.type}`);
     }
@@ -115,6 +143,112 @@ async function runSourceCover(genJobId: string, bookId: string, payload: SourceC
   await prisma.generationJob.update({
     where: { id: genJobId },
     data: { status: "done", resultUrl: url, resultId: scId },
+  });
+}
+
+// --- Interactive cover generation (moved off the sync API routes so KingCong's
+// ~150s image calls don't hit Cloudflare's ~100s HTTP timeout / error 524). ---
+
+// Book covers must be a fixed square. This final pass guarantees the exact
+// 2048x2048 output (a clean upscale, no crop when the model already returned
+// square). Ported verbatim from the compose-cover API route.
+const COVER_SIZE = 2048;
+
+// When the caller doesn't pass an explicit coloring/art style, tell the
+// recompose pass to KEEP whatever colors the source illustration already has.
+const PRESERVE_STYLE_DIRECTIVE =
+  "Keep the existing colors, palette, shading, lighting and rendering of the " +
+  "source illustration exactly — do not change the color scheme, only recompose " +
+  "the layout as instructed.";
+
+async function toSquareCoverBase64(base64: string, size = COVER_SIZE): Promise<string> {
+  const img = await loadImage(Buffer.from(base64, "base64"));
+  const side = Math.min(img.width, img.height);
+  const sx = (img.width - side) / 2;
+  const sy = (img.height - side) / 2;
+  const canvas = createCanvas(size, size);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+  return canvas.toBuffer("image/png").toString("base64");
+}
+
+/**
+ * Interactive "compose cover" (cover-thumbnail-step) — 2-phase. Mirrors the old
+ * sync POST /api/generate/compose-cover exactly:
+ *   Phase 1 — generateCoverSource: recompose the picked illustration into a clean
+ *     text-free cover LAYOUT (GPT-image flow forced inside).
+ *   Phase 2 — editImage with the KDP typography prompt (compact variant when the
+ *     provider caps prompts, e.g. KingCong).
+ * Then squares to exactly 2048x2048 and uploads the final PNG to R2.
+ */
+async function runComposeCover(genJobId: string, bookId: string, payload: ComposeCoverPayload): Promise<void> {
+  const { title, imageDataUrls, brand, style } = payload;
+  if (!title || !imageDataUrls?.length) throw new Error("title and imageDataUrls are required");
+
+  // The FIRST selected illustration is the base being turned into a cover;
+  // any extras act as style/scene references for the recompose pass.
+  const [primary, ...refs] = imageDataUrls;
+  const directive = style?.trim() ? style.trim() : PRESERVE_STYLE_DIRECTIVE;
+
+  // Phase 1 — clean text-free cover-source layout (heavy image step BEFORE any DB write).
+  const coverSource = await generateCoverSource(primary, directive, {
+    aspectRatio: "1:1",
+    referenceImageUrls: refs.length ? refs : undefined,
+    trace: { caller: "worker/generation/compose-cover:source", entityId: genJobId },
+  });
+
+  // Phase 2 — overlay KDP typography. KingCong caps prompts at 4000 chars → compact variant.
+  const buildTypography = usesCompactPrompts()
+    ? buildCoverTypographyPromptCompact
+    : buildCoverTypographyPrompt;
+  const typographyPrompt = buildTypography(brand?.trim() || "", { titleHint: title });
+  const composed = await editImage(coverSource.dataUrl, typographyPrompt, {
+    aspectRatio: "1:1",
+    flow: "gpt_image",
+    trace: { caller: "worker/generation/compose-cover:typography", entityId: genJobId },
+  });
+
+  // Guarantee an exact 2048x2048 square output, then upload to R2.
+  const base64 = await toSquareCoverBase64(composed.base64);
+  const r2Config = getR2Config();
+  const { url } = await uploadToR2({
+    client: createR2Client(r2Config),
+    config: r2Config,
+    key: `assets/books/${bookId}/cover-ai-${genJobId}.png`,
+    body: Buffer.from(base64, "base64"),
+    contentType: "image/png",
+  });
+
+  await prisma.generationJob.update({
+    where: { id: genJobId },
+    data: { status: "done", resultUrl: url, resultId: genJobId },
+  });
+}
+
+/**
+ * Interactive "AI cover" (cover-editor AI panel) — 1-phase. Mirrors the old sync
+ * POST /api/generate/cover-export (aiBlend=true), delegating to the shared
+ * generateAiCover which keeps its existing R2 key convention.
+ */
+async function runAiCover(genJobId: string, bookId: string, payload: AiCoverPayload): Promise<void> {
+  const { backgroundImageUrl, brandName, model } = payload;
+  if (!backgroundImageUrl) throw new Error("backgroundImageUrl is required");
+
+  const output = await generateAiCover({
+    cleanImageUrl: backgroundImageUrl,
+    brandName: brandName ?? "",
+    ...(typeof model === "string" && model.trim() ? { model: model.trim() } : {}),
+    r2Key: `assets/books/${bookId}/cover-ai.png`,
+    trace: {
+      caller: "worker/generation/ai-cover",
+      entityType: "book",
+      entityId: bookId,
+    },
+  });
+
+  await prisma.generationJob.update({
+    where: { id: genJobId },
+    data: { status: "done", resultUrl: output.url, resultId: genJobId },
   });
 }
 

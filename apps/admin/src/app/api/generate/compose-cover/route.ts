@@ -1,64 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createCanvas, loadImage } from "@napi-rs/canvas";
-import { editImage, generateCoverSource, usesCompactPrompts } from "@vx/server-core/ai/image-provider";
-import {
-  buildCoverTypographyPrompt,
-  buildCoverTypographyPromptCompact,
-} from "@vx/server-core/cover-generation";
-
-// Book covers must be a fixed square. Gemini image-to-image returns a square when
-// the source page is square (verified), and we also pass aspectRatio "1:1"; this
-// final pass guarantees the exact 2048x2048 output (a clean upscale, no crop when
-// the model already returned square).
-const COVER_SIZE = 2048;
-
-// When the caller doesn't pass an explicit coloring/art style, tell the
-// recompose pass to KEEP whatever colors the source illustration already has
-// (the picked pages are usually already colored/rendered). This keeps the
-// buildCoverSourcePrompt contract satisfied without forcing a palette shift.
-const PRESERVE_STYLE_DIRECTIVE =
-  "Keep the existing colors, palette, shading, lighting and rendering of the " +
-  "source illustration exactly — do not change the color scheme, only recompose " +
-  "the layout as instructed.";
-
-async function toSquareCoverBase64(base64: string, size = COVER_SIZE): Promise<string> {
-  const img = await loadImage(Buffer.from(base64, "base64"));
-  const side = Math.min(img.width, img.height);
-  const sx = (img.width - side) / 2;
-  const sy = (img.height - side) / 2;
-  const canvas = createCanvas(size, size);
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
-  return canvas.toBuffer("image/png").toString("base64");
-}
+import { prisma } from "@vx/db";
+import { enqueueGenerationJob } from "@/lib/queue/generation-queue";
+import { withQueueTimeout, isQueueTimeout, queueUnavailableResponse } from "@/lib/queue/queue-timeout";
 
 /**
- * AI cover composition — now shares the EXACT building blocks the clone
- * pipeline's stepGenerateCover uses, so an interactive "gen bìa AI" in the
- * cover editor produces the same premium result as the batch pipeline (which
- * previously looked noticeably nicer):
- *
- *   Phase 1 — generateCoverSource: recompose the picked illustration into a
- *     book-cover LAYOUT (main art in the lower 55–70%, clean title-safe area up
- *     top with sparse on-brand background motifs) and (re)colorize it. Runs on
- *     Diaflow's GPT-image flow (forced inside generateCoverSource) — the single
- *     biggest quality difference vs the old ad-hoc "add a title at top/bottom"
- *     prompt on the default provider.
- *   Phase 2 — buildCoverTypographyPrompt: overlay KDP-style typography (title,
- *     subtitle, brand) using the curated font catalog, same as generateAiCover.
- *
- * The two-pass shape mirrors the pipeline (clean cover-source → typography) and
- * is why the output now matches. `layout` is accepted for backward-compat but
- * the pipeline-parity layout always keeps the title-safe area at the top.
+ * AI cover composition — now ASYNC. KingCong's image calls run ~150s each and the
+ * 2-phase compose (source → typography) took 100–300s inline, which blew past
+ * Cloudflare's ~100s HTTP timeout (error 524). Instead of doing the work here we
+ * enqueue a background GenerationJob (type "compose-cover"); the worker reproduces
+ * the exact 2-phase pipeline (generateCoverSource → editImage typography →
+ * 2048x2048 square) and uploads the final PNG to R2. The frontend polls
+ * GET /api/generation-jobs for the result.
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, imageDataUrls, brand, style } = body as {
+    const { title, imageDataUrls, brand, style, bookId } = body as {
       title: string;
       imageDataUrls: string[];
       brand?: string;
       style?: string;
+      bookId?: string;
       layout?: string;
     };
 
@@ -66,43 +28,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "title and imageDataUrls are required" }, { status: 400 });
     }
 
-    // The FIRST selected illustration is the base being turned into a cover;
-    // any extras act as style/scene references for the recompose pass.
-    const [primary, ...refs] = imageDataUrls;
-    const directive = style?.trim() ? style.trim() : PRESERVE_STYLE_DIRECTIVE;
+    // bookId scopes the GenerationJob so the frontend can poll by book. The cover
+    // wizard may run before the book is persisted (bookId "temp"); fall back to a
+    // synthetic id so the poll filter still matches this job uniquely.
+    const effectiveBookId = bookId?.trim() || `compose-${crypto.randomUUID()}`;
 
-    // Phase 1 — recompose into a clean, text-free cover-source layout (GPT-image
-    // flow forced inside generateCoverSource). Same prompt the pipeline uses.
-    const coverSource = await generateCoverSource(primary, directive, {
-      aspectRatio: "1:1",
-      referenceImageUrls: refs.length ? refs : undefined,
-      trace: { caller: "compose-cover:source" },
+    // Best-effort book title for the queue drawer; missing book (temp flow) is fine.
+    let bookTitle = title;
+    if (bookId?.trim()) {
+      const book = await prisma.book.findUnique({ where: { id: bookId }, select: { title: true } });
+      if (book?.title) bookTitle = book.title;
+    }
+
+    const job = await prisma.generationJob.create({
+      data: {
+        type: "compose-cover",
+        status: "pending",
+        bookId: effectiveBookId,
+        bookTitle,
+        payload: {
+          title,
+          imageDataUrls,
+          brand: brand?.trim() || undefined,
+          style: style?.trim() || undefined,
+          bookId: effectiveBookId,
+        },
+      },
     });
 
-    // Phase 2 — overlay KDP typography (title + subtitle + brand) on the clean
-    // cover source. buildCoverTypographyPrompt takes the title as a hint and
-    // renders all three text roles per the shared spec.
-    // KingCong caps prompts at 4000 chars → use the compact typography variant.
-    const buildTypography = usesCompactPrompts()
-      ? buildCoverTypographyPromptCompact
-      : buildCoverTypographyPrompt;
-    const typographyPrompt = buildTypography(brand?.trim() || "", {
-      titleHint: title,
-    });
-    const composed = await editImage(coverSource.dataUrl, typographyPrompt, {
-      aspectRatio: "1:1",
-      flow: "gpt_image",
-      trace: { caller: "compose-cover:typography" },
-    });
+    try {
+      await withQueueTimeout(enqueueGenerationJob(job.id));
+    } catch (err) {
+      if (isQueueTimeout(err)) return queueUnavailableResponse({ jobId: job.id, bookId: effectiveBookId });
+      throw err;
+    }
 
-    // Guarantee an exact 2048x2048 square output.
-    const base64 = await toSquareCoverBase64(composed.base64);
-
-    return NextResponse.json({
-      success: true,
-      previewUrl: `data:image/png;base64,${base64}`,
-      base64,
-    });
+    return NextResponse.json({ success: true, jobId: job.id, bookId: effectiveBookId, status: "pending" });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
@@ -110,3 +71,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const dynamic = "force-dynamic";
