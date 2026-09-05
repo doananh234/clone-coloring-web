@@ -24,18 +24,27 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../.."
  */
 let dispatcher: Agent | null | undefined; // undefined = not built yet, null = none
 
-function build(): Agent | null {
+// Local FLUX (ComfyUI) image gen behind LiteLLM is slow — a cold-loaded 9B GGUF
+// img2img can take several minutes. Undici's default headers/body timeout
+// (~300s) aborts these mid-generation ("Headers Timeout Error"). Give LiteLLM
+// calls a generous window so slow FLUX edits complete instead of failing.
+// Override via LITELLM_TIMEOUT_MS.
+const LITELLM_TIMEOUT_MS = Number(process.env.LITELLM_TIMEOUT_MS) || 900_000;
+
+function build(): Agent {
+  const timeouts = { headersTimeout: LITELLM_TIMEOUT_MS, bodyTimeout: LITELLM_TIMEOUT_MS };
   if (process.env.LITELLM_TLS_INSECURE === "true") {
     console.warn("[litellm-tls] LITELLM_TLS_INSECURE=true — certificate verification DISABLED for LiteLLM calls");
-    return new Agent({ connect: { rejectUnauthorized: false } });
+    return new Agent({ ...timeouts, connect: { rejectUnauthorized: false } });
   }
   const caPath = process.env.LITELLM_CA_CERT;
   if (caPath) {
     const abs = isAbsolute(caPath) ? caPath : resolve(REPO_ROOT, caPath);
     const pem = readFileSync(abs, "utf8");
-    return new Agent({ connect: { ca: [...rootCertificates, pem] } });
+    return new Agent({ ...timeouts, connect: { ca: [...rootCertificates, pem] } });
   }
-  return null;
+  // No custom TLS needed, but still raise the timeouts for slow image gen.
+  return new Agent(timeouts);
 }
 
 function getDispatcher(): Agent | undefined {
