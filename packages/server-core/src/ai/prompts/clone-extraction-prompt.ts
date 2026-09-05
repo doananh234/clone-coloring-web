@@ -71,6 +71,6 @@ CRITICAL RULES FOR REPRODUCTION QUALITY:
 
 PAGE CLASSIFICATION (set EXACTLY ONE of the three booleans true):
 - "isCover": true ONLY for the FRONT COVER — big title typography, book title / author / brand text, decorative composition NOT meant to be colored.
-- "isIntro": true for a title / copyright / "this book belongs to" / table-of-contents / dedication page — mostly text, NOT a colorable illustration.
-- "isInterior": true for a normal COLORING page — a line-art illustration meant to be colored. This is the DEFAULT: when in doubt, set isInterior=true.
+- "isIntro": true for any NON-coloring utility page — title / copyright / "this book belongs to" / table-of-contents / dedication, OR a COLOR TEST / color-swatch / palette / "test your colors" page (rows or boxes of blank swatches meant for testing pencils/markers, NOT a scene to color). These are text or blank test strips, NOT a colorable illustration.
+- "isInterior": true for a normal COLORING page — a line-art illustration (a real subject/scene) meant to be colored. This is the DEFAULT for actual coloring pages. A page that is only blank swatch rows/boxes is NOT interior — it is isIntro.
 Only interior pages get redesigned; covers and intros are handled separately, so classify carefully.`;
