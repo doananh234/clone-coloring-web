@@ -4,6 +4,9 @@ Your goal is NOT to create reusable character/location cards. Your goal is to de
 
 Return JSON with this EXACT structure (no markdown, no extra text):
 {
+  "isCover": true or false,
+  "isIntro": true or false,
+  "isInterior": true or false,
   "scene": {
     "description": "Detailed scene summary: who is doing what, where, in what pose/arrangement. Example: 'A little girl in a puffy dress sits cross-legged on a garden path reading a book, with her cat curled up beside her. Butterflies float around them. Flower bushes frame both sides.'",
     "cameraView": "wide|medium|close-up|bird-eye|low-angle",
@@ -64,4 +67,10 @@ CRITICAL RULES FOR REPRODUCTION QUALITY:
 3. COMPOSITION must specify where each character and prop is positioned relative to the frame.
 4. If there are no characters (e.g., pattern/mandala), return empty characters array.
 5. If no clear location (white background), return empty locations array.
-6. Every detail matters: count the flowers, note the style of the fence, describe the shape of clouds. The more specific, the better the reproduction.`;
+6. Every detail matters: count the flowers, note the style of the fence, describe the shape of clouds. The more specific, the better the reproduction.
+
+PAGE CLASSIFICATION (set EXACTLY ONE of the three booleans true):
+- "isCover": true ONLY for the FRONT COVER — big title typography, book title / author / brand text, decorative composition NOT meant to be colored.
+- "isIntro": true for a title / copyright / "this book belongs to" / table-of-contents / dedication page — mostly text, NOT a colorable illustration.
+- "isInterior": true for a normal COLORING page — a line-art illustration meant to be colored. This is the DEFAULT: when in doubt, set isInterior=true.
+Only interior pages get redesigned; covers and intros are handled separately, so classify carefully.`;

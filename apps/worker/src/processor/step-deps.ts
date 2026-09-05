@@ -77,6 +77,9 @@ async function analyzePage(imageUrl: string, jobId: string): Promise<unknown> {
     temperature: 0.3,
     trace: { caller: "worker/analyze", entityType: "cloneJob", entityId: jobId },
   });
+  // Page-type signals live on the same JSON but are read separately so the
+  // reproduction object stays assignable to buildReproductionPrompt's input.
+  const signals = extracted as { isCover?: boolean; isIntro?: boolean; isInterior?: boolean };
   const reproductionPrompt = buildReproductionPrompt(extracted);
   return {
     scene: extracted.scene ?? { description: "", cameraView: "wide", composition: "" },
@@ -89,6 +92,11 @@ async function analyzePage(imageUrl: string, jobId: string): Promise<unknown> {
     characters: extracted.characters ?? [],
     locations: extracted.locations ?? [],
     props: extracted.props ?? [],
+    // Page-type signals — consumed by stepAnalyze's classifyPage pass so only
+    // interior pages get redesigned (covers/intros are handled separately).
+    isCover: signals.isCover === true,
+    isIntro: signals.isIntro === true,
+    isInterior: signals.isInterior === true,
     reproductionPrompt,
   };
 }

@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
+import type { PageType } from "./classify-page";
 
 interface JobPage {
   pageNumber: number;
@@ -7,6 +8,7 @@ interface JobPage {
   status: string;
   rawData?: { reproductionPrompt?: string };
   redesignedUrl?: string;
+  pageType?: PageType;
 }
 
 export interface ReproduceDeps {
@@ -34,6 +36,11 @@ export async function stepReproduce(
     const page = updatedPages[i];
     if (page.redesignedUrl) continue;
     if (!page.imageUrl) continue;
+    // Only INTERIOR pages get redesigned. Covers go through the cover pipeline
+    // and intros stay as-is (create-book files them as summary pages). Legacy
+    // pages with no pageType default to interior so pre-classification jobs are
+    // unchanged.
+    if (page.pageType && page.pageType !== "interior") continue;
     // prompt is no longer required — generatePage uses buildRedesignPrompt(30)
     // and ignores the passed-in prompt. We still pass it for signature compat.
     const prompt = page.rawData?.reproductionPrompt ?? "";
