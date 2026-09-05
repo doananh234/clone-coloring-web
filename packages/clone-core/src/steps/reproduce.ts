@@ -9,6 +9,7 @@ interface JobPage {
   rawData?: { reproductionPrompt?: string };
   redesignedUrl?: string;
   pageType?: PageType;
+  reproduceError?: string;
 }
 
 export interface ReproduceDeps {
@@ -32,6 +33,7 @@ export async function stepReproduce(
   const pages = (job.pages as JobPage[] | null | undefined) ?? [];
 
   const updatedPages = [...pages];
+  let failedPages = 0;
   for (let i = 0; i < updatedPages.length; i++) {
     const page = updatedPages[i];
     if (page.redesignedUrl) continue;
@@ -46,12 +48,40 @@ export async function stepReproduce(
     const prompt = page.rawData?.reproductionPrompt ?? "";
 
     const sourceImageUrl = deps.resolveR2Url(page.imageUrl);
-    const img = await deps.generatePage({
-      prompt,
-      sourceImageUrl,
-      pageNumber: page.pageNumber,
-      jobId: ctx.jobId,
-    });
+
+    // Per-page resilience: one page the provider rejects (e.g. KingCong
+    // "invalid_generation") must NOT kill the whole job. Retry once for transient
+    // errors, then mark the page errored and continue. The operator can regen the
+    // failed page(s) later; create-book drops status:"error" pages from the book.
+    let img: { base64: string } | null = null;
+    let lastErr = "";
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        img = await deps.generatePage({
+          prompt,
+          sourceImageUrl,
+          pageNumber: page.pageNumber,
+          jobId: ctx.jobId,
+        });
+        break;
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+
+    if (!img) {
+      failedPages++;
+      console.warn(`[reproduce] page ${page.pageNumber} failed, skipping: ${lastErr}`);
+      updatedPages[i] = { ...page, status: "error", reproduceError: lastErr };
+      await db.cloneJob.update({
+        where: { id: ctx.jobId },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: { pages: updatedPages as any },
+      });
+      continue;
+    }
+
     const key = `assets/clone-jobs/${ctx.jobId}/redesigned/page-${String(page.pageNumber).padStart(3, "0")}.png`;
     const { url } = await deps.uploadToR2({
       key,
@@ -66,5 +96,8 @@ export async function stepReproduce(
     });
   }
 
+  if (failedPages > 0) {
+    console.warn(`[reproduce] job ${ctx.jobId}: ${failedPages} page(s) failed and were skipped (regen manually).`);
+  }
   await ctx.markStepComplete("reproduce");
 }
