@@ -65,14 +65,26 @@ async function fetchPdf(url: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-async function analyzePage(imageUrl: string, jobId: string): Promise<unknown> {
+async function analyzePage(
+  imageUrl: string,
+  jobId: string,
+  pageNumber: number,
+  totalPages: number,
+): Promise<unknown> {
+  // Page position helps the LLM classify: page 1 is almost always the FRONT
+  // cover, an early title/copyright page is an intro, the rest are interior.
+  const positionNote =
+    `CONTEXT: This is page ${pageNumber} of ${totalPages} in the source book. ` +
+    `Page 1 is almost always the FRONT COVER; a title / copyright / dedication page near ` +
+    `the front is an intro; all other pages are interior coloring pages. Use this ` +
+    `position together with the image content to classify accurately.\n\n`;
   const extracted = await visionAnalyzeJSON<{
     scene?: unknown;
     environment?: unknown;
     characters?: unknown[];
     locations?: unknown[];
     props?: unknown[];
-  }>(imageUrl, CLONE_EXTRACTION_PROMPT, {
+  }>(imageUrl, positionNote + CLONE_EXTRACTION_PROMPT, {
     maxTokens: 4000,
     temperature: 0.3,
     trace: { caller: "worker/analyze", entityType: "cloneJob", entityId: jobId },

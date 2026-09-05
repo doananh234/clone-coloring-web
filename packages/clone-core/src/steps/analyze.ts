@@ -12,7 +12,12 @@ interface JobPage {
 }
 
 export interface AnalyzeDeps {
-  analyzePage: (imageUrl: string, jobId: string) => Promise<unknown>;
+  analyzePage: (
+    imageUrl: string,
+    jobId: string,
+    pageNumber: number,
+    totalPages: number,
+  ) => Promise<unknown>;
   resolveR2Url: (key: string) => string;
 }
 
@@ -33,7 +38,9 @@ export async function stepAnalyze(
     if (page.status === "analyzed" && page.rawData) continue;
 
     const imageUrl = deps.resolveR2Url(page.imageUrl);
-    const rawData = await deps.analyzePage(imageUrl, ctx.jobId);
+    // Pass page position so the LLM can tell the FRONT cover (page 1) apart from
+    // internal title/intro pages that also carry big title text.
+    const rawData = await deps.analyzePage(imageUrl, ctx.jobId, page.pageNumber, updatedPages.length);
 
     analyzedCount++;
     updatedPages[i] = { ...page, status: "analyzed", rawData };
@@ -47,24 +54,28 @@ export async function stepAnalyze(
 
   // Classification pass — turn the per-page isCover/isIntro/isInterior signals
   // from analyzePage into a concrete pageType, so stepReproduce only redesigns
-  // interior pages and stepCreateBook partitions cover/intro correctly. Pre-scan
-  // for an LLM-flagged cover first so the page-1 fallback doesn't also claim
-  // "cover" before we reach the real cover page (mirrors stepOneShot).
-  const llmFlaggedCover = updatedPages.some(
-    (p) => (p.rawData as { isCover?: unknown } | null | undefined)?.isCover === true,
-  );
-  let coverAlreadyAssigned = llmFlaggedCover;
+  // interior pages and stepCreateBook partitions cover/intro correctly.
+  //
+  // Assign at most ONE cover: the first page classified as cover wins; any later
+  // cover-flagged page is an internal title page → downgrade to intro. This stops
+  // the LLM's common mistake of flagging both page 1 and an internal title page
+  // as "cover" (which create-book would silently drop). `coverAssigned` also
+  // disables classifyPage's page-1 fallback once a real cover exists.
+  let coverAssigned = false;
   for (let i = 0; i < updatedPages.length; i++) {
     const p = updatedPages[i];
     const sig = (p.rawData ?? {}) as { isCover?: unknown; isIntro?: unknown; isInterior?: unknown };
-    const { pageType } = classifyPage({
+    let { pageType } = classifyPage({
       pageNumber: p.pageNumber,
       isCover: sig.isCover === true,
       isIntro: sig.isIntro === true,
       isInterior: sig.isInterior === true,
-      coverAlreadyAssigned,
+      coverAlreadyAssigned: coverAssigned,
     });
-    if (pageType === "cover") coverAlreadyAssigned = true;
+    if (pageType === "cover") {
+      if (coverAssigned) pageType = "interiorIntro";
+      else coverAssigned = true;
+    }
     updatedPages[i] = { ...p, pageType };
   }
   await db.cloneJob.update({
