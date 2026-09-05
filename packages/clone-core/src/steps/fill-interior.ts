@@ -111,14 +111,35 @@ export async function stepFillInterior(
   }
 
   const created: Record<string, unknown>[] = [];
+  let failed = 0;
   for (const t of tasks) {
-    const { base64 } = await deps.generatePage({
-      prompt: "",
-      sourceImageUrl: t.sourceImageUrl,
-      pageNumber: t.pageNumber,
-      jobId: ctx.jobId,
-      changePercent: t.changePercent,
-    });
+    // Per-page resilience: a fill page the provider rejects (e.g. KingCong
+    // "invalid_generation") must NOT kill the whole job. Retry once, then skip
+    // it and keep going — we may finish slightly under target, which is fine.
+    let base64: string | null = null;
+    let lastErr = "";
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        base64 = (
+          await deps.generatePage({
+            prompt: "",
+            sourceImageUrl: t.sourceImageUrl,
+            pageNumber: t.pageNumber,
+            jobId: ctx.jobId,
+            changePercent: t.changePercent,
+          })
+        ).base64;
+        break;
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    if (!base64) {
+      failed++;
+      console.warn(`[fill-interior] fill page ${t.pageNumber} failed, skipping: ${lastErr}`);
+      continue;
+    }
     const body = Buffer.from(base64, "base64");
     const key = `assets/clone-jobs/${ctx.jobId}/redesigned/page-${String(t.pageNumber).padStart(3, "0")}.png`;
     const { url } = await deps.uploadToR2({ key, body, contentType: "image/png" });
@@ -147,5 +168,8 @@ export async function stepFillInterior(
     data: { pages: merged as never, totalPages: merged.length, analyzedPages: merged.length },
   });
 
+  if (failed > 0) {
+    console.warn(`[fill-interior] job ${ctx.jobId}: ${failed} fill page(s) failed and were skipped.`);
+  }
   await ctx.markStepComplete("fill-interior");
 }
