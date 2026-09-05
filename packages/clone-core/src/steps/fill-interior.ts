@@ -114,26 +114,23 @@ export async function stepFillInterior(
   let failed = 0;
   for (const t of tasks) {
     // Per-page resilience: a fill page the provider rejects (e.g. KingCong
-    // "invalid_generation") must NOT kill the whole job. Retry once, then skip
-    // it and keep going — we may finish slightly under target, which is fine.
+    // "invalid_generation") must NOT kill the whole job. generatePage already
+    // falls back to LiteLLM/FLUX internally; if BOTH fail we skip it and keep
+    // going — we may finish slightly under target, which is fine.
     let base64: string | null = null;
     let lastErr = "";
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        base64 = (
-          await deps.generatePage({
-            prompt: "",
-            sourceImageUrl: t.sourceImageUrl,
-            pageNumber: t.pageNumber,
-            jobId: ctx.jobId,
-            changePercent: t.changePercent,
-          })
-        ).base64;
-        break;
-      } catch (err) {
-        lastErr = err instanceof Error ? err.message : String(err);
-        if (attempt < 2) await new Promise((r) => setTimeout(r, 2000));
-      }
+    try {
+      base64 = (
+        await deps.generatePage({
+          prompt: "",
+          sourceImageUrl: t.sourceImageUrl,
+          pageNumber: t.pageNumber,
+          jobId: ctx.jobId,
+          changePercent: t.changePercent,
+        })
+      ).base64;
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : String(err);
     }
     if (!base64) {
       failed++;

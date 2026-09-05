@@ -121,10 +121,31 @@ async function generatePage(args: {
   changePercent?: number;        // optional; defaults to 30 to match manual reproduce
 }): Promise<{ base64: string }> {
   const fullPrompt = buildRedesignPrompt(args.changePercent ?? 30);
-  const img = await editImage(resolveR2Url(args.sourceImageUrl), fullPrompt, {
-    trace: { caller: "worker/reproduce", entityType: "cloneJob", entityId: args.jobId },
-  });
-  return { base64: img.base64 || img.dataUrl?.split(",")[1] || "" };
+  const src = resolveR2Url(args.sourceImageUrl);
+  const trace = { caller: "worker/reproduce", entityType: "cloneJob", entityId: args.jobId };
+  const pick = (img: { base64?: string; dataUrl?: string }) =>
+    img.base64 || img.dataUrl?.split(",")[1] || "";
+  try {
+    // Primary: the configured IMAGE_PROVIDER (KingCong on prod).
+    return { base64: pick(await editImage(src, fullPrompt, { trace })) };
+  } catch (err) {
+    // KingCong sometimes rejects a page ("invalid_generation" / content policy).
+    // Fall back ONCE to LiteLLM with a FLUX model before the caller skips the
+    // page — recovers most rejects without manual regen. Model is overridable
+    // via LITELLM_FALLBACK_IMAGE_MODEL (default flux.2).
+    const fallbackModel = process.env.LITELLM_FALLBACK_IMAGE_MODEL || "flux.2";
+    const msg = err instanceof Error ? err.message.split("\n")[0] : String(err);
+    console.warn(
+      `[generatePage] primary provider failed for page ${args.pageNumber} (${msg}); ` +
+        `falling back to litellm/${fallbackModel}`,
+    );
+    const img = await editImage(src, fullPrompt, {
+      provider: "litellm",
+      model: fallbackModel,
+      trace: { ...trace, caller: "worker/reproduce-fallback" },
+    });
+    return { base64: pick(img) };
+  }
 }
 
 export const downloadDeps = { fetchPdf, uploadToR2 };

@@ -50,24 +50,21 @@ export async function stepReproduce(
     const sourceImageUrl = deps.resolveR2Url(page.imageUrl);
 
     // Per-page resilience: one page the provider rejects (e.g. KingCong
-    // "invalid_generation") must NOT kill the whole job. Retry once for transient
-    // errors, then mark the page errored and continue. The operator can regen the
-    // failed page(s) later; create-book drops status:"error" pages from the book.
+    // "invalid_generation") must NOT kill the whole job. generatePage already
+    // falls back to LiteLLM/FLUX internally on a primary failure; if BOTH fail
+    // we mark the page errored and continue. The operator can regen it later;
+    // create-book drops status:"error" pages from the book.
     let img: { base64: string } | null = null;
     let lastErr = "";
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        img = await deps.generatePage({
-          prompt,
-          sourceImageUrl,
-          pageNumber: page.pageNumber,
-          jobId: ctx.jobId,
-        });
-        break;
-      } catch (err) {
-        lastErr = err instanceof Error ? err.message : String(err);
-        if (attempt < 2) await new Promise((r) => setTimeout(r, 2000));
-      }
+    try {
+      img = await deps.generatePage({
+        prompt,
+        sourceImageUrl,
+        pageNumber: page.pageNumber,
+        jobId: ctx.jobId,
+      });
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : String(err);
     }
 
     if (!img) {
