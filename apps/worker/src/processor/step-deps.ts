@@ -130,18 +130,22 @@ async function generatePage(args: {
     return { base64: pick(await editImage(src, fullPrompt, { trace })) };
   } catch (err) {
     // KingCong sometimes rejects a page ("invalid_generation" / content policy).
-    // Fall back ONCE to LiteLLM with a FLUX model before the caller skips the
-    // page — recovers most rejects without manual regen. Model is overridable
-    // via LITELLM_FALLBACK_IMAGE_MODEL (default flux.2).
-    const fallbackModel = process.env.LITELLM_FALLBACK_IMAGE_MODEL || "flux.2";
+    // Fall back ONCE before the caller skips the page — recovers most rejects
+    // without manual regen. Default: direct Azure gpt-image-2
+    // (AZURE_IMAGE_DEPLOYMENT_NAME). NOT via LiteLLM — LiteLLM's edit proxy and
+    // Azure gpt-image disagree on content-type (multipart vs json), and local
+    // FLUX/ComfyUI runs on CPU (too slow). Override the fallback backend with
+    // CLONE_FALLBACK_IMAGE_PROVIDER (+ optional CLONE_FALLBACK_IMAGE_MODEL).
+    const fallbackProvider = process.env.CLONE_FALLBACK_IMAGE_PROVIDER || "azure";
+    const fallbackModel = process.env.CLONE_FALLBACK_IMAGE_MODEL;
     const msg = err instanceof Error ? err.message.split("\n")[0] : String(err);
     console.warn(
       `[generatePage] primary provider failed for page ${args.pageNumber} (${msg}); ` +
-        `falling back to litellm/${fallbackModel}`,
+        `falling back to ${fallbackProvider}${fallbackModel ? "/" + fallbackModel : ""}`,
     );
     const img = await editImage(src, fullPrompt, {
-      provider: "litellm",
-      model: fallbackModel,
+      provider: fallbackProvider as never,
+      ...(fallbackModel ? { model: fallbackModel } : {}),
       trace: { ...trace, caller: "worker/reproduce-fallback" },
     });
     return { base64: pick(img) };
