@@ -11,7 +11,8 @@ export type ImageProviderName =
   | "kingcong"
   | "vertex"
   | "gemini"
-  | "litellm";
+  | "litellm"
+  | "gemini-web";
 
 export type ImageGenerationOptions = {
   size?: "1024x1024" | "1024x1792" | "1792x1024";

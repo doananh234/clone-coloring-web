@@ -61,6 +61,11 @@ function getProvider(override?: string): ImageProviderInterface {
     return require("./image-provider-litellm").litellmImageProvider;
   }
 
+  if (provider === "gemini-web") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./image-provider-gemini-web").geminiWebImageProvider;
+  }
+
   if (provider === "vertex") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./image-provider-vertex").vertexImageProvider;
