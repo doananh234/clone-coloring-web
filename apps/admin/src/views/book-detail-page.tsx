@@ -63,6 +63,7 @@ import { ImageGrid, type ImageItem } from "@/components/image-grid";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ExtractionReviewModal } from "@/components/extraction-review-modal";
 import { appNavigate } from "@/lib/navigate";
+import { pollGenerationJob } from "@/lib/poll-generation-job";
 import type { BookEntity } from "@/crud/books";
 
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
@@ -407,15 +408,18 @@ export function BookDetailPage({ bookId }: { bookId: string }) {
         }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        notify.success("Page colorized successfully");
-        refresh();
-        setColorizeOpen(false);
-      } else {
+      if (!res.ok || !data.jobId) {
         notify.error(data.error || "Colorization failed");
+        return;
       }
-    } catch {
-      notify.error("Colorization failed");
+      // Colorize now runs as a background GenerationJob (avoids Cloudflare 524 on
+      // the slow provider chain). Poll until the worker finishes, then refresh.
+      await pollGenerationJob(data.jobId);
+      notify.success("Page colorized successfully");
+      refresh();
+      setColorizeOpen(false);
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : "Colorization failed");
     } finally {
       setColorizing(false);
     }

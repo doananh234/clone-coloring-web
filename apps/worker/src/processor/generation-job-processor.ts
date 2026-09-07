@@ -6,8 +6,13 @@ import {
   generateCoverSourceBW,
   generateCoverSource,
   editImage,
+  colorizeImage,
   usesCompactPrompts,
 } from "@vx/server-core/ai";
+import {
+  upsertColoredSourceCover,
+  type SourceCover as ColoringSourceCover,
+} from "@vx/coloring/data/source-covers";
 import { generateAiCover, buildCoverTypographyPrompt, buildCoverTypographyPromptCompact } from "@vx/server-core/cover-generation";
 import { collectExportPlan, buildExportZip, stableExportUrl, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
 
@@ -50,6 +55,24 @@ type AiCoverPayload = {
 };
 
 /**
+ * Payload for the interactive "colorize one page" flow. Mirrors the old sync
+ * POST /api/coloring-styles/colorize body verbatim so runColorize is a 1:1 port.
+ * Moved off the request path because the colorize provider chain (kingcong →
+ * diaflow → gemini-web → azure) runs serially and can exceed Cloudflare's ~100s
+ * HTTP limit (error 524). bookId/pageId are optional (test colorize omits them).
+ */
+type ColorizePayload = {
+  imageUrl: string;
+  coloringStyleId: string;
+  coloringVariantId?: string;
+  bookId?: string;
+  pageId?: string;
+  useReference?: boolean;
+  target?: "page" | "sourceCover";
+  provider?: "kingcong" | "diaflow" | "litellm" | "azure";
+};
+
+/**
  * Process one background GenerationJob. Sets status running → done/error and
  * stores the result. Errors are recorded on the row AND rethrown so BullMQ marks
  * the queue job failed (visible in the admin queue board).
@@ -73,6 +96,8 @@ export async function processGenerationJob(generationJobId: string): Promise<voi
       await runComposeCover(job.id, job.bookId, job.payload as unknown as ComposeCoverPayload);
     } else if (job.type === "ai-cover") {
       await runAiCover(job.id, job.bookId, job.payload as unknown as AiCoverPayload);
+    } else if (job.type === "colorize") {
+      await runColorize(job.id, job.payload as unknown as ColorizePayload);
     } else {
       throw new Error(`Unknown generation job type: ${job.type}`);
     }
@@ -83,6 +108,137 @@ export async function processGenerationJob(generationJobId: string): Promise<voi
     });
     throw err;
   }
+}
+
+/**
+ * Colorize one page (or a source-cover). Verbatim port of the former sync
+ * /api/coloring-styles/colorize handler: load style/variant → colorizeImage
+ * (runs the provider fallback chain internally) → upload to R2 → patch the book's
+ * coloringPages entry or sourceCovers list. Sets resultUrl for the drawer preview.
+ */
+async function runColorize(genJobId: string, payload: ColorizePayload): Promise<void> {
+  const {
+    imageUrl,
+    coloringStyleId,
+    coloringVariantId,
+    bookId,
+    pageId,
+    useReference = true,
+    target = "page",
+    provider,
+  } = payload;
+
+  const style = await prisma.coloringStyle.findUnique({ where: { id: coloringStyleId } });
+  if (!style) throw new Error("Coloring style not found");
+
+  // Resolve the chosen variant (if any) — its directive + reference thumbnail
+  // override the style-level defaults so the exact selected colors are applied.
+  type Variant = { id?: string; colorizationDirective?: string; thumbnailUrl?: string };
+  const variant = coloringVariantId
+    ? ((style.variants as Variant[] | null) || []).find((v) => v?.id === coloringVariantId)
+    : undefined;
+
+  const directive = (variant?.colorizationDirective || style.colorizationDirective || "").trim();
+  if (!directive) throw new Error("Coloring style/variant has no colorizationDirective");
+
+  const styleRefs = ((style.referenceImages as { url: string }[]) || []).map((r) => resolveR2Url(r.url));
+  const referenceImageUrls = useReference
+    ? variant?.thumbnailUrl
+      ? [resolveR2Url(variant.thumbnailUrl)]
+      : styleRefs
+    : [];
+
+  const img = await colorizeImage(resolveR2Url(imageUrl), directive, {
+    referenceImageUrls,
+    provider,
+    trace: { caller: "worker/generation/colorize", entityId: genJobId },
+  });
+
+  const r2Config = getR2Config();
+  const r2Client = createR2Client(r2Config);
+  const base64 = img.dataUrl.split(",")[1];
+  const buffer = Buffer.from(base64, "base64");
+
+  const key =
+    bookId && pageId
+      ? target === "sourceCover"
+        ? `assets/${bookId}/source-covers/${pageId}-colored.png`
+        : `assets/${bookId}/pages/${pageId}-colored.png`
+      : `assets/coloring-styles/${coloringStyleId}/test-${crypto.randomUUID()}.png`;
+
+  const { url: coloredUrl } = await uploadToR2({
+    client: r2Client,
+    config: r2Config,
+    key,
+    body: buffer,
+    contentType: "image/png",
+  });
+
+  // Patch the matching entry in the book (page coloredUrl or sourceCovers list).
+  if (bookId && pageId) {
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (book) {
+      const coloredUrlWithBust = `${coloredUrl}?v=${Date.now()}`;
+      if (target === "sourceCover") {
+        const data = (book.data as Record<string, unknown> | null) ?? {};
+        const sourceCovers = upsertColoredSourceCover(
+          (data.sourceCovers as ColoringSourceCover[] | undefined) ?? [],
+          pageId,
+          coloredUrlWithBust,
+          coloringStyleId,
+          coloringVariantId ?? null,
+        );
+        await prisma.book.update({ where: { id: bookId }, data: { data: { ...data, sourceCovers } as never } });
+      } else {
+        type PageEntry = {
+          id?: string;
+          pageId?: string;
+          url?: string;
+          coloredUrl?: string;
+          coloringStyleId?: string;
+          [k: string]: unknown;
+        };
+        let coloringPages = (book.coloringPages as PageEntry[]) || [];
+
+        // Migrate legacy orphan entries: merge {pageId, coloredUrl} back into real pages.
+        const orphans = coloringPages.filter((p) => !p.url && p.pageId && p.coloredUrl);
+        if (orphans.length > 0) {
+          const orphanMap = new Map(orphans.map((o) => [o.pageId!, o]));
+          coloringPages = coloringPages
+            .filter((p) => p.id && p.url)
+            .map((p) => {
+              const orphan = orphanMap.get(p.id!);
+              if (orphan && !p.coloredUrl) {
+                return { ...p, coloredUrl: orphan.coloredUrl, coloringStyleId: orphan.coloringStyleId };
+              }
+              return p;
+            });
+        }
+
+        const existingIdx = coloringPages.findIndex((p) => p.id === pageId);
+        if (existingIdx >= 0) {
+          coloringPages[existingIdx].coloredUrl = coloredUrlWithBust;
+          coloringPages[existingIdx].coloringStyleId = coloringStyleId;
+          coloringPages[existingIdx].coloringVariantId = coloringVariantId ?? null;
+          const sel = coloringPages[existingIdx].selectedVariantId as string | undefined;
+          const variants = coloringPages[existingIdx].variants as { id: string; coloredUrl?: string }[] | undefined;
+          if (sel && Array.isArray(variants)) {
+            const vIdx = variants.findIndex((v) => v.id === sel);
+            if (vIdx >= 0) variants[vIdx].coloredUrl = coloredUrlWithBust;
+          }
+        } else {
+          console.warn(`[colorize] Page ${pageId} not found in book ${bookId} coloringPages`);
+        }
+
+        await prisma.book.update({ where: { id: bookId }, data: { coloringPages: coloringPages as never } });
+      }
+    }
+  }
+
+  await prisma.generationJob.update({
+    where: { id: genJobId },
+    data: { status: "done", resultUrl: coloredUrl },
+  });
 }
 
 async function runSourceCover(genJobId: string, bookId: string, payload: SourceCoverPayload): Promise<void> {
