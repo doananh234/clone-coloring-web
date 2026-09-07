@@ -76,6 +76,46 @@ function getProvider(override?: string): ImageProviderInterface {
 }
 
 /**
+ * Ordered provider chain for ONE image op: the resolved primary first, then the
+ * configured fallbacks. On a provider error we advance to the next so a single
+ * provider hiccup (KingCong "invalid_generation" / content policy, Diaflow 429,
+ * etc.) never fails the whole page — the image just gets produced by the next
+ * backend. Configure the fallbacks with IMAGE_FALLBACK_PROVIDERS (csv, default
+ * "diaflow,azure"; "azure" = gpt-image-2). Set it empty for strict single-provider.
+ */
+function providerChain(override?: string): string[] {
+  const primary = resolveProviderName(override);
+  const fallbacks = (process.env.IMAGE_FALLBACK_PROVIDERS ?? "diaflow,azure")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return [...new Set([primary, ...fallbacks])];
+}
+
+async function withProviderFallback(
+  override: string | undefined,
+  run: (p: ImageProviderInterface) => Promise<GeneratedImage>,
+  label: string,
+): Promise<GeneratedImage> {
+  const chain = providerChain(override);
+  let lastErr: unknown;
+  for (let i = 0; i < chain.length; i++) {
+    const name = chain[i];
+    try {
+      return await run(getProvider(name));
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message.split("\n")[0] : String(err);
+      const more = i < chain.length - 1 ? ` — routing to "${chain[i + 1]}"` : " (last provider in chain)";
+      console.warn(`[image:${label}] provider "${name}" failed: ${msg}${more}`);
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error(`all image providers failed (${chain.join(" -> ")}): ${String(lastErr)}`);
+}
+
+/**
  * Normalize image URL: resolve relative R2 paths to full URLs.
  * Ensures any /assets/... path becomes https://cdn.example.com/assets/...
  */
@@ -98,7 +138,11 @@ export async function generateImage(
   prompt: string,
   options?: ImageGenerationOptions,
 ): Promise<GeneratedImage> {
-  const img = await getProvider(options?.provider).generateImage(prompt, options);
+  const img = await withProviderFallback(
+    options?.provider,
+    (p) => p.generateImage(prompt, options),
+    "generate",
+  );
   return options?.rawSize ? img : normalizeGeneratedImage(img);
 }
 
@@ -107,7 +151,12 @@ export async function editImage(
   prompt: string,
   options?: ColorizeOptions,
 ): Promise<GeneratedImage> {
-  const img = await getProvider(options?.provider).editImage(normalizeImageUrl(imageUrl), prompt, options);
+  const url = normalizeImageUrl(imageUrl);
+  const img = await withProviderFallback(
+    options?.provider,
+    (p) => p.editImage(url, prompt, options),
+    "edit",
+  );
   return options?.rawSize ? img : normalizeGeneratedImage(img);
 }
 

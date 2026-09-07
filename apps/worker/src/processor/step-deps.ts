@@ -121,35 +121,14 @@ async function generatePage(args: {
   changePercent?: number;        // optional; defaults to 30 to match manual reproduce
 }): Promise<{ base64: string }> {
   const fullPrompt = buildRedesignPrompt(args.changePercent ?? 30);
-  const src = resolveR2Url(args.sourceImageUrl);
-  const trace = { caller: "worker/reproduce", entityType: "cloneJob", entityId: args.jobId };
-  const pick = (img: { base64?: string; dataUrl?: string }) =>
-    img.base64 || img.dataUrl?.split(",")[1] || "";
-  try {
-    // Primary: the configured IMAGE_PROVIDER (KingCong on prod).
-    return { base64: pick(await editImage(src, fullPrompt, { trace })) };
-  } catch (err) {
-    // KingCong sometimes rejects a page ("invalid_generation" / content policy).
-    // Fall back ONCE before the caller skips the page — recovers most rejects
-    // without manual regen. Default: direct Azure gpt-image-2
-    // (AZURE_IMAGE_DEPLOYMENT_NAME). NOT via LiteLLM — LiteLLM's edit proxy and
-    // Azure gpt-image disagree on content-type (multipart vs json), and local
-    // FLUX/ComfyUI runs on CPU (too slow). Override the fallback backend with
-    // CLONE_FALLBACK_IMAGE_PROVIDER (+ optional CLONE_FALLBACK_IMAGE_MODEL).
-    const fallbackProvider = process.env.CLONE_FALLBACK_IMAGE_PROVIDER || "azure";
-    const fallbackModel = process.env.CLONE_FALLBACK_IMAGE_MODEL;
-    const msg = err instanceof Error ? err.message.split("\n")[0] : String(err);
-    console.warn(
-      `[generatePage] primary provider failed for page ${args.pageNumber} (${msg}); ` +
-        `falling back to ${fallbackProvider}${fallbackModel ? "/" + fallbackModel : ""}`,
-    );
-    const img = await editImage(src, fullPrompt, {
-      provider: fallbackProvider as never,
-      ...(fallbackModel ? { model: fallbackModel } : {}),
-      trace: { ...trace, caller: "worker/reproduce-fallback" },
-    });
-    return { base64: pick(img) };
-  }
+  // editImage runs the provider fallback chain (IMAGE_PROVIDER ->
+  // IMAGE_FALLBACK_PROVIDERS, e.g. kingcong -> diaflow -> azure/gpt-image-2)
+  // internally, so one provider rejecting a page routes to the next instead of
+  // failing. Only if EVERY provider fails does this throw (caller then skips).
+  const img = await editImage(resolveR2Url(args.sourceImageUrl), fullPrompt, {
+    trace: { caller: "worker/reproduce", entityType: "cloneJob", entityId: args.jobId },
+  });
+  return { base64: img.base64 || img.dataUrl?.split(",")[1] || "" };
 }
 
 export const downloadDeps = { fetchPdf, uploadToR2 };
