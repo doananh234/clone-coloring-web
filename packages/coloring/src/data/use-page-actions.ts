@@ -7,16 +7,19 @@ import type { BookColoringPage } from "./types";
 
 const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (staging).";
 
+type PolledJob = { resultUrl?: string; resultId?: string; error?: string };
+
 /**
- * Poll a background GenerationJob until it finishes → returns its resultUrl.
- * Colorize and animate now run as async jobs on the worker (KingCong/Veo calls
- * exceed Cloudflare's ~100s limit → used to 500/524), so the POST returns a
- * jobId and we watch the job here. Long window because Veo video takes ~3–8 min.
+ * Poll a background GenerationJob until it finishes → returns the done job
+ * (resultUrl + resultId). Colorize/animate/regen run as async jobs on the worker
+ * (KingCong/Veo/img2img calls exceed Cloudflare's ~100s limit → used to 500/524),
+ * so the POST returns a jobId and we watch the job here. Long window because Veo
+ * video takes ~3–8 min.
  */
-async function pollGenerationJob(jobId: string, maxMs = 15 * 60 * 1000): Promise<string> {
+async function pollGenerationJob(jobId: string, maxMs = 15 * 60 * 1000): Promise<PolledJob> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < maxMs) {
-    let job: { status?: string; resultUrl?: string; error?: string } | undefined;
+    let job: (PolledJob & { status?: string }) | undefined;
     try {
       const res = await httpGet<{ job?: typeof job }>(
         `${COLORING_API_BASE}/generation-jobs/${encodeURIComponent(jobId)}`,
@@ -25,7 +28,7 @@ async function pollGenerationJob(jobId: string, maxMs = 15 * 60 * 1000): Promise
     } catch {
       // 404 (row not visible yet) / transient network → keep polling.
     }
-    if (job?.status === "done") return job.resultUrl ?? "";
+    if (job?.status === "done") return { resultUrl: job.resultUrl, resultId: job.resultId };
     if (job?.status === "error") throw new Error(job.error || "Tác vụ nền thất bại.");
     await new Promise((r) => setTimeout(r, 4000));
   }
@@ -58,10 +61,17 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
     artStyleId?: string,
     instructions?: string,
   ): Promise<{ url: string; cameraView?: string; viaJob: false }> => {
-    const res = await httpPost<{ url?: string; cameraView?: string }>(
+    const res = await httpPost<{ jobId?: string; url?: string; cameraView?: string }>(
       `${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}/pages/${encodeURIComponent(pageId)}/regen`,
       { newAngle, artStyleId: artStyleId || undefined, instructions: instructions || undefined },
     );
+    // Async: POST returns a jobId; poll for the candidate (worker stashes the
+    // camera view in resultId). Old sync path returned url/cameraView directly.
+    if (res?.jobId) {
+      const job = await pollGenerationJob(res.jobId);
+      if (!job.resultUrl) throw new Error("Không tạo được bản mới từ ảnh hiện tại.");
+      return { url: job.resultUrl, cameraView: job.resultId, viaJob: false };
+    }
     if (!res?.url) throw new Error("Không tạo được bản mới từ ảnh hiện tại.");
     return { url: res.url, cameraView: res.cameraView, viaJob: false };
   };
@@ -159,7 +169,7 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
         opts ?? {},
       );
       // New async flow returns a jobId; old sync flow returned url directly.
-      const url = res?.jobId ? await pollGenerationJob(res.jobId) : res?.url;
+      const url = res?.jobId ? (await pollGenerationJob(res.jobId)).resultUrl : res?.url;
       if (!url) throw new Error("Không tạo được animation.");
       inval();
       return url;

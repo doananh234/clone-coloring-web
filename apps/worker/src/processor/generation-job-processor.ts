@@ -17,6 +17,7 @@ import {
 } from "@vx/coloring/data/source-covers";
 import type { BookColoringPage } from "@vx/coloring/data/additional-pages";
 import { generateAiCover, buildCoverTypographyPrompt, buildCoverTypographyPromptCompact } from "@vx/server-core/cover-generation";
+import { frameInstruction, pickDifferentCameraView } from "@vx/server-core/ai/prompts";
 import { collectExportPlan, buildExportZip, stableExportUrl, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
 
 type Page = { id?: string; url?: string };
@@ -89,6 +90,21 @@ type AnimatePayload = {
 };
 
 /**
+ * Payload for single-page regen PREVIEW (redraw current line-art, optionally a
+ * new camera angle / B&W style / user edits). Async: image-to-image can exceed
+ * Cloudflare's ~100s limit (error 524). Produces a candidate uploaded to R2; the
+ * book is NOT modified (the client applies the chosen candidate separately).
+ */
+type RegenPayload = {
+  bookId: string;
+  pageId: string;
+  newAngle?: boolean;
+  artStyleId?: string;
+  instructions?: string;
+  provider?: "kingcong" | "diaflow" | "litellm" | "azure";
+};
+
+/**
  * Process one background GenerationJob. Sets status running → done/error and
  * stores the result. Errors are recorded on the row AND rethrown so BullMQ marks
  * the queue job failed (visible in the admin queue board).
@@ -116,6 +132,8 @@ export async function processGenerationJob(generationJobId: string): Promise<voi
       await runColorize(job.id, job.payload as unknown as ColorizePayload);
     } else if (job.type === "animate") {
       await runAnimate(job.id, job.payload as unknown as AnimatePayload);
+    } else if (job.type === "regen") {
+      await runRegen(job.id, job.payload as unknown as RegenPayload);
     } else {
       throw new Error(`Unknown generation job type: ${job.type}`);
     }
@@ -256,6 +274,105 @@ async function runColorize(genJobId: string, payload: ColorizePayload): Promise<
   await prisma.generationJob.update({
     where: { id: genJobId },
     data: { status: "done", resultUrl: coloredUrl },
+  });
+}
+
+/**
+ * Regen one page → a PREVIEW candidate (redraw the current line-art, optionally a
+ * new camera angle, a B&W style to follow, and user edits). Uploads to R2 and
+ * sets resultUrl; the book is untouched. Verbatim port of the former sync
+ * /api/books/[bookId]/pages/[pageId]/regen handler.
+ */
+async function runRegen(genJobId: string, payload: RegenPayload): Promise<void> {
+  const { bookId, pageId, artStyleId, provider } = payload;
+  const newAngle = Boolean(payload.newAngle);
+  const instructions = typeof payload.instructions === "string" ? payload.instructions.trim() : "";
+
+  const book = await prisma.book.findUnique({ where: { id: bookId } });
+  if (!book) throw new Error("Book not found");
+  const pages = (book.coloringPages as unknown as BookColoringPage[]) ?? [];
+  const page = pages.find((p) => p.id === pageId);
+  if (!page?.url) throw new Error("Page not found");
+
+  // Optional B&W art style to follow: its reference image(s) go in as SECONDARY
+  // references (the current page stays PRIMARY so the scene is preserved).
+  let styleDirective = "";
+  let styleRefUrls: string[] = [];
+  if (artStyleId) {
+    const style = await prisma.artStyle.findUnique({
+      where: { id: artStyleId },
+      select: { referenceImages: true, generationDirective: true },
+    });
+    if (style) {
+      styleDirective = style.generationDirective ?? "";
+      const refs = (style.referenceImages as { url?: string }[] | null) ?? [];
+      styleRefUrls = refs
+        .map((r) => r?.url)
+        .filter((u): u is string => Boolean(u))
+        .slice(0, 2)
+        .map((u) => resolveR2Url(u));
+    }
+  }
+
+  const anchorUrl = resolveR2Url(page.url);
+  const cameraView = newAngle ? pickDifferentCameraView(undefined) : undefined;
+  const lineArt = "Clean black-and-white line art only (no color, no shading).";
+
+  let prompt: string;
+  if (styleRefUrls.length) {
+    const n = 1 + styleRefUrls.length;
+    const styleLabel = styleRefUrls.length > 1 ? `IMAGE 2-${n}` : "IMAGE 2";
+    const task = cameraView
+      ? `Redraw IMAGE 1 from a ${cameraView} CAMERA VIEW — the composition, framing and viewpoint MUST change SIGNIFICANTLY to fit this new angle (do NOT keep the original camera position). Keep the same characters, objects and scene, only the viewpoint changes`
+      : `Redraw IMAGE 1 keeping the SAME scene, composition and camera angle`;
+    prompt =
+      `You are given ${n} images IN THIS EXACT ORDER:\n` +
+      `- IMAGE 1 = SOURCE PAGE: the coloring page to redraw. Keep its scene, characters and objects.\n` +
+      `- ${styleLabel} = STYLE REFERENCE(S): black-and-white line-art sample(s). Copy ONLY their drawing STYLE (stroke weight, curve treatment, spacing, motif treatment). Do NOT copy their subject, scene or content.\n\n` +
+      `TASK: ${task}, in the black-and-white line-art style of ${styleLabel}. ${lineArt} ` +
+      `STRICT: Do NOT redraw, reproduce or borrow the CONTENT of ${styleLabel} — take its STYLE only.` +
+      (styleDirective ? `\n\nStyle directive (applies to the STYLE of ${styleLabel} only):\n${styleDirective}` : "");
+    const frame = frameInstruction();
+    if (frame) prompt += `\n\n${frame}`;
+  } else {
+    const task = cameraView
+      ? `Redraw this black-and-white coloring page from a ${cameraView} CAMERA VIEW — the composition, framing and viewpoint MUST change SIGNIFICANTLY to fit this new angle (do NOT keep the original camera position). Keep the SAME characters, objects and scene, only the viewpoint changes`
+      : `Redraw this black-and-white coloring page keeping the SAME scene, composition, characters, objects and camera angle`;
+    prompt =
+      `${task}. ` +
+      `CRITICAL — PRESERVE THE ORIGINAL LINE-ART STYLE: keep the EXACT same stroke weight, line thickness, curve treatment and drawing technique as the source image. Do NOT restyle, do NOT redesign, do NOT change the artistic style. ${lineArt} ` +
+      `Output must be 1 single frame, not a split panel or grid layout.`;
+    const frame = frameInstruction();
+    if (frame) prompt += `\n\n${frame}`;
+  }
+
+  if (instructions) {
+    prompt += `\n\nUSER-REQUESTED CHANGES (apply these exactly to the redrawn page, they take priority): ${instructions}`;
+  }
+
+  const img = await editImage(anchorUrl, prompt, {
+    provider,
+    referenceImageUrls: styleRefUrls.length ? styleRefUrls : undefined,
+    trace: { caller: "worker/generation/regen", entityType: "book", entityId: bookId },
+  });
+  const base64 = img.base64 || img.dataUrl?.split(",")[1] || "";
+  if (!base64) throw new Error("editImage returned no image data");
+
+  const r2Config = getR2Config();
+  const r2Client = createR2Client(r2Config);
+  const key = `assets/${bookId}/pages/${pageId}-regen-${crypto.randomUUID()}.png`;
+  const { url } = await uploadToR2({
+    client: r2Client,
+    config: r2Config,
+    key,
+    body: Buffer.from(base64, "base64"),
+    contentType: "image/png",
+  });
+
+  // Stash cameraView in resultId (free text field) so the client can label the preview.
+  await prisma.generationJob.update({
+    where: { id: genJobId },
+    data: { status: "done", resultUrl: url, resultId: cameraView ?? null },
   });
 }
 
