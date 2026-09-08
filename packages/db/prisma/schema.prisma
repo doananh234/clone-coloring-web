@@ -317,6 +317,16 @@ model GenerationJob {
   @@index([createdAt])
 }
 
+// Generic server-side settings (key/value JSON). First use: "imageProviderConfig"
+// = { primary, fallbacks[] } for the runtime-editable image-gen provider chain,
+// so operators can reorder primary/fallback providers from the UI without a
+// redeploy. Read by both admin and worker via @vx/db loadImageProviderConfig().
+model AppSetting {
+  key       String   @id
+  value     Json     @default(dbgenerated("'{}'"))
+  updatedAt DateTime @updatedAt
+}
+
 model Font {
   id        String   @id @default(cuid())
   name      String

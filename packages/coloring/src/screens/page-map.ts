@@ -33,6 +33,7 @@ export function resolvePageTitle(slug: string[]): string {
       if (sub === "users") return "Người dùng & quyền";
       if (sub === "ai-cost") return "Chi phí AI & logs";
       if (sub === "settings") return "Cài đặt hệ thống";
+      if (sub === "image-providers") return "Ưu tiên Image Gen";
       return "Kênh bán & hệ thống";
     case "etsy":
       return "Etsy listings";

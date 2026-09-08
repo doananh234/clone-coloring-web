@@ -1,4 +1,6 @@
 import pino from "pino";
+import { setImageProviderConfigResolver } from "@vx/server-core/ai";
+import { loadImageProviderConfig } from "@vx/db";
 import { createWorker, createGenerationWorker } from "./queue";
 import "./db";
 import { reconcileOnBoot } from "./env";
@@ -7,6 +9,10 @@ import { processGenerationJob } from "./processor/generation-job-processor";
 import { reconcileStaleJobs } from "./reconciler";
 
 const logger = pino({ transport: { target: "pino-pretty" } });
+
+// Feed the DB-backed image provider order into server-core's chain so the worker
+// honors UI-changed primary/fallback priority without a redeploy (env is default).
+setImageProviderConfigResolver(loadImageProviderConfig);
 
 async function main() {
   logger.info("worker booting");

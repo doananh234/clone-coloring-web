@@ -66,3 +66,9 @@ export {
   readCloneJobStatusCounts,
 } from "./clone-status-counts";
 export { dbProvider, isSqlite, ci, cieq, jsonPath } from "./sql-compat";
+export {
+  loadImageProviderConfig,
+  saveImageProviderConfig,
+  invalidateImageProviderConfigCache,
+  type ImageProviderConfig,
+} from "./settings/image-provider-config";

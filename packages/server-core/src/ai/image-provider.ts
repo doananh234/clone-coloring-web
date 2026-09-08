@@ -39,8 +39,43 @@ function resolveProviderName(override?: string): string {
   return (override || process.env.IMAGE_PROVIDER || "azure").toLowerCase();
 }
 
+/** Selectable image backends with display labels — single source for the UI/API. */
+export const AVAILABLE_IMAGE_PROVIDERS: { name: string; label: string }[] = [
+  { name: "kingcong", label: "KingCong (browser)" },
+  { name: "diaflow", label: "Diaflow" },
+  { name: "gemini-web", label: "Gemini Web (image)" },
+  { name: "azure", label: "Azure GPT-image" },
+  { name: "litellm", label: "LiteLLM" },
+  { name: "vertex", label: "Vertex AI" },
+  { name: "gemini", label: "Gemini (API)" },
+];
+const KNOWN_PROVIDERS = new Set(AVAILABLE_IMAGE_PROVIDERS.map((p) => p.name));
+
+// --- Runtime provider config (injected; keeps server-core free of @vx/db) -----
+// The app layer (admin instrumentation + worker boot) registers a resolver that
+// reads the DB-backed provider order (AppSetting "imageProviderConfig"), so the
+// primary + fallback chain can be reordered from the UI without a redeploy.
+export type ImageProviderConfigLike = { primary?: string; fallbacks?: string[] };
+let configResolver: (() => Promise<ImageProviderConfigLike | null>) | null = null;
+// Last-resolved effective primary — lets usesCompactPrompts() (sync, called
+// before the async chain) reflect the DB primary, not just env.
+let cachedPrimary = "";
+
+export function setImageProviderConfigResolver(
+  fn: () => Promise<ImageProviderConfigLike | null>,
+): void {
+  configResolver = fn;
+  // Warm cachedPrimary so the compact-prompt decision is right soon after boot.
+  void fn()
+    .then((c) => {
+      if (c?.primary) cachedPrimary = c.primary.toLowerCase();
+    })
+    .catch(() => {});
+}
+
 export function usesCompactPrompts(override?: string): boolean {
-  return resolveProviderName(override) === "kingcong";
+  const primary = override?.toLowerCase() || cachedPrimary || (process.env.IMAGE_PROVIDER || "azure").toLowerCase();
+  return primary === "kingcong";
 }
 
 function getProvider(override?: string): ImageProviderInterface {
@@ -88,12 +123,26 @@ function getProvider(override?: string): ImageProviderInterface {
  * backend. Configure the fallbacks with IMAGE_FALLBACK_PROVIDERS (csv, default
  * "diaflow,azure"; "azure" = gpt-image-2). Set it empty for strict single-provider.
  */
-function providerChain(override?: string): string[] {
-  const primary = resolveProviderName(override);
-  const fallbacks = (process.env.IMAGE_FALLBACK_PROVIDERS ?? "diaflow,azure")
-    .split(",")
+async function resolveChain(override?: string): Promise<string[]> {
+  // DB config (if a resolver is registered) wins over env; a per-call override
+  // still wins over both (single operator-chosen provider).
+  let cfg: ImageProviderConfigLike | null = null;
+  if (configResolver) {
+    try {
+      cfg = await configResolver();
+    } catch {
+      cfg = null;
+    }
+  }
+  const envPrimary = (process.env.IMAGE_PROVIDER || "azure").toLowerCase();
+  const primary = (override || cfg?.primary || envPrimary).toLowerCase();
+  const rawFallbacks = cfg?.fallbacks?.length
+    ? cfg.fallbacks
+    : (process.env.IMAGE_FALLBACK_PROVIDERS ?? "diaflow,azure").split(",");
+  const fallbacks = rawFallbacks
     .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
+    .filter((s) => s && KNOWN_PROVIDERS.has(s));
+  cachedPrimary = primary;
   return [...new Set([primary, ...fallbacks])];
 }
 
@@ -138,7 +187,7 @@ async function withProviderFallback(
   run: (p: ImageProviderInterface) => Promise<GeneratedImage>,
   label: string,
 ): Promise<GeneratedImage> {
-  const chain = providerChain(override);
+  const chain = await resolveChain(override);
   // Deprioritize tripped providers to the back so healthy fallbacks run first
   // (a dead KingCong no longer eats the request budget before diaflow is tried).
   const live = chain.filter((n) => !isCircuitOpen(n));
