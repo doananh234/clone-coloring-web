@@ -27,6 +27,27 @@
   cursor: not-allowed;
   transform: none;
 }
+/* Loading state: a button awaiting an async action shows a spinner and blocks
+   further clicks (prevents spam-clicking when it isn't obvious work is running). */
+.motio-theme .mo-btn[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.7;
+}
+.motio-theme .mo-btn__spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  display: inline-block;
+  animation: mo-spin 0.6s linear infinite;
+}
+@keyframes mo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .motio-theme .mo-btn:focus-visible {
   outline: none;
   box-shadow: var(--shadow-glow);

@@ -163,7 +163,7 @@ export function ImageProvidersScreen() {
           {err && <div style={{ color: "var(--danger)", fontSize: 13 }}>{err}</div>}
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <Button disabled={!COLORING_WRITE_ENABLED || !dirty || !primary || save.isPending} onClick={() => save.mutate()}>
+            <Button loading={save.isPending} disabled={!COLORING_WRITE_ENABLED || !dirty || !primary} onClick={() => save.mutate()}>
               {save.isPending ? "Đang lưu…" : "Lưu thay đổi"}
             </Button>
             {dirty && <span style={{ fontSize: 12.5, color: "var(--muted-foreground)" }}>Có thay đổi chưa lưu</span>}
