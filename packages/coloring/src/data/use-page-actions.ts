@@ -1,11 +1,36 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { httpPut, httpPost } from "@vx/core-uikit/api";
+import { httpPut, httpPost, httpGet } from "@vx/core-uikit/api";
 import { COLORING_API_BASE, COLORING_WRITE_ENABLED } from "./config";
 import type { BookColoringPage } from "./types";
 
 const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (staging).";
+
+/**
+ * Poll a background GenerationJob until it finishes → returns its resultUrl.
+ * Colorize and animate now run as async jobs on the worker (KingCong/Veo calls
+ * exceed Cloudflare's ~100s limit → used to 500/524), so the POST returns a
+ * jobId and we watch the job here. Long window because Veo video takes ~3–8 min.
+ */
+async function pollGenerationJob(jobId: string, maxMs = 15 * 60 * 1000): Promise<string> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < maxMs) {
+    let job: { status?: string; resultUrl?: string; error?: string } | undefined;
+    try {
+      const res = await httpGet<{ job?: typeof job }>(
+        `${COLORING_API_BASE}/generation-jobs/${encodeURIComponent(jobId)}`,
+      );
+      job = res?.job;
+    } catch {
+      // 404 (row not visible yet) / transient network → keep polling.
+    }
+    if (job?.status === "done") return job.resultUrl ?? "";
+    if (job?.status === "error") throw new Error(job.error || "Tác vụ nền thất bại.");
+    await new Promise((r) => setTimeout(r, 4000));
+  }
+  throw new Error("Hết thời gian chờ tác vụ nền — thử lại sau ít phút.");
+}
 
 /**
  * Per-page actions on a book's coloring pages, replicating the existing
@@ -122,27 +147,35 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
       put({ coloringPages: pages.filter((p) => p.id !== pageId) }),
     /** Persist a new interior page order (drag-drop reorder → full array). */
     reorderPages: (ordered: BookColoringPage[]) => put({ coloringPages: ordered }),
-    /** Generate a "self-drawing" animation MP4 for one page (via @vx/motion). */
+    /**
+     * Generate a short animation MP4 for one page via the Gemini Veo video API
+     * (image→video). Async: the route enqueues a job (Veo takes ~3–8 min); we
+     * poll until the worker uploads the MP4 and returns its URL.
+     */
     animate: async (pageId: string, opts?: { format?: "9:16" | "1:1" | "16:9"; durationSec?: number }): Promise<string> => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
-      const res = await httpPost<{ url?: string }>(
+      const res = await httpPost<{ jobId?: string; url?: string }>(
         `${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}/pages/${encodeURIComponent(pageId)}/animate`,
         opts ?? {},
       );
-      if (!res?.url) throw new Error("Không tạo được animation.");
+      // New async flow returns a jobId; old sync flow returned url directly.
+      const url = res?.jobId ? await pollGenerationJob(res.jobId) : res?.url;
+      if (!url) throw new Error("Không tạo được animation.");
       inval();
-      return res.url;
+      return url;
     },
-    /** Colorize one page with a coloring style + optional color variant. */
+    /** Colorize one page with a coloring style + optional color variant (async job). */
     colorize: async (pageId: string, pageUrl: string, styleId: string, variantId?: string | null) => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
-      await httpPost(`${COLORING_API_BASE}/coloring-styles/colorize`, {
+      const res = await httpPost<{ jobId?: string }>(`${COLORING_API_BASE}/coloring-styles/colorize`, {
         imageUrl: pageUrl,
         coloringStyleId: styleId,
         coloringVariantId: variantId ?? undefined,
         bookId,
         pageId,
       });
+      // Async: wait for the worker to finish so inval() shows the colored result.
+      if (res?.jobId) await pollGenerationJob(res.jobId);
       inval();
     },
   };

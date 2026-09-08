@@ -188,7 +188,7 @@ export function PageActionsRow({
         </Button>
         {!isSC && (
           <Button variant="outline" size="sm" disabled={disabled || busy !== null}
-            title="Tạo video 'tự vẽ' (MP4 9:16) cho trang này — cần chạy service @vx/motion"
+            title="Tạo video animation (MP4 9:16) cho trang này bằng Gemini Veo — chạy nền, mất ~3–8 phút"
             onClick={run("anim", async () => { await actions.animate(page.id, { format: "9:16", durationSec: 6 }); })}>
             <Icon name="sparkles" size={15} /> {busy === "anim" ? "Đang tạo…" : page.animationUrl ? "Tạo lại MP4" : "Tạo animation"}
           </Button>
