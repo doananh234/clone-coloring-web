@@ -7,12 +7,15 @@ import {
   generateCoverSource,
   editImage,
   colorizeImage,
+  videoFromImage,
+  downloadVideo,
   usesCompactPrompts,
 } from "@vx/server-core/ai";
 import {
   upsertColoredSourceCover,
   type SourceCover as ColoringSourceCover,
 } from "@vx/coloring/data/source-covers";
+import type { BookColoringPage } from "@vx/coloring/data/additional-pages";
 import { generateAiCover, buildCoverTypographyPrompt, buildCoverTypographyPromptCompact } from "@vx/server-core/cover-generation";
 import { collectExportPlan, buildExportZip, stableExportUrl, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
 
@@ -73,6 +76,19 @@ type ColorizePayload = {
 };
 
 /**
+ * Payload for the "animate one page" flow. Generates a short video from the page
+ * image via Gemini Veo (video-provider-gemini-web). Always async — Veo renders
+ * take ~3–8 min, far beyond any request/Cloudflare timeout.
+ */
+type AnimatePayload = {
+  bookId: string;
+  pageId: string;
+  format?: "9:16" | "1:1" | "16:9";
+  durationSec?: number;
+  prompt?: string;
+};
+
+/**
  * Process one background GenerationJob. Sets status running → done/error and
  * stores the result. Errors are recorded on the row AND rethrown so BullMQ marks
  * the queue job failed (visible in the admin queue board).
@@ -98,6 +114,8 @@ export async function processGenerationJob(generationJobId: string): Promise<voi
       await runAiCover(job.id, job.bookId, job.payload as unknown as AiCoverPayload);
     } else if (job.type === "colorize") {
       await runColorize(job.id, job.payload as unknown as ColorizePayload);
+    } else if (job.type === "animate") {
+      await runAnimate(job.id, job.payload as unknown as AnimatePayload);
     } else {
       throw new Error(`Unknown generation job type: ${job.type}`);
     }
@@ -238,6 +256,55 @@ async function runColorize(genJobId: string, payload: ColorizePayload): Promise<
   await prisma.generationJob.update({
     where: { id: genJobId },
     data: { status: "done", resultUrl: coloredUrl },
+  });
+}
+
+/**
+ * Animate one page → short MP4 via Gemini Veo (image→video). Downloads the
+ * rendered clip off the generator host, re-uploads it to our R2 (stable key),
+ * and writes animationUrl onto the page. Sets resultUrl for the drawer preview.
+ */
+async function runAnimate(genJobId: string, payload: AnimatePayload): Promise<void> {
+  const { bookId, pageId, durationSec = 6, prompt } = payload;
+
+  const book = await prisma.book.findUnique({ where: { id: bookId } });
+  if (!book) throw new Error("Book not found");
+  const pages = (book.coloringPages as unknown as BookColoringPage[]) ?? [];
+  const idx = pages.findIndex((p) => p.id === pageId);
+  if (idx === -1) throw new Error("Page not found");
+
+  // Prefer the colored version if present (richer motion), else the line-art.
+  const src = pages[idx].coloredUrl
+    ? resolveR2Url(pages[idx].coloredUrl!)
+    : resolveR2Url(pages[idx].url);
+
+  const motionPrompt =
+    prompt?.trim() ||
+    `Animate this coloring illustration into a short, gentle looping video (~${durationSec}s). ` +
+      `Add subtle, playful motion: the main subject blinks and moves gently, with soft ambient ` +
+      `motion in the background (leaves sway, light shimmer). Keep the original art style, colors, ` +
+      `and composition intact — do not redraw or change the characters.`;
+
+  const videoUrl = await videoFromImage(src, motionPrompt);
+  const { buffer, mimeType } = await downloadVideo(videoUrl);
+
+  const r2Config = getR2Config();
+  const r2Client = createR2Client(r2Config);
+  const { url } = await uploadToR2({
+    client: r2Client,
+    config: r2Config,
+    key: `assets/${bookId}/anim/${pageId}.mp4`,
+    body: buffer,
+    contentType: mimeType || "video/mp4",
+  });
+
+  const bustUrl = `${url}?v=${Date.now()}`;
+  const updated = pages.map((p, i) => (i === idx ? { ...p, animationUrl: bustUrl } : p));
+  await prisma.book.update({ where: { id: bookId }, data: { coloringPages: updated as never } });
+
+  await prisma.generationJob.update({
+    where: { id: genJobId },
+    data: { status: "done", resultUrl: url },
   });
 }
 

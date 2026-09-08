@@ -97,27 +97,76 @@ function providerChain(override?: string): string[] {
   return [...new Set([primary, ...fallbacks])];
 }
 
+// --- Provider circuit breaker -------------------------------------------------
+// A provider that keeps failing (e.g. KingCong timing out for 600s while its
+// backend is down) would otherwise be tried FIRST on every request, burning the
+// whole Cloudflare ~100s budget before the fallback runs — surfacing as 524.
+// The breaker tracks consecutive failures per provider; once a provider trips it
+// is DEPRIORITIZED to the back of the chain for a cooldown window so healthy
+// fallbacks run first. It is never fully removed (still tried as last resort),
+// and any success closes it again (half-open recovery after the cooldown).
+// Per-process, in-memory (module state persists across requests in the long-
+// running Next.js/worker node server). Tune via env:
+//   IMAGE_BREAKER_THRESHOLD    consecutive failures to trip (default 2)
+//   IMAGE_BREAKER_COOLDOWN_MS  how long to deprioritize (default 120000)
+//   IMAGE_BREAKER_DISABLED=true disable entirely
+type BreakerState = { failures: number; openUntil: number };
+const breaker = new Map<string, BreakerState>();
+const BREAKER_THRESHOLD = Number(process.env.IMAGE_BREAKER_THRESHOLD) || 2;
+const BREAKER_COOLDOWN_MS = Number(process.env.IMAGE_BREAKER_COOLDOWN_MS) || 120_000;
+const BREAKER_DISABLED = process.env.IMAGE_BREAKER_DISABLED === "true";
+
+function isCircuitOpen(name: string): boolean {
+  if (BREAKER_DISABLED) return false;
+  const s = breaker.get(name);
+  return !!s && s.openUntil > Date.now();
+}
+
+function recordProviderResult(name: string, ok: boolean): void {
+  if (ok) {
+    breaker.delete(name);
+    return;
+  }
+  const s = breaker.get(name) ?? { failures: 0, openUntil: 0 };
+  s.failures += 1;
+  if (s.failures >= BREAKER_THRESHOLD) s.openUntil = Date.now() + BREAKER_COOLDOWN_MS;
+  breaker.set(name, s);
+}
+
 async function withProviderFallback(
   override: string | undefined,
   run: (p: ImageProviderInterface) => Promise<GeneratedImage>,
   label: string,
 ): Promise<GeneratedImage> {
   const chain = providerChain(override);
+  // Deprioritize tripped providers to the back so healthy fallbacks run first
+  // (a dead KingCong no longer eats the request budget before diaflow is tried).
+  const live = chain.filter((n) => !isCircuitOpen(n));
+  const tripped = chain.filter((n) => isCircuitOpen(n));
+  const order = [...live, ...tripped];
+  if (tripped.length) {
+    console.warn(
+      `[image:${label}] circuit open for [${tripped.join(", ")}] — deprioritized; trying [${live.join(", ") || "none"}] first`,
+    );
+  }
   let lastErr: unknown;
-  for (let i = 0; i < chain.length; i++) {
-    const name = chain[i];
+  for (let i = 0; i < order.length; i++) {
+    const name = order[i];
     try {
-      return await run(getProvider(name));
+      const res = await run(getProvider(name));
+      recordProviderResult(name, true);
+      return res;
     } catch (err) {
+      recordProviderResult(name, false);
       lastErr = err;
       const msg = err instanceof Error ? err.message.split("\n")[0] : String(err);
-      const more = i < chain.length - 1 ? ` — routing to "${chain[i + 1]}"` : " (last provider in chain)";
+      const more = i < order.length - 1 ? ` — routing to "${order[i + 1]}"` : " (last provider in chain)";
       console.warn(`[image:${label}] provider "${name}" failed: ${msg}${more}`);
     }
   }
   throw lastErr instanceof Error
     ? lastErr
-    : new Error(`all image providers failed (${chain.join(" -> ")}): ${String(lastErr)}`);
+    : new Error(`all image providers failed (${order.join(" -> ")}): ${String(lastErr)}`);
 }
 
 /**

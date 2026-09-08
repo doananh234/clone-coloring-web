@@ -46,6 +46,13 @@ export {
   type ColoringPageOptions,
 } from "./image-provider";
 
+// Video generation (Gemini Veo, browser-driven, OpenAI-compatible)
+export {
+  generateVideo,
+  videoFromImage,
+  downloadVideo,
+} from "./video-provider-gemini-web";
+
 // Prompt Templates
 export {
   EXTRACTION_PROMPT,
