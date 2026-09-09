@@ -8,6 +8,7 @@
     "./components": "./src/components/index.ts",
     "./screens": "./src/screens/index.ts",
     "./data/page-variants": "./src/data/page-variants.ts",
+    "./data/detect-misregen-pages": "./src/data/detect-misregen-pages.ts",
     "./data/additional-pages": "./src/data/additional-pages.ts",
     "./data/page-type": "./src/data/page-type.ts",
     "./data/cover-candidates": "./src/data/cover-candidates.ts",
