@@ -23,6 +23,16 @@ import type { BookColoringPage } from "../../data/types";
  * GET /api/page-regen-prompt, and what the operator leaves in the box replaces
  * it outright — the same contract as the cover dialog.
  */
+
+/**
+ * Which rule set the regen prompt uses. "title" = a title page (illustration
+ * plus title lettering, redrawn ~55% different); "text" = a text-only utility
+ * page (copyright, table of contents, dedication, "this book belongs to"),
+ * reproduced faithfully. Declared here rather than imported from server-core so
+ * that server-only package stays out of the client bundle.
+ */
+type IntroVariant = "title" | "text";
+
 export function IntroActionsRow({
   bookId,
   summaryPages,
@@ -41,23 +51,31 @@ export function IntroActionsRow({
   const [zoom, setZoom] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
   const [promptText, setPromptText] = useState("");
-  const [defaultPrompt, setDefaultPrompt] = useState("");
+  /** Server default per variant, cached so switching back does not refetch. */
+  const [defaultPrompts, setDefaultPrompts] = useState<Partial<Record<IntroVariant, string>>>({});
+  const [variant, setVariant] = useState<IntroVariant>("title");
   const [loadingPrompt, setLoadingPrompt] = useState(false);
   const disabled = !COLORING_WRITE_ENABLED;
 
-  /** Fetch the server's own regen prompt so the box shows what really gets sent. */
-  const openPrompt = async () => {
+  /**
+   * Open the dialog on variant `v`, fetching the server's own prompt for it so
+   * the box shows what really gets sent.
+   */
+  const loadPrompt = async (v: IntroVariant) => {
     setErr(null);
     setPromptOpen(true);
-    if (defaultPrompt) {
-      setPromptText(defaultPrompt);
+    setVariant(v);
+    const cached = defaultPrompts[v];
+    if (cached) {
+      setPromptText(cached);
       return;
     }
     setLoadingPrompt(true);
     try {
-      const res = await httpGet<{ prompt?: string }>(`${COLORING_API_BASE}/page-regen-prompt`);
+      const qs = new URLSearchParams({ variant: v, bookId });
+      const res = await httpGet<{ prompt?: string }>(`${COLORING_API_BASE}/intro-regen-prompt?${qs}`);
       const p = res?.prompt ?? "";
-      setDefaultPrompt(p);
+      setDefaultPrompts((prev) => ({ ...prev, [v]: p }));
       setPromptText(p);
     } catch {
       setErr("Không tải được prompt mặc định — bạn vẫn có thể tự nhập.");
@@ -108,10 +126,12 @@ export function IntroActionsRow({
     }
   };
 
+  const activeDefault = defaultPrompts[variant] ?? "";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Vẽ lại trang intro — sửa được prompt" onClick={openPrompt}>
+        <Button variant="outline" size="sm" disabled={disabled || busy !== null} title="Vẽ lại trang intro — sửa được prompt" onClick={() => loadPrompt(variant)}>
           <Icon name="sparkles" size={15} /> Regen
         </Button>
         <Button variant="outline" size="sm" disabled={disabled || busy !== null} onClick={remove} style={{ marginLeft: "auto", color: "var(--danger)" }}>
@@ -131,7 +151,7 @@ export function IntroActionsRow({
             <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Bấm ảnh để phóng to. “Áp dụng” để dùng cho trang này, “Tạo lại” để sửa prompt và thử bản khác.</div>
           </div>
           <Button size="sm" disabled={busy !== null} onClick={applyCand}>{busy === "apply" ? "Đang áp dụng…" : "Áp dụng"}</Button>
-          <Button variant="outline" size="sm" disabled={busy !== null} onClick={openPrompt}>Tạo lại</Button>
+          <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => loadPrompt(variant)}>Tạo lại</Button>
           <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => setCand(null)}>Bỏ</Button>
         </div>
       )}
@@ -162,8 +182,29 @@ export function IntroActionsRow({
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Regen trang intro — prompt</h3>
             </div>
             <p style={{ fontSize: 12.5, color: "var(--muted-foreground)", margin: "0 0 10px" }}>
-              Đây là prompt hệ thống sẽ gửi đi. Sửa thoải mái — nội dung trong ô sẽ <strong>thay thế hoàn toàn</strong> prompt mặc định.
+              Chọn loại trang, rồi sửa prompt nếu cần. Nội dung trong ô sẽ <strong>thay thế hoàn toàn</strong> prompt mặc định.
             </p>
+            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+              {(
+                [
+                  { v: "title" as const, label: "Trang tựa có hình", hint: "Có minh hoạ + chữ tựa — vẽ lại khác ~55%" },
+                  { v: "text" as const, label: "Trang chữ thuần", hint: "Chỉ có chữ (bản quyền, mục lục…) — chép lại trung thành" },
+                ]
+              ).map(({ v, label, hint }) => (
+                <Button
+                  key={v}
+                  variant={variant === v ? "primary" : "outline"}
+                  size="sm"
+                  title={hint}
+                  disabled={busy !== null || loadingPrompt}
+                  onClick={() => {
+                    if (v !== variant) void loadPrompt(v);
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
             <textarea
               className="mo-input"
               value={loadingPrompt ? "Đang tải prompt mặc định…" : promptText}
@@ -176,8 +217,8 @@ export function IntroActionsRow({
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={busy !== null || loadingPrompt || !defaultPrompt || promptText === defaultPrompt}
-                onClick={() => setPromptText(defaultPrompt)}
+                disabled={busy !== null || loadingPrompt || !activeDefault || promptText === activeDefault}
+                onClick={() => setPromptText(activeDefault)}
               >
                 Khôi phục mặc định
               </Button>
