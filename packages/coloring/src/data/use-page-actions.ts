@@ -125,7 +125,7 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
      * summaryPages column, so this always takes the id-addressed regen route with
      * target:"summary" — never /reproduce, whose apply step writes coloringPages.
      * `promptOverride` replaces the server's built prompt outright (the dialog
-     * prefills the box from GET /api/page-regen-prompt).
+     * prefills the box from GET /api/intro-regen-prompt).
      */
     genIntroCandidate: async (page: BookColoringPage, promptOverride?: string): Promise<{ url: string }> => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
