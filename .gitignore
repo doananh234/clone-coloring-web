@@ -33,3 +33,6 @@ backups/
 **/.kingcong-session.json
 **/.kingcong-profile/
 .yarn/install-state.gz
+
+# Claude Code personal settings (not shared)
+.claude/settings.local.json
