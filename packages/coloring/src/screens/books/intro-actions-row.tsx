@@ -20,7 +20,7 @@ import type { BookColoringPage } from "../../data/types";
  *
  * Unlike interior regen (which appends optional extra instructions to the
  * server's prompt), this dialog shows the WHOLE prompt, prefilled from
- * GET /api/page-regen-prompt, and what the operator leaves in the box replaces
+ * GET /api/intro-regen-prompt, and what the operator leaves in the box replaces
  * it outright — the same contract as the cover dialog.
  */
 
@@ -64,9 +64,10 @@ export function IntroActionsRow({
   const loadPrompt = async (v: IntroVariant) => {
     setErr(null);
     setPromptOpen(true);
-    setVariant(v);
     const cached = defaultPrompts[v];
     if (cached) {
+      // Cache hit produces v's text immediately — safe to advance the selection.
+      setVariant(v);
       setPromptText(cached);
       return;
     }
@@ -76,9 +77,16 @@ export function IntroActionsRow({
       const res = await httpGet<{ prompt?: string }>(`${COLORING_API_BASE}/intro-regen-prompt?${qs}`);
       const p = res?.prompt ?? "";
       setDefaultPrompts((prev) => ({ ...prev, [v]: p }));
+      // Only advance the selection once v's text has actually landed in the box —
+      // otherwise the highlighted button and the box contents would disagree.
+      setVariant(v);
       setPromptText(p);
     } catch {
+      // Leave `variant` on whatever it was — do NOT let the selection advance to
+      // v, since the box never got v's text. Clear the box too, so the submit
+      // button's `!promptText.trim()` guard blocks sending the wrong rule set.
       setErr("Không tải được prompt mặc định — bạn vẫn có thể tự nhập.");
+      setPromptText("");
     } finally {
       setLoadingPrompt(false);
     }
@@ -184,6 +192,11 @@ export function IntroActionsRow({
             <p style={{ fontSize: 12.5, color: "var(--muted-foreground)", margin: "0 0 10px" }}>
               Chọn loại trang, rồi sửa prompt nếu cần. Nội dung trong ô sẽ <strong>thay thế hoàn toàn</strong> prompt mặc định.
             </p>
+            {err && (
+              <div style={{ padding: "8px 10px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: 12, marginBottom: 10 }}>
+                {err}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
               {(
                 [

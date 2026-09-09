@@ -10,32 +10,37 @@ import { prisma } from "@vx/db";
 import { buildIntroRegenPrompt, type IntroPageVariant } from "@vx/server-core/ai/prompts";
 
 export async function GET(req: NextRequest) {
-  const raw = req.nextUrl.searchParams.get("variant");
-  const variant: IntroPageVariant = raw === "text" ? "text" : "title";
+  try {
+    const raw = req.nextUrl.searchParams.get("variant");
+    const variant: IntroPageVariant = raw === "text" ? "text" : "title";
 
-  // A text page never quotes the book title, so skip the lookup entirely.
-  if (variant === "text") {
-    return NextResponse.json({ prompt: buildIntroRegenPrompt({ variant }) });
+    // A text page never quotes the book title, so skip the lookup entirely.
+    if (variant === "text") {
+      return NextResponse.json({ prompt: buildIntroRegenPrompt({ variant }) });
+    }
+
+    const bookId = req.nextUrl.searchParams.get("bookId");
+    if (!bookId) {
+      return NextResponse.json({ error: "bookId is required for the title variant" }, { status: 400 });
+    }
+
+    const book = await prisma.book.findUnique({
+      where: { id: bookId },
+      select: { title: true, subtitle: true },
+    });
+    if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
+
+    return NextResponse.json({
+      prompt: buildIntroRegenPrompt({
+        variant,
+        title: book.title,
+        subtitle: book.subtitle ?? undefined,
+      }),
+    });
+  } catch (error) {
+    console.error("[intro-regen-prompt GET] Error:", error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
-
-  const bookId = req.nextUrl.searchParams.get("bookId");
-  if (!bookId) {
-    return NextResponse.json({ error: "bookId is required for the title variant" }, { status: 400 });
-  }
-
-  const book = await prisma.book.findUnique({
-    where: { id: bookId },
-    select: { title: true, subtitle: true },
-  });
-  if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
-
-  return NextResponse.json({
-    prompt: buildIntroRegenPrompt({
-      variant,
-      title: book.title ?? undefined,
-      subtitle: book.subtitle ?? undefined,
-    }),
-  });
 }
 
 export const dynamic = "force-dynamic";
