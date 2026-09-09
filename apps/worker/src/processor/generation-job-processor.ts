@@ -17,7 +17,7 @@ import {
 } from "@vx/coloring/data/source-covers";
 import type { BookColoringPage } from "@vx/coloring/data/additional-pages";
 import { generateAiCover, buildCoverTypographyPrompt, buildCoverTypographyPromptCompact } from "@vx/server-core/cover-generation";
-import { frameInstruction, pickDifferentCameraView } from "@vx/server-core/ai/prompts";
+import { frameInstruction, pickDifferentCameraView, buildPageRegenPrompt } from "@vx/server-core/ai/prompts";
 import { collectExportPlan, buildExportZip, stableExportUrl, type ExportInput, type ExportPageLike } from "@vx/server-core/book-export";
 
 type Page = { id?: string; url?: string };
@@ -101,6 +101,10 @@ type RegenPayload = {
   newAngle?: boolean;
   artStyleId?: string;
   instructions?: string;
+  /** Replaces the built prompt outright (intro regen dialog). */
+  promptOverride?: string;
+  /** Which book column the page lives in. Default "page" = coloringPages. */
+  target?: "page" | "summary";
   provider?: "kingcong" | "diaflow" | "litellm" | "azure";
 };
 
@@ -290,7 +294,10 @@ async function runRegen(genJobId: string, payload: RegenPayload): Promise<void> 
 
   const book = await prisma.book.findUnique({ where: { id: bookId } });
   if (!book) throw new Error("Book not found");
-  const pages = (book.coloringPages as unknown as BookColoringPage[]) ?? [];
+  // Intro pages live in summaryPages, interiors in coloringPages — two separate
+  // columns, so the caller says which list the page is in.
+  const column = payload.target === "summary" ? book.summaryPages : book.coloringPages;
+  const pages = (column as unknown as BookColoringPage[]) ?? [];
   const page = pages.find((p) => p.id === pageId);
   if (!page?.url) throw new Error("Page not found");
 
@@ -316,39 +323,20 @@ async function runRegen(genJobId: string, payload: RegenPayload): Promise<void> 
 
   const anchorUrl = resolveR2Url(page.url);
   const cameraView = newAngle ? pickDifferentCameraView(undefined) : undefined;
-  const lineArt = "Clean black-and-white line art only (no color, no shading).";
 
-  let prompt: string;
-  if (styleRefUrls.length) {
-    const n = 1 + styleRefUrls.length;
-    const styleLabel = styleRefUrls.length > 1 ? `IMAGE 2-${n}` : "IMAGE 2";
-    const task = cameraView
-      ? `Redraw IMAGE 1 from a ${cameraView} CAMERA VIEW — the composition, framing and viewpoint MUST change SIGNIFICANTLY to fit this new angle (do NOT keep the original camera position). Keep the same characters, objects and scene, only the viewpoint changes`
-      : `Redraw IMAGE 1 keeping the SAME scene, composition and camera angle`;
-    prompt =
-      `You are given ${n} images IN THIS EXACT ORDER:\n` +
-      `- IMAGE 1 = SOURCE PAGE: the coloring page to redraw. Keep its scene, characters and objects.\n` +
-      `- ${styleLabel} = STYLE REFERENCE(S): black-and-white line-art sample(s). Copy ONLY their drawing STYLE (stroke weight, curve treatment, spacing, motif treatment). Do NOT copy their subject, scene or content.\n\n` +
-      `TASK: ${task}, in the black-and-white line-art style of ${styleLabel}. ${lineArt} ` +
-      `STRICT: Do NOT redraw, reproduce or borrow the CONTENT of ${styleLabel} — take its STYLE only.` +
-      (styleDirective ? `\n\nStyle directive (applies to the STYLE of ${styleLabel} only):\n${styleDirective}` : "");
-    const frame = frameInstruction();
-    if (frame) prompt += `\n\n${frame}`;
-  } else {
-    const task = cameraView
-      ? `Redraw this black-and-white coloring page from a ${cameraView} CAMERA VIEW — the composition, framing and viewpoint MUST change SIGNIFICANTLY to fit this new angle (do NOT keep the original camera position). Keep the SAME characters, objects and scene, only the viewpoint changes`
-      : `Redraw this black-and-white coloring page keeping the SAME scene, composition, characters, objects and camera angle`;
-    prompt =
-      `${task}. ` +
-      `CRITICAL — PRESERVE THE ORIGINAL LINE-ART STYLE: keep the EXACT same stroke weight, line thickness, curve treatment and drawing technique as the source image. Do NOT restyle, do NOT redesign, do NOT change the artistic style. ${lineArt} ` +
-      `Output must be 1 single frame, not a split panel or grid layout.`;
-    const frame = frameInstruction();
-    if (frame) prompt += `\n\n${frame}`;
-  }
-
-  if (instructions) {
-    prompt += `\n\nUSER-REQUESTED CHANGES (apply these exactly to the redrawn page, they take priority): ${instructions}`;
-  }
+  // A promptOverride (from the intro regen dialog, which prefills its box from
+  // GET /api/page-regen-prompt) REPLACES the built prompt outright — same
+  // contract as the cover dialog's override. Style references and camera view
+  // still apply; the override only decides the words.
+  const prompt =
+    payload.promptOverride?.trim() ||
+    buildPageRegenPrompt({
+      cameraView,
+      styleRefCount: styleRefUrls.length,
+      styleDirective,
+      instructions,
+      frame: frameInstruction(),
+    });
 
   const img = await editImage(anchorUrl, prompt, {
     provider,

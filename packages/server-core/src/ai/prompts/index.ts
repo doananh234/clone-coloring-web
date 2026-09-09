@@ -14,6 +14,9 @@ export { buildCoverSourcePrompt } from "./cover-source-prompt-template";
 
 export { buildCoverSourceBWPrompt } from "./cover-source-bw-prompt-template";
 
+export { buildPageRegenPrompt } from "./page-regen-prompt";
+export type { PageRegenPromptOptions } from "./page-regen-prompt";
+
 export {
   ART_STYLE_EXTRACTION_PROMPT,
   buildDirectiveFromProperties,

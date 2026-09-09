@@ -120,6 +120,35 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
         return genFromImage(page.id, newAngle);
       }
     },
+    /**
+     * Regen one INTRO page → a preview candidate. Intro pages live in the book's
+     * summaryPages column, so this always takes the id-addressed regen route with
+     * target:"summary" — never /reproduce, whose apply step writes coloringPages.
+     * `promptOverride` replaces the server's built prompt outright (the dialog
+     * prefills the box from GET /api/page-regen-prompt).
+     */
+    genIntroCandidate: async (page: BookColoringPage, promptOverride?: string): Promise<{ url: string }> => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+      const res = await httpPost<{ jobId?: string; url?: string }>(
+        `${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}/pages/${encodeURIComponent(page.id)}/regen`,
+        { target: "summary", promptOverride: promptOverride?.trim() || undefined },
+      );
+      if (res?.jobId) {
+        const job = await pollGenerationJob(res.jobId);
+        if (!job.resultUrl) throw new Error("Không tạo được bản mới cho trang intro.");
+        return { url: job.resultUrl };
+      }
+      if (!res?.url) throw new Error("Không tạo được bản mới cho trang intro.");
+      return { url: res.url };
+    },
+    /** Apply an intro candidate: point that summaryPages entry at the new image. */
+    applyIntroCandidate: async (summaryPages: BookColoringPage[], pageId: string, url: string) => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+      await put({ summaryPages: summaryPages.map((p) => (p.id === pageId ? { ...p, url } : p)) });
+    },
+    /** Remove one intro page from the book. */
+    removeIntroPage: (summaryPages: BookColoringPage[], pageId: string) =>
+      put({ summaryPages: summaryPages.filter((p) => p.id !== pageId) }),
     /** Apply an image-regen candidate (no job): set the page's line-art url. */
     applyImageCandidate: async (pages: BookColoringPage[], pageId: string, url: string) => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);

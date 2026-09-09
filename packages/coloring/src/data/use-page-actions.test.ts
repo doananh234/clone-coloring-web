@@ -87,3 +87,55 @@ describe("usePageActions — clone-job calls address the page by identity", () =
     expect(httpPost).not.toHaveBeenCalled();
   });
 });
+
+describe("usePageActions — intro pages live in summaryPages, not coloringPages", () => {
+  const intro = page({ id: "sp1", url: "/s1.png", sourcePageNumber: 2 });
+  const otherIntro = page({ id: "sp2", url: "/s2.png", sourcePageNumber: 3 });
+
+  beforeEach(() => {
+    httpPost.mockReset();
+    httpPut.mockReset();
+    httpGet.mockReset();
+    httpPost.mockResolvedValue({ jobId: "job-1" });
+    httpGet.mockResolvedValue({ job: { status: "done", resultUrl: "https://r2/intro-regen.png" } });
+    httpPut.mockResolvedValue({});
+  });
+
+  it("genIntroCandidate regens through the id-addressed route with the summary target", async () => {
+    // Never /reproduce: an intro page's clone-job counterpart is not in the
+    // book's interior array, and the candidate must not touch coloringPages.
+    const a = usePageActions("b1", "job1");
+    const r = await a.genIntroCandidate(intro);
+
+    expect(urlOf(httpPost.mock.calls[0])).toContain("/books/b1/pages/sp1/regen");
+    expect(bodyOf(httpPost.mock.calls[0])).toMatchObject({ target: "summary" });
+    expect(r.url).toBe("https://r2/intro-regen.png");
+  });
+
+  it("genIntroCandidate sends the edited prompt as a full override", async () => {
+    const a = usePageActions("b1", "job1");
+    await a.genIntroCandidate(intro, "Redraw it snowy.");
+
+    expect(bodyOf(httpPost.mock.calls[0])).toMatchObject({ promptOverride: "Redraw it snowy." });
+  });
+
+  it("applyIntroCandidate writes summaryPages and leaves the other intro page alone", async () => {
+    const a = usePageActions("b1", "job1");
+    await a.applyIntroCandidate([intro, otherIntro], "sp1", "https://r2/new.png");
+
+    const body = httpPut.mock.calls[0][1] as { summaryPages: { id: string; url: string }[] };
+    expect(Object.keys(body)).toEqual(["summaryPages"]);
+    expect(body.summaryPages).toEqual([
+      { id: "sp1", url: "https://r2/new.png", sourcePageNumber: 2 },
+      { id: "sp2", url: "/s2.png", sourcePageNumber: 3 },
+    ]);
+  });
+
+  it("removeIntroPage drops just that page from summaryPages", async () => {
+    const a = usePageActions("b1", "job1");
+    await a.removeIntroPage([intro, otherIntro], "sp1");
+
+    const body = httpPut.mock.calls[0][1] as { summaryPages: { id: string }[] };
+    expect(body.summaryPages.map((p) => p.id)).toEqual(["sp2"]);
+  });
+});
