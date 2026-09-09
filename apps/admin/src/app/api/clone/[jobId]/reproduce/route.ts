@@ -4,7 +4,7 @@ import { pickDifferentCameraView, type CameraView } from "@vx/server-core/ai/pro
 import { getR2Config, createR2Client } from "@vx/server-core/r2";
 import { flushLangfuse } from "@vx/server-core/langfuse";
 import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
-import { generateVariation, patchJobPage, updateBookPageUrl } from "./helpers";
+import { generateVariation, patchJobPage, updateBookPageUrl, updateBookPageUrlById } from "./helpers";
 import { mirrorUrlToSelectedVariant } from "@vx/coloring/data/page-variants";
 
 export const maxDuration = 300;
@@ -133,9 +133,20 @@ async function reproduceSinglePage(
   apply: boolean,
   changePercent: number,
   preserveStyle: boolean,
+  sourcePageNumber?: number,
+  bookPageId?: string,
 ): Promise<NextResponse> {
   const jobPages = (row.pages as CloneJobPage[]) || [];
-  const jobPage = jobPages[pageIndex];
+
+  // Two different index spaces meet here. The jobs compare screen sends a real
+  // index into row.pages. The BOOK screen can only know an index into the book's
+  // coloringPages, which holds interiors only — create-book drops excluded pages
+  // and lifts cover/intro pages out — so that index points at an unrelated job
+  // page (regenerating interior #5 would redraw the cover). It sends the page's
+  // sourcePageNumber instead, the one identifier both sides agree on.
+  const jobIndex =
+    sourcePageNumber != null ? jobPages.findIndex((p) => p.pageNumber === sourcePageNumber) : pageIndex;
+  const jobPage = jobPages[jobIndex];
   if (!jobPage) {
     return NextResponse.json({ error: "Page not found" }, { status: 404 });
   }
@@ -184,7 +195,7 @@ async function reproduceSinglePage(
       r2Config,
     });
 
-    await patchJobPage(jobId, pageIndex, (target) => ({
+    await patchJobPage(jobId, jobIndex, (target) => ({
       ...target,
       ...(kind === "regen"
         ? { regenCandidateUrl: url }
@@ -205,7 +216,10 @@ async function reproduceSinglePage(
     }));
 
     if (apply && bookId) {
-      await updateBookPageUrl(bookId, pageIndex, url);
+      // Book-screen callers identify their page by id; only a job-space caller
+      // may address the book array positionally.
+      if (bookPageId) await updateBookPageUrlById(bookId, bookPageId, url);
+      else await updateBookPageUrl(bookId, pageIndex, url);
     }
 
     results.push({ index: pageIndex, success: true, url, cameraView, applied: apply });
@@ -344,13 +358,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
     const body = await req.json().catch(() => ({}));
-    const { pageIndex, newAngle, apply, changePercent, preserveStyle } = body as {
-      pageIndex?: number;
-      newAngle?: boolean;
-      apply?: boolean;
-      changePercent?: number;
-      preserveStyle?: boolean;
-    };
+    const { pageIndex, newAngle, apply, changePercent, preserveStyle, sourcePageNumber, bookPageId } =
+      body as {
+        pageIndex?: number;
+        newAngle?: boolean;
+        apply?: boolean;
+        changePercent?: number;
+        preserveStyle?: boolean;
+        /** Book-screen callers: the page's source page number + its book page id. */
+        sourcePageNumber?: number;
+        bookPageId?: string;
+      };
     // Clamp to a sane 5–95% range; fall back to the legacy 30% default.
     const pct = Math.min(95, Math.max(5, Number(changePercent) || 30));
 
@@ -360,7 +378,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     if (pageIndex !== undefined) {
-      return reproduceSinglePage(jobId, row, pageIndex, !!newAngle, !!apply, pct, !!preserveStyle);
+      return reproduceSinglePage(
+        jobId,
+        row,
+        pageIndex,
+        !!newAngle,
+        !!apply,
+        pct,
+        !!preserveStyle,
+        typeof sourcePageNumber === "number" ? sourcePageNumber : undefined,
+        typeof bookPageId === "string" && bookPageId ? bookPageId : undefined,
+      );
     }
     return reproducePendingPages(jobId, row);
   } catch (error) {

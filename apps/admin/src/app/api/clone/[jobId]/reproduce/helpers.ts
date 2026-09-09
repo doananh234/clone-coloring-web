@@ -125,8 +125,44 @@ export async function patchJobPage(
 }
 
 /**
+ * Points the book's coloring page at a new URL, addressed by the page's OWN id.
+ *
+ * Prefer this over updateBookPageUrl: a book's coloringPages array holds only
+ * the interior pages (create-book pulls the cover and intro pages out), so an
+ * index taken from the job's page array points at the wrong book page — and one
+ * taken from the book's array can't be used to look the job page up either.
+ * The id is the only identifier that means the same thing on both sides.
+ */
+export async function updateBookPageUrlById(
+  bookId: string,
+  bookPageId: string,
+  url: string,
+): Promise<boolean> {
+  return withWriteLock(`book:${bookId}`, async () => {
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) return false;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const coloringPages = ((book.coloringPages as any[]) || []).slice();
+    const idx = coloringPages.findIndex((p) => p?.id === bookPageId);
+    if (idx < 0) return false;
+
+    coloringPages[idx] = mirrorUrlToSelectedVariant({ ...coloringPages[idx], url, status: "done" }, url);
+    await prisma.book.update({
+      where: { id: bookId },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { coloringPages: coloringPages as any },
+    });
+    return true;
+  });
+}
+
+/**
  * Points the book's coloring page at a new URL (apply step). No-op when the
  * book or the page at that index doesn't exist.
+ *
+ * Index-addressed: only safe when the caller's index really is a book-array
+ * index. Callers coming from a clone job must use updateBookPageUrlById.
  */
 export async function updateBookPageUrl(
   bookId: string,

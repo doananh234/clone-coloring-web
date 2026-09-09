@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
-import { patchJobPage, updateBookPageUrl } from "../reproduce/helpers";
+import { patchJobPage, updateBookPageUrl, updateBookPageUrlById } from "../reproduce/helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
     const body = await req.json().catch(() => ({}));
-    const { pageIndex, kind } = body as { pageIndex?: number; kind?: CandidateKind };
+    const { pageIndex, kind, sourcePageNumber, bookPageId } = body as {
+      pageIndex?: number;
+      kind?: CandidateKind;
+      /** Book-screen callers: the page's source page number + its book page id. */
+      sourcePageNumber?: number;
+      bookPageId?: string;
+    };
 
     if (pageIndex === undefined || pageIndex === null) {
       return NextResponse.json({ error: "pageIndex required" }, { status: 400 });
@@ -46,7 +52,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const pages = (row.pages as CloneJobPage[]) || [];
-    const page = pages[pageIndex];
+    // Book-screen callers only know an index into the book's interior-only
+    // coloringPages, which does not line up with the job's page array — see
+    // reproduceSinglePage. They send sourcePageNumber, valid in both spaces.
+    const jobIndex =
+      typeof sourcePageNumber === "number"
+        ? pages.findIndex((p) => p.pageNumber === sourcePageNumber)
+        : pageIndex;
+    const page = pages[jobIndex];
     if (!page) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 });
     }
@@ -56,7 +69,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: `No ${kind} candidate for this page` }, { status: 404 });
     }
 
-    const patched = await patchJobPage(jobId, pageIndex, (target) => ({
+    const patched = await patchJobPage(jobId, jobIndex, (target) => ({
       ...target,
       reproducedUrl: url,
       // The camera view becomes the page's official view only once the
@@ -75,7 +88,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     if (row.bookId) {
-      await updateBookPageUrl(row.bookId, pageIndex, url);
+      if (bookPageId) await updateBookPageUrlById(row.bookId, bookPageId, url);
+      else await updateBookPageUrl(row.bookId, pageIndex, url);
     }
 
     return NextResponse.json({ success: true, pageIndex, kind, url });

@@ -167,7 +167,7 @@ export function PageBatchSelect({
       indices,
       async (i) => {
         setCurrent(i);
-        await actions.regenApply(i);
+        await actions.regenApply(pages[i]);
       },
       (done, index, ok) => {
         setProgress({ done, total: indices.length });

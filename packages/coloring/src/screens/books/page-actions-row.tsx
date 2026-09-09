@@ -47,7 +47,7 @@ export function PageActionsRow({
   const isSC = variant === "sourceCover" && !!sourceCover;
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenOpts, setRegenOpts] = useState<RegenAddOpts>({ count: 2, source: "A", changePercent: 30 });
-  // Book page maps 1:1 by array index to its source clone job page.
+  // Present in the book's array at all? (Regen/Đổi góc need a real page row.)
   const pageIndex = pages.findIndex((p) => p.id === page.id);
   // Cover / thumbnail / square are set from the COLORED version (like the old
   // "Set Colored as …" lightbox actions) → only offered once the page is colorized.
@@ -88,7 +88,7 @@ export function PageActionsRow({
     setErr(null);
     setZoom(false);
     try {
-      const r = await actions.genCandidate(pageIndex, newAngle, page.id, regenStyleId || undefined, instructions || undefined);
+      const r = await actions.genCandidate(page, newAngle, regenStyleId || undefined, instructions || undefined);
       setCand({ url: r.url, cameraView: r.cameraView, kind: newAngle ? "angle" : "regen", viaJob: r.viaJob });
       setRegenModal(null);
     } catch (e) {
@@ -104,7 +104,7 @@ export function PageActionsRow({
     setBusy("apply");
     setErr(null);
     try {
-      if (cand.viaJob) await actions.applyCandidate(pageIndex, cand.kind);
+      if (cand.viaJob) await actions.applyCandidate(page, cand.kind);
       else await actions.applyImageCandidate(pages, page.id, cand.url);
       setCand(null);
     } catch (e) {
