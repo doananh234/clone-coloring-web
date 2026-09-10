@@ -204,6 +204,19 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
     /** Remove one page from the book. */
     removePage: (pages: BookColoringPage[], pageId: string) =>
       put({ coloringPages: pages.filter((p) => p.id !== pageId) }),
+    /**
+     * Remove N pages from the book in ONE write (batch-select "Xoá đã chọn").
+     * Deliberately not a loop over removePage: that filters the SAME `pages`
+     * snapshot each time, so the second write would restore what the first
+     * removed. One write is also all-or-nothing — no half-deleted book.
+     * Only the book row is touched; the images stay on R2 (same as removePage),
+     * and the source clone job keeps its own pages, so a book export still
+     * ships the originals under "Main book/".
+     */
+    removePages: (pages: BookColoringPage[], pageIds: string[]) => {
+      const drop = new Set(pageIds);
+      return put({ coloringPages: pages.filter((p) => !drop.has(p.id)) });
+    },
     /** Persist a new interior page order (drag-drop reorder → full array). */
     reorderPages: (ordered: BookColoringPage[]) => put({ coloringPages: ordered }),
     /**

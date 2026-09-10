@@ -134,6 +134,8 @@ export function PageBatchSelect({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [results, setResults] = useState<Map<number, "ok" | "err">>(new Map());
   const [summary, setSummary] = useState<{ ok: number; err: number } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [delErr, setDelErr] = useState<string | null>(null);
 
   if (pages.length === 0) {
     return <EmptyState icon="image" title="Chưa có trang" sub="Sách này chưa có trang tô màu." />;
@@ -209,6 +211,32 @@ export function PageBatchSelect({
     qc.invalidateQueries({ queryKey: ["coloring", "book", bookId] });
   };
 
+  /**
+   * Gỡ các trang đã chọn khỏi sách. One write via removePages (a loop would
+   * resurrect earlier deletions). Images stay on R2 and the source clone job is
+   * untouched, so a book export still ships the originals under "Main book/".
+   */
+  const removeSelected = async () => {
+    const indices = [...selected].sort((a, b) => a - b);
+    if (indices.length === 0) return;
+    if (!window.confirm(`Xoá ${indices.length} trang đã chọn khỏi sách? Ảnh gốc trong clone job vẫn giữ nguyên. Không thể hoàn tác.`)) return;
+
+    setDeleting(true);
+    setDelErr(null);
+    try {
+      await actions.removePages(pages, indices.map((i) => pages[i].id));
+      // selected / results / summary are all keyed by INDEX, and every page
+      // after a deleted one shifts down — so they must be dropped, not remapped.
+      setSelected(new Set());
+      setResults(new Map());
+      setSummary(null);
+    } catch (e) {
+      setDelErr(e instanceof Error ? e.message : "Xoá thất bại");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const disabled = !actions.enabled;
   const pct = progress && progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 
@@ -224,6 +252,13 @@ export function PageBatchSelect({
         <Button variant="outline" size="sm" disabled={running} onClick={selectAll}>Chọn tất cả</Button>
         <Button variant="outline" size="sm" disabled={running || selected.size === 0} onClick={clear}>Bỏ chọn</Button>
         <span style={{ fontSize: 13, color: "var(--muted-foreground)" }}>Đã chọn <span style={{ ...mono, fontWeight: 600, color: "var(--foreground)" }}>{selected.size}</span>/{pages.length}</span>
+        <Button size="sm" variant="outline"
+          disabled={disabled || running || deleting || selected.size === 0}
+          title={disabled ? "Cần bật ghi thật (staging)" : "Gỡ các trang đã chọn khỏi sách (ảnh gốc vẫn giữ)"}
+          style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+          onClick={removeSelected}>
+          <Icon name="trash-2" size={15} /> {deleting ? "Đang xoá…" : "Xoá đã chọn"}
+        </Button>
         <div style={{ flex: 1 }} />
         {cloneJobId && (
           <Button size="sm" variant="outline"
@@ -276,6 +311,12 @@ export function PageBatchSelect({
         </div>
       )}
 
+      {delErr && (
+        <div style={{ fontSize: 12.5, padding: "8px 12px", borderRadius: "var(--radius-sm)", background: "var(--danger-bg)", color: "var(--danger)" }}>
+          {delErr}
+        </div>
+      )}
+
       {disabled && (
         <div style={{ fontSize: 11.5, color: "var(--muted-foreground)" }}>
           Regen chỉ chạy khi bật ghi thật (<span style={mono}>NEXT_PUBLIC_COLORING_WRITE=1</span> · staging).
@@ -291,7 +332,7 @@ export function PageBatchSelect({
             index={i}
             selected={selected.has(i)}
             state={stateOf(i)}
-            disabled={running}
+            disabled={running || deleting}
             onToggle={toggle}
           />
         ))}

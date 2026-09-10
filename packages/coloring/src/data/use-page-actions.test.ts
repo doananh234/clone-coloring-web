@@ -139,3 +139,40 @@ describe("usePageActions — intro pages live in summaryPages, not coloringPages
     expect(body.summaryPages.map((p) => p.id)).toEqual(["sp2"]);
   });
 });
+
+describe("usePageActions — bulk delete removes N interior pages at once", () => {
+  const p1 = page({ id: "bp1", url: "/p1.png" });
+  const p2 = page({ id: "bp2", url: "/p2.png" });
+  const p3 = page({ id: "bp3", url: "/p3.png" });
+
+  beforeEach(() => {
+    httpPost.mockReset();
+    httpPut.mockReset();
+    httpGet.mockReset();
+    httpPut.mockResolvedValue({});
+  });
+
+  it("removePages drops every id it was given and keeps the rest in order", async () => {
+    const a = usePageActions("b1", "job1");
+    await a.removePages([p1, p2, p3], ["bp1", "bp3"]);
+
+    const body = httpPut.mock.calls[0][1] as { coloringPages: { id: string }[] };
+    expect(body.coloringPages.map((p) => p.id)).toEqual(["bp2"]);
+  });
+
+  it("removePages sends ONE write, so no deletion can resurrect an earlier one", async () => {
+    // A per-page loop over removePage() would filter each time from the SAME
+    // stale array, so the second write would restore what the first removed.
+    const a = usePageActions("b1", "job1");
+    await a.removePages([p1, p2, p3], ["bp1", "bp3"]);
+
+    expect(httpPut).toHaveBeenCalledTimes(1);
+  });
+
+  it("removePages touches only coloringPages, never another book column", async () => {
+    const a = usePageActions("b1", "job1");
+    await a.removePages([p1, p2, p3], ["bp2"]);
+
+    expect(Object.keys(httpPut.mock.calls[0][1] as object)).toEqual(["coloringPages"]);
+  });
+});
