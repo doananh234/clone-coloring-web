@@ -70,6 +70,32 @@ describe("POST /api/clone/[jobId]/apply-candidate", () => {
     expect(patchJobPage).not.toHaveBeenCalled();
   });
 
+  it("applies the candidate on the book-screen payload, which carries no pageIndex", async () => {
+    // What usePageActions.applyCandidate actually sends. The old
+    // `pageIndex required` guard rejected it with a 400 even though the
+    // resolver below has always understood sourcePageNumber.
+    const res = await POST(req({ sourcePageNumber: 5, bookPageId: "bp5", kind: "regen" }), params);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ url: "https://r2/c5.png" });
+    expect(updateBookPageUrlById).toHaveBeenCalledWith("b1", "bp5", "https://r2/c5.png");
+  });
+
+  it("400s when the caller identifies the page neither way", async () => {
+    const res = await POST(req({ kind: "regen" }), params);
+
+    expect(res.status).toBe(400);
+    expect(patchJobPage).not.toHaveBeenCalled();
+  });
+
+  it("never writes the book page at an undefined index when no pageIndex was sent", async () => {
+    // updateBookPageUrl(bookId, undefined, url) would silently write at a
+    // garbage position; with no pageIndex the id is the only safe address.
+    await POST(req({ sourcePageNumber: 5, kind: "regen" }), params);
+
+    expect(updateBookPageUrl).not.toHaveBeenCalled();
+  });
+
   it("still indexes by pageIndex when no sourcePageNumber is sent (jobs compare screen)", async () => {
     const res = await POST(req({ pageIndex: 1, kind: "regen" }), params);
 

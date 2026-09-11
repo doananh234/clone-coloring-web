@@ -39,8 +39,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       bookPageId?: string;
     };
 
-    if (pageIndex === undefined || pageIndex === null) {
-      return NextResponse.json({ error: "pageIndex required" }, { status: 400 });
+    // Either identifier addresses exactly one page: the jobs screen sends
+    // pageIndex, the book screen only ever knows the page's own identity and
+    // sends sourcePageNumber. The resolver below has always accepted both —
+    // this guard demanded pageIndex, so every book-screen apply 400'd.
+    if (pageIndex == null && sourcePageNumber == null) {
+      return NextResponse.json(
+        { error: "pageIndex or sourcePageNumber required" },
+        { status: 400 },
+      );
     }
     if (!kind || !KINDS.includes(kind)) {
       return NextResponse.json({ error: `kind must be one of: ${KINDS.join(", ")}` }, { status: 400 });
@@ -55,10 +62,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     // Book-screen callers only know an index into the book's interior-only
     // coloringPages, which does not line up with the job's page array — see
     // reproduceSinglePage. They send sourcePageNumber, valid in both spaces.
+    // -1 is unreachable (the guard above rejects "neither identifier"), but it
+    // keeps the type honest and falls into the not-found branch either way.
     const jobIndex =
       typeof sourcePageNumber === "number"
         ? pages.findIndex((p) => p.pageNumber === sourcePageNumber)
-        : pageIndex;
+        : typeof pageIndex === "number"
+          ? pageIndex
+          : -1;
     const page = pages[jobIndex];
     if (!page) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 });
@@ -88,8 +99,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     if (row.bookId) {
+      // Address the book page by id when the caller gave one; otherwise by the
+      // index it sent. With neither, there is no safe position to write —
+      // updateBookPageUrl(bookId, undefined, url) would land at a garbage slot,
+      // so leave the book alone (the job page is patched either way).
       if (bookPageId) await updateBookPageUrlById(row.bookId, bookPageId, url);
-      else await updateBookPageUrl(row.bookId, pageIndex, url);
+      else if (typeof pageIndex === "number") await updateBookPageUrl(row.bookId, pageIndex, url);
     }
 
     return NextResponse.json({ success: true, pageIndex, kind, url });
