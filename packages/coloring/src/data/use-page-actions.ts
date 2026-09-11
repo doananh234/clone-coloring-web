@@ -7,6 +7,9 @@ import type { BookColoringPage } from "./types";
 
 const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (staging).";
 
+/** Matches the jobs screen's default in its "% thay đổi khi regen" box. */
+const DEFAULT_CHANGE_PERCENT = 30;
+
 type PolledJob = { resultUrl?: string; resultId?: string; error?: string };
 
 /**
@@ -102,21 +105,28 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
       try {
         const res = await httpPost<{ results?: { url?: string; cameraView?: string }[] }>(
           `${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`,
-          // No B&W style chosen here → keep the page's own nét vẽ (faithful clone),
-          // not a redesign variation. Only "đổi góc" changes the camera.
+          // Same payload shape the jobs screen sends, so both screens get the
+          // same prompt (buildRedesignPrompt) anchored on the ORIGINAL source
+          // page. preserveStyle used to be set here, which selected the
+          // "do NOT redesign, keep the exact stroke weight" prompt — it redrew
+          // whatever texture it was handed, so regens only ever added detail.
           {
             sourcePageNumber: page.sourcePageNumber,
             bookPageId: page.id,
             newAngle,
             apply: false,
-            preserveStyle: true,
+            changePercent: DEFAULT_CHANGE_PERCENT,
           },
         );
         const r = res?.results?.[0];
-        if (!r?.url) throw new Error("no candidate");
+        if (!r?.url) throw new Error("Clone job không trả về bản nào.");
         return { url: r.url, cameraView: r.cameraView, viaJob: true };
-      } catch {
-        // Clone job missing (404) or reproduce failed → regen from current image.
+      } catch (err) {
+        // ONLY a missing clone job justifies redrawing from the page's own
+        // image. A bare catch here hid a misrouted request for months: every
+        // failure quietly switched both the source image and the prompt, and
+        // the UI showed a normal-looking candidate either way.
+        if ((err as { status?: number } | null)?.status !== 404) throw err;
         return genFromImage(page.id, newAngle);
       }
     },
@@ -204,6 +214,19 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
     /** Remove one page from the book. */
     removePage: (pages: BookColoringPage[], pageId: string) =>
       put({ coloringPages: pages.filter((p) => p.id !== pageId) }),
+    /**
+     * Remove N pages from the book in ONE write (batch-select "Xoá đã chọn").
+     * Deliberately not a loop over removePage: that filters the SAME `pages`
+     * snapshot each time, so the second write would restore what the first
+     * removed. One write is also all-or-nothing — no half-deleted book.
+     * Only the book row is touched; the images stay on R2 (same as removePage),
+     * and the source clone job keeps its own pages, so a book export still
+     * ships the originals under "Main book/".
+     */
+    removePages: (pages: BookColoringPage[], pageIds: string[]) => {
+      const drop = new Set(pageIds);
+      return put({ coloringPages: pages.filter((p) => !drop.has(p.id)) });
+    },
     /** Persist a new interior page order (drag-drop reorder → full array). */
     reorderPages: (ordered: BookColoringPage[]) => put({ coloringPages: ordered }),
     /**

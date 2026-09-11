@@ -102,6 +102,25 @@ describe("POST /api/clone/[jobId]/reproduce — single page", () => {
     expect(generateVariation).not.toHaveBeenCalled();
   });
 
+  it("takes the single-page path on the book-screen payload, which carries no pageIndex", async () => {
+    // The book screen only knows the page's identity, never a job index — it has
+    // always sent sourcePageNumber alone. Gating the single-page path on
+    // pageIndex dropped that call into the bulk pending-pages path instead,
+    // which returns an empty result set for a finished book; the client then
+    // silently redrew from the page's own (already dense) image.
+    const res = await POST(req({ sourcePageNumber: 5, bookPageId: "bp5", apply: false }), params);
+
+    expect(res.status).toBe(200);
+    expect(generateVariation).toHaveBeenCalledTimes(1);
+    expect(generateVariation.mock.calls[0][0]).toMatchObject({ sourceImageUrl: "/src/p5.png" });
+  });
+
+  it("passes the caller's changePercent through to the variation", async () => {
+    await POST(req({ sourcePageNumber: 5, apply: false, changePercent: 55 }), params);
+
+    expect(generateVariation.mock.calls[0][0]).toMatchObject({ changePercent: 55 });
+  });
+
   it("still indexes by pageIndex when no sourcePageNumber is sent (jobs compare screen)", async () => {
     await POST(req({ pageIndex: 1, apply: false }), params);
 

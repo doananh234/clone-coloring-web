@@ -139,3 +139,83 @@ describe("usePageActions — intro pages live in summaryPages, not coloringPages
     expect(body.summaryPages.map((p) => p.id)).toEqual(["sp2"]);
   });
 });
+
+describe("usePageActions — bulk delete removes N interior pages at once", () => {
+  const p1 = page({ id: "bp1", url: "/p1.png" });
+  const p2 = page({ id: "bp2", url: "/p2.png" });
+  const p3 = page({ id: "bp3", url: "/p3.png" });
+
+  beforeEach(() => {
+    httpPost.mockReset();
+    httpPut.mockReset();
+    httpGet.mockReset();
+    httpPut.mockResolvedValue({});
+  });
+
+  it("removePages drops every id it was given and keeps the rest in order", async () => {
+    const a = usePageActions("b1", "job1");
+    await a.removePages([p1, p2, p3], ["bp1", "bp3"]);
+
+    const body = httpPut.mock.calls[0][1] as { coloringPages: { id: string }[] };
+    expect(body.coloringPages.map((p) => p.id)).toEqual(["bp2"]);
+  });
+
+  it("removePages sends ONE write, so no deletion can resurrect an earlier one", async () => {
+    // A per-page loop over removePage() would filter each time from the SAME
+    // stale array, so the second write would restore what the first removed.
+    const a = usePageActions("b1", "job1");
+    await a.removePages([p1, p2, p3], ["bp1", "bp3"]);
+
+    expect(httpPut).toHaveBeenCalledTimes(1);
+  });
+
+  it("removePages touches only coloringPages, never another book column", async () => {
+    const a = usePageActions("b1", "job1");
+    await a.removePages([p1, p2, p3], ["bp2"]);
+
+    expect(Object.keys(httpPut.mock.calls[0][1] as object)).toEqual(["coloringPages"]);
+  });
+});
+
+describe("usePageActions — book-screen regen must reach the clone job, not silently fall back", () => {
+  const apiErr = (status: number) => Object.assign(new Error(`API Error ${status}`), { status });
+
+  beforeEach(() => {
+    httpPost.mockReset();
+    httpPut.mockReset();
+    httpGet.mockReset();
+    httpPost.mockResolvedValue({ results: [{ url: "https://r2/cand.png" }], succeeded: 1 });
+  });
+
+  it("genCandidate asks for a redesign variation, the same one the jobs screen gets", async () => {
+    // preserveStyle switched the server onto buildPageRegenPrompt ("do NOT
+    // redesign"), which redraws the texture it is handed instead of thinning it.
+    const a = usePageActions("b1", "job1");
+    await a.genCandidate(interior5, false);
+
+    const body = bodyOf(httpPost.mock.calls[0]);
+    expect(body.preserveStyle).toBeUndefined();
+    expect(body.changePercent).toBe(30);
+  });
+
+  it("genCandidate falls back to the image path only when the clone job is gone", async () => {
+    httpPost.mockRejectedValueOnce(apiErr(404));
+    httpPost.mockResolvedValueOnce({ url: "https://r2/from-image.png" });
+    const a = usePageActions("b1", "job1");
+
+    const r = await a.genCandidate(interior5, false);
+
+    expect(urlOf(httpPost.mock.calls[1])).toContain("/books/b1/pages/bp5/regen");
+    expect(r.url).toBe("https://r2/from-image.png");
+  });
+
+  it("genCandidate surfaces a server error instead of quietly redrawing the current image", async () => {
+    // The old bare `catch {}` turned every failure into a silent switch to the
+    // current-image path — which is how the misrouted call went unnoticed.
+    httpPost.mockRejectedValueOnce(apiErr(500));
+    const a = usePageActions("b1", "job1");
+
+    await expect(a.genCandidate(interior5, false)).rejects.toThrow();
+    expect(httpPost).toHaveBeenCalledTimes(1);
+  });
+});
