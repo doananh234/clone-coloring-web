@@ -176,3 +176,46 @@ describe("usePageActions — bulk delete removes N interior pages at once", () =
     expect(Object.keys(httpPut.mock.calls[0][1] as object)).toEqual(["coloringPages"]);
   });
 });
+
+describe("usePageActions — book-screen regen must reach the clone job, not silently fall back", () => {
+  const apiErr = (status: number) => Object.assign(new Error(`API Error ${status}`), { status });
+
+  beforeEach(() => {
+    httpPost.mockReset();
+    httpPut.mockReset();
+    httpGet.mockReset();
+    httpPost.mockResolvedValue({ results: [{ url: "https://r2/cand.png" }], succeeded: 1 });
+  });
+
+  it("genCandidate asks for a redesign variation, the same one the jobs screen gets", async () => {
+    // preserveStyle switched the server onto buildPageRegenPrompt ("do NOT
+    // redesign"), which redraws the texture it is handed instead of thinning it.
+    const a = usePageActions("b1", "job1");
+    await a.genCandidate(interior5, false);
+
+    const body = bodyOf(httpPost.mock.calls[0]);
+    expect(body.preserveStyle).toBeUndefined();
+    expect(body.changePercent).toBe(30);
+  });
+
+  it("genCandidate falls back to the image path only when the clone job is gone", async () => {
+    httpPost.mockRejectedValueOnce(apiErr(404));
+    httpPost.mockResolvedValueOnce({ url: "https://r2/from-image.png" });
+    const a = usePageActions("b1", "job1");
+
+    const r = await a.genCandidate(interior5, false);
+
+    expect(urlOf(httpPost.mock.calls[1])).toContain("/books/b1/pages/bp5/regen");
+    expect(r.url).toBe("https://r2/from-image.png");
+  });
+
+  it("genCandidate surfaces a server error instead of quietly redrawing the current image", async () => {
+    // The old bare `catch {}` turned every failure into a silent switch to the
+    // current-image path — which is how the misrouted call went unnoticed.
+    httpPost.mockRejectedValueOnce(apiErr(500));
+    const a = usePageActions("b1", "job1");
+
+    await expect(a.genCandidate(interior5, false)).rejects.toThrow();
+    expect(httpPost).toHaveBeenCalledTimes(1);
+  });
+});

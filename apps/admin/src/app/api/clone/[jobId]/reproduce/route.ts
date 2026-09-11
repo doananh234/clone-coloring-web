@@ -377,11 +377,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Clone job not found" }, { status: 404 });
     }
 
-    if (pageIndex !== undefined) {
+    // Either identifier selects ONE page. The jobs screen sends pageIndex; the
+    // book screen only ever knows the page's own identity and sends
+    // sourcePageNumber. Gating on pageIndex alone dropped every book-screen
+    // regen into the bulk pending-pages path below, which returns an empty
+    // result set for a finished book — the client then silently redrew from the
+    // page's own image with the style-preserving prompt, so repeated regens
+    // thickened the line art instead of varying it.
+    if (pageIndex !== undefined || sourcePageNumber !== undefined) {
       return reproduceSinglePage(
         jobId,
         row,
-        pageIndex,
+        typeof pageIndex === "number" ? pageIndex : -1,
         !!newAngle,
         !!apply,
         pct,
