@@ -8,8 +8,10 @@
  *     -> CloneJob.data.sourceBookId
  *       -> SourceBook.niche / SourceBook.priority
  *
- * Scope: ALL books whose lineage resolves to a non-empty niche.
- * Idempotent: a book whose data.niche already matches is skipped.
+ * Scope: ALL books whose lineage resolves to a non-empty niche OR a non-empty
+ *   priority.
+ * Idempotent: a book is skipped only when both its niche and priority are
+ *   already up to date.
  *
  * Usage (from apps/worker):
  *   yarn backfill:niche              # DRY RUN (default) — logs, writes nothing
