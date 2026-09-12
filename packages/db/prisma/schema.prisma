@@ -46,6 +46,9 @@ model Book {
   // No app code writes these columns — Prisma only reads/filters them.
   interiorPages      Int?
   niche              String?
+  // Cùng cơ chế với `niche`: trigger book_denorm_perf copy từ data.priority.
+  // App chỉ đọc/filter, không bao giờ ghi trực tiếp cột này.
+  priority           String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   // NOTE: the Postgres GIN index on coloringPages (jsonb containment) is omitted
