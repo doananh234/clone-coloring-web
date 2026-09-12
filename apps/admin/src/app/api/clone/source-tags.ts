@@ -31,7 +31,7 @@ export async function readSourceTags(
     if (priority) out.priority = priority;
     return out;
   } catch (error) {
-    console.error("DEBUG-CATCH-HIT"); console.warn(
+    console.warn(
       `[source-tags] không đọc được tag của job ${jobId}; book sẽ được tạo không có niche/priority:`,
       error instanceof Error ? error.message : error,
     );
