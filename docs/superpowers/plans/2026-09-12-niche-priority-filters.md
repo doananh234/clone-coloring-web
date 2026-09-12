@@ -219,6 +219,7 @@ git commit -m "feat(db): denormalize Book.priority via book_denorm_perf trigger"
 **Files:**
 - Create: `apps/admin/src/app/api/clone/filters.ts`
 - Create: `apps/admin/src/app/api/clone/filters.test.ts`
+- Create: `apps/admin/src/app/api/clone/route.test.ts`
 - Modify: `apps/admin/src/app/api/clone/route.ts` (hàm `GET`, dòng 14-81)
 
 **Interfaces:**
@@ -281,14 +282,6 @@ describe("buildCloneJobWhere", () => {
     expect(buildCloneJobWhere({ status: "", niche: "", priority: null })).toBeUndefined();
   });
 
-  // Phân trang chỉ đúng khi count và findMany nhìn cùng một tập. Builder là
-  // hàm thuần nên gọi hai lần cùng input phải cho ra where bằng nhau — đó là
-  // thứ route dựa vào khi truyền cùng một `where` cho cả hai lời gọi.
-  it("is pure, so count and findMany can share one where", () => {
-    const a = buildCloneJobWhere({ status: "pending", niche: "Cozy" });
-    const b = buildCloneJobWhere({ status: "pending", niche: "Cozy" });
-    expect(a).toEqual(b);
-  });
 });
 ```
 
@@ -350,7 +343,7 @@ export function buildCloneJobWhere(f: CloneJobFilters): Prisma.CloneJobWhereInpu
 
 Run: `cd apps/admin && yarn test src/app/api/clone/filters.test.ts`
 
-Expected: PASS, 8 tests
+Expected: PASS, 7 tests
 
 - [ ] **Step 5: Nối vào route list**
 
@@ -411,16 +404,120 @@ Và đổi dòng return cuối của `GET`:
     return NextResponse.json({ success: true, data: jobs, counts, total });
 ```
 
-- [ ] **Step 6: Kiểm tra typecheck**
+- [ ] **Step 6: Test route — `count` và `findMany` phải dùng CHUNG một `where`**
 
-Run: `cd apps/admin && npx tsc --noEmit`
+Đây là chỗ lỗi phân trang thật sự sống. Nếu hai lời gọi nhìn hai tập khác nhau,
+số trang sai mà không test nào của builder bắt được.
 
-Expected: không có lỗi. Nếu `include` báo lỗi cùng `omit`, đó là dấu hiệu Prisma client chưa được sinh lại sau Task 1 — chạy `cd packages/db && npx prisma generate`.
+Tạo `apps/admin/src/app/api/clone/route.test.ts`:
 
-- [ ] **Step 7: Commit**
+```ts
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
+
+const findMany = vi.fn();
+const count = vi.fn();
+const readCounts = vi.fn();
+vi.mock("@vx/db", () => ({
+  prisma: {
+    cloneJob: {
+      findMany: (...a: unknown[]) => findMany(...a),
+      count: (...a: unknown[]) => count(...a),
+    },
+  },
+  readCloneJobStatusCounts: (...a: unknown[]) => readCounts(...a),
+}));
+vi.mock("@vx/server-core/r2", () => ({
+  getR2Config: vi.fn(),
+  createR2Client: vi.fn(),
+  uploadToR2: vi.fn(),
+  resolveR2Url: vi.fn(),
+}));
+vi.mock("@vx/server-core/pdf-renderer", () => ({ renderPdfToImages: vi.fn() }));
+vi.mock("@/lib/queue/clone-queue", () => ({ cloneQueue: { add: vi.fn() } }));
+
+import { GET } from "./route";
+
+const req = (qs: string) => new NextRequest(`http://localhost/api/clone?${qs}`);
+
+describe("GET /api/clone", () => {
+  beforeEach(() => {
+    findMany.mockReset().mockResolvedValue([]);
+    count.mockReset().mockResolvedValue(7);
+    readCounts.mockReset().mockResolvedValue({ total: 0, counts: {} });
+  });
+
+  it("passes the SAME where to findMany and count when filtering", async () => {
+    await GET(req("niche=Cozy&status=pending&counts=0"));
+
+    expect(count).toHaveBeenCalledTimes(1);
+    const listWhere = findMany.mock.calls[0][0].where;
+    const countWhere = count.mock.calls[0][0].where;
+    expect(countWhere).toEqual(listWhere);
+    expect(listWhere).toEqual({
+      AND: [{ status: "pending" }, { sourceBook: { is: { niche: "Cozy" } } }],
+    });
+  });
+
+  it("returns that filtered total in the response", async () => {
+    const res = await GET(req("niche=Cozy&counts=0"));
+    expect((await res.json()).total).toBe(7);
+  });
+
+  it("skips the count entirely when no tag filter is applied", async () => {
+    const res = await GET(req("status=pending&counts=0"));
+    expect(count).not.toHaveBeenCalled();
+    expect((await res.json()).total).toBeNull();
+  });
+
+  it("lifts niche and priority from the joined source book", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "j1", name: "n", status: "pending", totalPages: 0, analyzedPages: 0,
+        bookId: null, error: null, data: {}, createdAt: new Date(), updatedAt: new Date(),
+        sourceBook: { niche: "Film", priority: "2" },
+      },
+    ]);
+
+    const res = await GET(req("counts=0"));
+    const job = (await res.json()).data[0];
+    expect(job.niche).toBe("Film");
+    expect(job.priority).toBe("2");
+  });
+
+  it("reports null tags for a job with no source book", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "j2", name: "n", status: "pending", totalPages: 0, analyzedPages: 0,
+        bookId: null, error: null, data: {}, createdAt: new Date(), updatedAt: new Date(),
+        sourceBook: null,
+      },
+    ]);
+
+    const res = await GET(req("counts=0"));
+    const job = (await res.json()).data[0];
+    expect(job.niche).toBeNull();
+    expect(job.priority).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 7: Chạy test route**
+
+Run: `cd apps/admin && yarn test src/app/api/clone/route.test.ts`
+
+Expected: PASS, 5 tests. Nếu module không load được vì thiếu mock, bổ sung mock cho đúng module đó — đừng bỏ bớt assert.
+
+- [ ] **Step 8: Kiểm tra typecheck**
+
+Run: `cd apps/admin && yarn typecheck`
+
+Expected: 0 lỗi (baseline sạch). Nếu `include` báo lỗi cùng `omit`, đó là dấu hiệu Prisma client chưa được sinh lại sau Task 1 — chạy `cd packages/db && npx prisma generate`.
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add apps/admin/src/app/api/clone/filters.ts apps/admin/src/app/api/clone/filters.test.ts apps/admin/src/app/api/clone/route.ts
+git add apps/admin/src/app/api/clone/filters.ts apps/admin/src/app/api/clone/filters.test.ts apps/admin/src/app/api/clone/route.ts apps/admin/src/app/api/clone/route.test.ts
 git commit -m "feat(clone): filter jobs by source niche/priority + filter-aware total"
 ```
 
@@ -837,8 +934,15 @@ describe("readSourceTags", () => {
   });
 
   it("never throws — book creation must not fail over a missing tag", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     findUnique.mockRejectedValue(new Error("db down"));
+
     expect(await readSourceTags("j1")).toEqual({});
+    // Nuốt lỗi nhưng phải để lại dấu vết: book mất tag là truy được nguyên nhân.
+    expect(warn).toHaveBeenCalledOnce();
+    expect(String(warn.mock.calls[0][0])).toContain("j1");
+
+    warn.mockRestore();
   });
 
   it("trims and drops whitespace-only values", async () => {
@@ -873,6 +977,8 @@ import { prisma } from "@vx/db";
  * không tạo ra khoá rỗng, và trigger book_denorm_perf sẽ để cột scalar NULL.
  *
  * Không bao giờ ném lỗi: thiếu một cái tag không đáng làm hỏng việc tạo book.
+ * Nhưng có log — book mới bỗng dưng mất tag phải truy được về nguyên nhân,
+ * chứ không im lặng biến mất.
  */
 export async function readSourceTags(
   jobId: string,
@@ -889,7 +995,11 @@ export async function readSourceTags(
     if (niche) out.niche = niche;
     if (priority) out.priority = priority;
     return out;
-  } catch {
+  } catch (error) {
+    console.warn(
+      `[source-tags] không đọc được tag của job ${jobId}; book sẽ được tạo không có niche/priority:`,
+      error instanceof Error ? error.message : error,
+    );
     return {};
   }
 }
