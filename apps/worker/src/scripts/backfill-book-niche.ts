@@ -1,12 +1,12 @@
 /**
- * Denormalize each book's `niche` onto Book.data.niche (+ data.nicheLower for
- * case-insensitive search) so the books list can show a niche tag and search it
- * without a per-request join.
+ * Denormalize niche + priority của SourceBook nguồn lên Book.data (`niche`,
+ * `nicheLower` cho tìm kiếm không phân biệt hoa thường, và `priority`) để trang
+ * Books lọc/hiển thị được mà không cần join mỗi request.
  *
  * Niche lineage (the value already exists upstream, just not on the book):
  *   Book.data.cloneJobId (or data.sourceCloneJobId)
  *     -> CloneJob.data.sourceBookId
- *       -> SourceBook.niche
+ *       -> SourceBook.niche / SourceBook.priority
  *
  * Scope: ALL books whose lineage resolves to a non-empty niche.
  * Idempotent: a book whose data.niche already matches is skipped.
@@ -68,12 +68,16 @@ async function main() {
 
   const sourceBooks = await db.sourceBook.findMany({
     where: { id: { in: [...sourceBookIds] } },
-    select: { id: true, niche: true },
+    select: { id: true, niche: true, priority: true },
   });
-  const nicheBySourceBook = new Map<string, string>();
+  const tagsBySourceBook = new Map<string, { niche?: string; priority?: string }>();
   for (const sb of sourceBooks) {
+    const tags: { niche?: string; priority?: string } = {};
     const n = str(sb.niche);
-    if (n) nicheBySourceBook.set(sb.id, n);
+    const p = str(sb.priority);
+    if (n) tags.niche = n;
+    if (p) tags.priority = p;
+    if (n || p) tagsBySourceBook.set(sb.id, tags);
   }
 
   let scanned = 0;
@@ -89,24 +93,35 @@ async function main() {
     const data: Rec = isObj(book.data) ? { ...book.data } : {};
     const jobId = str(data.cloneJobId) || str(data.sourceCloneJobId);
     const sbId = jobId ? sourceBookIdByJob.get(jobId) : undefined;
-    const niche = sbId ? nicheBySourceBook.get(sbId) : undefined;
 
-    if (!niche) {
+    const tags = sbId ? tagsBySourceBook.get(sbId) : undefined;
+    const niche = tags?.niche;
+    const priority = tags?.priority;
+
+    if (!niche && !priority) {
       skippedNoNiche++;
       continue;
     }
 
-    const nicheLower = niche.toLowerCase();
-    if (str(data.niche) === niche && str(data.nicheLower) === nicheLower) {
+    const nicheLower = niche?.toLowerCase();
+    const nicheSame = !niche || (str(data.niche) === niche && str(data.nicheLower) === nicheLower);
+    const prioritySame = !priority || str(data.priority) === priority;
+    if (nicheSame && prioritySame) {
       skippedUnchanged++;
       continue;
     }
 
-    data.niche = niche;
-    data.nicheLower = nicheLower;
+    if (niche) {
+      data.niche = niche;
+      data.nicheLower = nicheLower;
+    }
+    if (priority) data.priority = priority;
 
     changed++;
-    log(`FIX  ${book.id} "${String(book.title).slice(0, 30)}" — niche="${niche}"`);
+    log(
+      `FIX  ${book.id} "${String(book.title).slice(0, 30)}" — ` +
+        `niche=${niche ? `"${niche}"` : "—"} priority=${priority ? `"${priority}"` : "—"}`,
+    );
 
     if (APPLY) {
       try {
