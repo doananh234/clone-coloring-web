@@ -139,6 +139,8 @@ export interface BookRow {
   backgroundColor?: string | null;
   /** Denormalized source niche (from CloneJob → SourceBook), shown as a tag. */
   niche?: string | null;
+  /** Denormalized source priority (từ CloneJob → SourceBook), hiện làm tag. */
+  priority?: string | null;
   /** Operator id this book is assigned to (null = unassigned). */
   assignedToId?: string | null;
   /** Kanban queue status: "todo" | "in_progress" | "review" | "done". */

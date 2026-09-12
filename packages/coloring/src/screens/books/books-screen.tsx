@@ -13,6 +13,7 @@ import { Pagination } from "../../components/ui/pagination";
 import { LoadingRows, EmptyState, ErrorState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useBooks } from "../../data/use-books";
+import { useCloneFacets } from "../../data/use-clone-facets";
 import { useOperators, useBookAssign } from "../../data/use-book-assign";
 import { useColoringAuth } from "../../hooks/coloring-auth";
 import { applyBookPatch } from "../../data/local-books";
@@ -47,6 +48,7 @@ function BookCard({ book, onOpen, checked, onToggle, assigneeName }: { book: Boo
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {book.isPublic ? <Badge tone="success" dot>Đã duyệt</Badge> : <Badge tone="neutral">Nháp</Badge>}
         {book.niche && <Badge tone="info">{book.niche}</Badge>}
+        {book.priority && <Badge tone="neutral">P{book.priority}</Badge>}
         {book.category && <Badge tone="neutral">{book.category}</Badge>}
         {assigneeName && <Badge tone="carbon">◍ {assigneeName}</Badge>}
       </div>
@@ -63,6 +65,9 @@ export function BooksScreen() {
   const [status] = useQueryParam("status", "pub");
   const [assignFilter] = useQueryParam("assign", "all");
   const [interior] = useQueryParam("interior", "gt40");
+  const [niche] = useQueryParam("niche", "");
+  const [priority] = useQueryParam("priority", "");
+  const facets = useCloneFacets();
   const setParams = useSetQueryParams();
   // Changing any filter resets to page 1 (else you land on an out-of-range/empty page).
   const setQ = (v: string) => setParams({ q: v || null, page: null });
@@ -86,7 +91,7 @@ export function BooksScreen() {
   }, [searchText, q]);
   // Search/category/status all filter server-side (full library, every page) —
   // not client-side on the current page (the old "search only in this page" bug).
-  const { books, total, totalPages, isLoading, isError } = useBooks(page, 24, { q, cat, status, assign: assignFilter, interior });
+  const { books, total, totalPages, isLoading, isError } = useBooks(page, 24, { q, cat, status, assign: assignFilter, interior, niche, priority });
 
   const shown = useMemo(() => books.map(applyBookPatch), [books]);
   const catOptions = useMemo(() => {
@@ -134,6 +139,28 @@ export function BooksScreen() {
           <div style={{ width: 150 }}><Select value={status} onChange={setStatus} options={[{ label: "Tất cả", value: "all" }, { label: "Đã duyệt", value: "pub" }, { label: "Nháp", value: "draft" }]} /></div>
           <div style={{ width: 150 }}><Select value={assignFilter} onChange={setAssignFilter} options={[{ label: "Tất cả", value: "all" }, { label: "Của tôi", value: "mine" }, { label: "Chưa giao", value: "unassigned" }]} /></div>
           <div style={{ width: 160 }}><Select value={interior} onChange={setInterior} options={[{ label: "Tất cả", value: "all" }, { label: "Interior > 40", value: "gt40" }]} /></div>
+          <div style={{ width: 160 }}>
+            <Select
+              value={niche}
+              onChange={(v) => setParams({ niche: v || null, page: null })}
+              options={[
+                { label: "Mọi niche", value: "" },
+                ...facets.niches.map((n) => ({ label: n, value: n })),
+                { label: "Chưa gắn niche", value: "__blank__" },
+              ]}
+            />
+          </div>
+          <div style={{ width: 160 }}>
+            <Select
+              value={priority}
+              onChange={(v) => setParams({ priority: v || null, page: null })}
+              options={[
+                { label: "Mọi priority", value: "" },
+                ...facets.priorities.map((p) => ({ label: `Priority ${p}`, value: p })),
+                { label: "Chưa gắn priority", value: "__blank__" },
+              ]}
+            />
+          </div>
           <Button size="sm" onClick={() => router.push(`${B}/books/new`)}><Icon name="plus" size={16} /> Tạo sách</Button>
         </div>
       </div>
