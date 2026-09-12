@@ -6,6 +6,7 @@ import { flushLangfuse } from "@vx/server-core/langfuse";
 import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { generateVariation, patchJobPage, updateBookPageUrl, updateBookPageUrlById } from "./helpers";
 import { mirrorUrlToSelectedVariant } from "@vx/coloring/data/page-variants";
+import { readSourceTags } from "../../source-tags";
 
 export const maxDuration = 300;
 
@@ -92,6 +93,8 @@ async function ensureBook(jobId: string, row: JobRow): Promise<string> {
       mood: p.rawData!.environment?.mood || "",
     }));
 
+  const sourceTags = await readSourceTags(jobId);
+
   const createdBook = await prisma.book.create({
     data: {
       title: jobBookData.title || row.name || "Untitled",
@@ -111,6 +114,7 @@ async function ensureBook(jobId: string, row: JobRow): Promise<string> {
         isRedesigned: false,
         isEditionConverted: false,
         cloneJobId: jobId,
+        ...sourceTags,
       },
     },
   });

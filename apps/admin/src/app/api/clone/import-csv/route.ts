@@ -110,6 +110,9 @@ export async function POST(req: NextRequest) {
           status,
           sourcePdfUrl: row.sourcePdfUrl,
           sourceFileName: row.fileName,
+          // Cột scalar cho quan hệ CloneJob.sourceBook. Khoá trong `data` phía
+          // dưới được giữ lại vì nhiều chỗ đang đọc nó.
+          sourceBookId: row.id,
           totalPages: 0,
           analyzedPages: 0,
           pages: [],

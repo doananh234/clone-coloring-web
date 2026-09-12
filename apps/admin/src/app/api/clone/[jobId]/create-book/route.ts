@@ -3,6 +3,7 @@ import { prisma } from "@vx/db";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { moveCloneJobImageToBook } from "@/lib/move-clone-page-to-book";
 import { extractSourceStyleFromCover } from "./extract-source-style";
+import { readSourceTags } from "../../source-tags";
 
 // AI style extraction (coloring + cover-design) runs inline, so allow a long budget.
 export const maxDuration = 300;
@@ -131,6 +132,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       }
     }
 
+    const sourceTags = await readSourceTags(jobId);
+
     const createdBook = await prisma.book.create({
       data: {
         id: bookId,
@@ -154,6 +157,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           isRedesigned: false,
           isEditionConverted: false,
           cloneJobId: jobId,
+          ...sourceTags,
           // Source-cover style, auto-extracted (editable in the cover editor).
           coloringStyleId: sourceStyle.coloringStyleId,
           coloringVariantId: sourceStyle.coloringVariantId,

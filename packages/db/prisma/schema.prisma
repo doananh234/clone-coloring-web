@@ -46,6 +46,9 @@ model Book {
   // No app code writes these columns — Prisma only reads/filters them.
   interiorPages      Int?
   niche              String?
+  // Cùng cơ chế với `niche`: trigger book_denorm_perf copy từ data.priority.
+  // App chỉ đọc/filter, không bao giờ ghi trực tiếp cột này.
+  priority           String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   // NOTE: the Postgres GIN index on coloringPages (jsonb containment) is omitted
@@ -192,6 +195,7 @@ model SourceBook {
   priority         String?
   importedFromCsv  String?
   data             Json     @default(dbgenerated("'{}'"))
+  cloneJobs        CloneJob[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -262,6 +266,11 @@ model CloneJob {
   name           String
   status         String   @default("pending")
   sourceBookId   String?
+  // Quan hệ thật thay cho việc đọc data->>'sourceBookId'. Cột + index đã tồn
+  // tại từ trước nhưng chưa từng được ghi; backfill ở
+  // prisma/clonejob-sourcebook-2026-09.sql đổ giá trị từ JSON sang. Khoá JSON
+  // được giữ lại cho các chỗ đang đọc nó.
+  sourceBook     SourceBook? @relation(fields: [sourceBookId], references: [id])
   sourceFileName String?
   sourcePdfUrl   String?
   totalPages     Int      @default(0)
