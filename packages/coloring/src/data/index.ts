@@ -1,5 +1,6 @@
 export { useCloneJobs } from "./use-clone-jobs";
-export type { UseCloneJobsResult } from "./use-clone-jobs";
+export type { UseCloneJobsResult, CloneJobsFilter } from "./use-clone-jobs";
+export * from "./use-clone-facets";
 export { useCloneJob } from "./use-clone-job";
 export type { UseCloneJobResult } from "./use-clone-job";
 export { useBooks } from "./use-books";

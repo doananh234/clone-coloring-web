@@ -24,12 +24,18 @@ export interface CloneJobRow {
   brand: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Niche của SourceBook nguồn (qua quan hệ CloneJob.sourceBook). */
+  niche?: string | null;
+  /** Priority của SourceBook nguồn. */
+  priority?: string | null;
 }
 
 export interface CloneJobsResponse {
   success: boolean;
   data: CloneJobRow[];
   counts: Record<string, number>;
+  /** Tổng số job khớp filter tag; null khi request không lọc theo tag. */
+  total?: number | null;
 }
 
 export interface CloneJobPage {
