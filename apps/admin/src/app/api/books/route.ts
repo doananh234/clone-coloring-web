@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma, ci, jsonPath } from "@vx/db";
 import { getOperatorFromRequest } from "@/lib/auth/require-operator";
+import { bookTagClause } from "./filters";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -64,6 +65,13 @@ export async function GET(req: NextRequest) {
     and.push({ interiorPages: { gt: 40 } });
   }
 
+  // Tag từ CSV nguồn, denormalized sang cột scalar bởi trigger book_denorm_perf
+  // nên đây là so khớp btree chứ không phải JSONB path scan.
+  const niche = (searchParams.get("niche") || "").trim();
+  if (niche) and.push(bookTagClause("niche", niche));
+  const priority = (searchParams.get("priority") || "").trim();
+  if (priority) and.push(bookTagClause("priority", priority));
+
   const where: Prisma.BookWhereInput = and.length ? { AND: and } : {};
 
   try {
@@ -85,7 +93,8 @@ export async function GET(req: NextRequest) {
     // b.etsyListing (title/price) and filters on it, so it must be lifted here.
     const data = rows.map((b) => ({
       ...b,
-      niche: (b.data as { niche?: unknown } | null)?.niche ?? null,
+      niche: b.niche ?? (b.data as { niche?: unknown } | null)?.niche ?? null,
+      priority: b.priority ?? null,
       queueStatus: (b.data as { queueStatus?: unknown } | null)?.queueStatus ?? "todo",
       exportUrl: (b.data as { export?: { url?: string } } | null)?.export?.url ?? null,
       etsyListing: (b.data as { etsyListing?: unknown } | null)?.etsyListing ?? null,
