@@ -5,7 +5,7 @@ Branch: `feat/jobs-search-source`. Spec: `docs/superpowers/specs/2026-09-21-jobs
 ## Các bước
 
 - [x] 1. API filter: `q` + `source` trong `apps/admin/src/app/api/clone/filters.ts` + `route.ts` (raw ILIKE lấy id theo brand, đếm total khi có q/source) + test
-- [ ] 2. facets trả `sources` (`apps/admin/src/app/api/clone/facets/route.ts`) + test; type `CloneFacets` ở `packages/coloring/src/data/use-clone-facets.ts`
+- [x] 2. facets trả `sources` (`apps/admin/src/app/api/clone/facets/route.ts`) + test; type `CloneFacets` ở `packages/coloring/src/data/use-clone-facets.ts`
 - [ ] 3. Client: `use-clone-jobs.ts` nhận q/source + keepPreviousData; `jobs-screen.tsx` input state local + debounce 300ms, bỏ lọc client (trừ job nháp local), thêm Select nguồn
 - [ ] 4. Verify: `yarn workspace @vx/admin test`, `yarn typecheck`, thử tay trên màn Clone jobs
 
