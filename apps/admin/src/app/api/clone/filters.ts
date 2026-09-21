@@ -28,14 +28,38 @@ export interface CloneJobFilters {
   status?: string | null;
   niche?: string | null;
   priority?: string | null;
+  /** Từ khoá tìm theo tên job, id và nguồn. */
+  q?: string | null;
+  /** Id các job có nguồn (`data.brand`) khớp `q`. Route tự lấy bằng raw ILIKE
+   *  vì filter JSON của Prisma không có chế độ không phân biệt hoa thường. */
+  brandMatchIds?: string[];
+  /** Nguồn chính xác (`data.brand`). */
+  source?: string | null;
+}
+
+function searchClause(q: string, brandMatchIds: string[] = []): Prisma.CloneJobWhereInput {
+  const or: Prisma.CloneJobWhereInput[] = [
+    { name: { contains: q, mode: "insensitive" } },
+    { id: { contains: q, mode: "insensitive" } },
+  ];
+  if (brandMatchIds.length) or.push({ id: { in: brandMatchIds } });
+  return { OR: or };
 }
 
 /** Dựng `where` cho list jobs. Trả undefined khi không lọc gì (giữ nguyên
  *  đường nhanh cũ: Prisma bỏ qua `where` hoàn toàn). */
 export function buildCloneJobWhere(f: CloneJobFilters): Prisma.CloneJobWhereInput | undefined {
   const and: Prisma.CloneJobWhereInput[] = [];
+  const q = f.q?.trim();
   if (f.status && f.status !== "all") and.push({ status: f.status });
   if (f.niche) and.push(tagClause("niche", f.niche));
   if (f.priority) and.push(tagClause("priority", f.priority));
+  if (q) and.push(searchClause(q, f.brandMatchIds));
+  if (f.source) and.push({ data: { path: ["brand"], equals: f.source } });
   return and.length ? { AND: and } : undefined;
+}
+
+/** Escape ký tự đại diện của LIKE để từ khoá được khớp nguyên văn. */
+export function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }

@@ -49,4 +49,47 @@ describe("buildCloneJobWhere", () => {
     expect(buildCloneJobWhere({ status: "", niche: "", priority: null })).toBeUndefined();
   });
 
+  it("searches name and id case-insensitively", () => {
+    expect(buildCloneJobWhere({ q: "coco" })).toEqual({
+      AND: [
+        {
+          OR: [
+            { name: { contains: "coco", mode: "insensitive" } },
+            { id: { contains: "coco", mode: "insensitive" } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("adds the source-matched ids as a third search branch", () => {
+    expect(buildCloneJobWhere({ q: "plat", brandMatchIds: ["a", "b"] })).toEqual({
+      AND: [
+        {
+          OR: [
+            { name: { contains: "plat", mode: "insensitive" } },
+            { id: { contains: "plat", mode: "insensitive" } },
+            { id: { in: ["a", "b"] } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("trims the query and ignores a blank one", () => {
+    expect(buildCloneJobWhere({ q: "   " })).toBeUndefined();
+    expect(buildCloneJobWhere({ q: " coco " })).toEqual(buildCloneJobWhere({ q: "coco" }));
+  });
+
+  it("matches a source exactly through the JSON brand key", () => {
+    expect(buildCloneJobWhere({ source: "Búsqueda y Plática" })).toEqual({
+      AND: [{ data: { path: ["brand"], equals: "Búsqueda y Plática" } }],
+    });
+  });
+
+  it("ANDs search and source with the other filters", () => {
+    const where = buildCloneJobWhere({ status: "pending", niche: "Cozy", q: "x", source: "S" });
+    expect(where?.AND).toHaveLength(4);
+  });
+
 });

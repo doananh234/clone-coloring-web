@@ -4,8 +4,10 @@ import { NextRequest } from "next/server";
 const findMany = vi.fn();
 const count = vi.fn();
 const readCounts = vi.fn();
+const queryRaw = vi.fn();
 vi.mock("@vx/db", () => ({
   prisma: {
+    $queryRaw: (...a: unknown[]) => queryRaw(...a),
     cloneJob: {
       findMany: (...a: unknown[]) => findMany(...a),
       count: (...a: unknown[]) => count(...a),
@@ -31,6 +33,49 @@ describe("GET /api/clone", () => {
     findMany.mockReset().mockResolvedValue([]);
     count.mockReset().mockResolvedValue(7);
     readCounts.mockReset().mockResolvedValue({ total: 0, counts: {} });
+    queryRaw.mockReset().mockResolvedValue([]);
+  });
+
+  it("searches by q across name, id and the source-matched ids", async () => {
+    queryRaw.mockResolvedValue([{ id: "s1" }]);
+    const res = await GET(req("q=plat&counts=0"));
+
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    // Tagged template: the escaped ILIKE pattern is the bound value.
+    expect(queryRaw.mock.calls[0].slice(1)).toEqual(["%plat%"]);
+    const where = findMany.mock.calls[0][0].where;
+    expect(where).toEqual({
+      AND: [
+        {
+          OR: [
+            { name: { contains: "plat", mode: "insensitive" } },
+            { id: { contains: "plat", mode: "insensitive" } },
+            { id: { in: ["s1"] } },
+          ],
+        },
+      ],
+    });
+    expect(count.mock.calls[0][0].where).toEqual(where);
+    expect((await res.json()).total).toBe(7);
+  });
+
+  it("escapes LIKE wildcards in q", async () => {
+    await GET(req(`q=${encodeURIComponent("50%_off")}&counts=0`));
+    expect(queryRaw.mock.calls[0].slice(1)).toEqual(["%50\\%\\_off%"]);
+  });
+
+  it("skips the source lookup when q is blank", async () => {
+    await GET(req("q=%20%20&counts=0"));
+    expect(queryRaw).not.toHaveBeenCalled();
+    expect(count).not.toHaveBeenCalled();
+  });
+
+  it("filters by exact source and counts the total", async () => {
+    const res = await GET(req(`source=${encodeURIComponent("Búsqueda y Plática")}&counts=0`));
+    expect(findMany.mock.calls[0][0].where).toEqual({
+      AND: [{ data: { path: ["brand"], equals: "Búsqueda y Plática" } }],
+    });
+    expect((await res.json()).total).toBe(7);
   });
 
   it("passes the SAME where to findMany and count when filtering", async () => {
