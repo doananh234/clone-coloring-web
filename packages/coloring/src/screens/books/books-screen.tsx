@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryParam, useQueryNumber, useSetQueryParams } from "../../hooks/use-query-param";
+import { useQueryParam, useQueryNumber, useSetQueryParams, useDebouncedInput } from "../../hooks/use-query-param";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
@@ -77,18 +77,8 @@ export function BooksScreen() {
   const setInterior = (v: string) => setParams({ interior: v || null, page: null });
 
   // Debounced search: the input updates instantly for a responsive feel, but the
-  // URL param `q` (which drives the API fetch) is only written after typing
-  // pauses — so we don't fire a request + refetch on every keystroke.
-  const [searchText, setSearchText] = useState(q);
-  const setQRef = useRef(setQ);
-  setQRef.current = setQ;
-  // Sync the box when `q` changes from outside (back/forward nav, reset).
-  useEffect(() => setSearchText(q), [q]);
-  useEffect(() => {
-    if (searchText === q) return;
-    const t = setTimeout(() => setQRef.current(searchText), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [searchText, q]);
+  // URL param `q` (which drives the API fetch) is only written after typing pauses.
+  const [searchText, setSearchText] = useDebouncedInput(q, setQ, SEARCH_DEBOUNCE_MS);
   // Search/category/status all filter server-side (full library, every page) —
   // not client-side on the current page (the old "search only in this page" bug).
   const { books, total, totalPages, isLoading, isError } = useBooks(page, 24, { q, cat, status, assign: assignFilter, interior, niche, priority });
