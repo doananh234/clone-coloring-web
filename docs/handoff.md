@@ -18,3 +18,4 @@ Branch: `feat/jobs-search-source`. Spec: `docs/superpowers/specs/2026-09-21-jobs
 ## Lưu ý cho agent tiếp theo
 
 - Admin đã có sẵn vài test fail và worker có ~19 lỗi tsc từ trước; chỉ quan tâm lỗi mới.
+- Bước 4: unit test pass (coloring 126/126; admin 158/164, 6 lỗi có sẵn ở colorize/cover-export/generate-pdf/source-covers), `tsc` admin sạch. CHƯA thử trên DB thật (raw SQL `data->>'brand'` + JSON path filter mới chỉ test bằng mock) — cần user cho phép tunnel + `yarn dev --filter=@vx/admin` hoặc tự thử tay.
