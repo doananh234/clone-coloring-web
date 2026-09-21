@@ -4,7 +4,7 @@ import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/serve
 import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { cloneQueue } from "@/lib/queue/clone-queue";
-import { buildCloneJobWhere } from "./filters";
+import { buildCloneJobWhere, escapeLike } from "./filters";
 
 type UploadMode = "one-shot" | "multi-step";
 
@@ -25,7 +25,19 @@ export async function GET(req: NextRequest) {
 
     const niche = url.searchParams.get("niche");
     const priority = url.searchParams.get("priority");
-    const where = buildCloneJobWhere({ status, niche, priority });
+    const q = url.searchParams.get("q")?.trim() || "";
+    const source = url.searchParams.get("source");
+    // Nguồn nằm trong JSON (`data.brand`) mà filter JSON của Prisma không có
+    // chế độ không phân biệt hoa thường → lấy id khớp bằng ILIKE rồi gộp vào
+    // nhánh OR của search. Danh sách id đi thành bind param: nếu một từ khoá
+    // khớp hơn ~30k job sẽ chạm giới hạn param của Postgres (hiện ~2.2k job).
+    const brandMatchIds = q
+      ? (
+          await prisma.$queryRaw<{ id: string }[]>`
+            SELECT id FROM "CloneJob" WHERE data->>'brand' ILIKE ${`%${escapeLike(q)}%`}`
+        ).map((r) => r.id)
+      : [];
+    const where = buildCloneJobWhere({ status, niche, priority, q, brandMatchIds, source });
 
     // Terminal states are sorted by when they became terminal (updatedAt), so
     // the latest finish/failure is visible at the top. Non-terminal states
@@ -35,10 +47,10 @@ export async function GET(req: NextRequest) {
       ? ({ updatedAt: "desc" } as const)
       : ({ createdAt: "desc" } as const);
 
-    // Tab badges đọc cached counts (theo status, chưa qua filter tag), nên khi
-    // có filter tag chúng không còn dùng được để tính số trang. Chỉ khi đó mới
-    // trả thêm một count thật — giữ nguyên chi phí của đường không-lọc.
-    const hasTagFilter = Boolean(niche || priority);
+    // Tab badges đọc cached counts (theo status, chưa qua filter), nên khi có
+    // filter tag / search / nguồn chúng không còn dùng được để tính số trang.
+    // Chỉ khi đó mới trả thêm một count thật — giữ nguyên chi phí của đường không-lọc.
+    const hasTagFilter = Boolean(niche || priority || q || source);
 
     const [rows, cached, total] = await Promise.all([
       prisma.cloneJob.findMany({

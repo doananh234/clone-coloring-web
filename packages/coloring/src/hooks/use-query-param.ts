@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
 /**
@@ -54,4 +54,43 @@ export function useQueryNumber(key: string, fallback = 1): [number, (n: number) 
   const [raw, setRaw] = useQueryParam(key, String(fallback));
   const value = Math.max(1, Number(raw) || fallback);
   return [value, (n: number) => setRaw(String(n))];
+}
+
+/**
+ * Text input backed by a URL param, debounced. The box updates instantly (local
+ * state) and `commit` — which writes the URL and so drives the fetch — only runs
+ * after typing pauses. Writing the URL on every keystroke re-renders the whole
+ * route and the box briefly shows the stale URL value, dropping typed chars.
+ *
+ * `value` changing from outside (back/forward, reset) resyncs the box, but NOT
+ * when it's just our own commit landing: the user may have typed more while
+ * router.replace was in flight, and resyncing then would eat those chars.
+ */
+export function useDebouncedInput(
+  value: string,
+  commit: (v: string) => void,
+  delayMs = 300,
+): [string, (v: string) => void] {
+  const [text, setText] = useState(value);
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  const committedRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== committedRef.current) {
+      committedRef.current = value;
+      setText(value);
+    }
+  }, [value]);
+
+  useEffect(() => {
+    if (text === committedRef.current) return;
+    const t = setTimeout(() => {
+      committedRef.current = text;
+      commitRef.current(text);
+    }, delayMs);
+    return () => clearTimeout(t);
+  }, [text, delayMs]);
+
+  return [text, setText];
 }
