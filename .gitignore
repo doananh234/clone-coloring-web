@@ -36,3 +36,7 @@ backups/
 
 # Claude Code personal settings (not shared)
 .claude/settings.local.json
+
+# Build info / agent worktrees — noise that looks like an unfinished step to the next agent
+*.tsbuildinfo
+.claude/worktrees/
