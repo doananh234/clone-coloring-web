@@ -21,3 +21,4 @@ Branch: `feat/clone-keep-source-cover`. User đã duyệt thiết kế (2026-09-
 ## Lưu ý cho agent tiếp theo
 
 - Backfill ghi prod: chạy bằng `docker exec vx-worker /app/node_modules/.bin/tsx ...` (KHÔNG `yarn backfill:*` — .env cũ trong image). Có sách user đã tự chọn bìa (Cover candidates / cover editor) → hỏi user phạm vi trước khi apply.
+- 2026-09-22: merge `ae6214b` + deploy prod xong. Dry-run backfill trên prod: 134 sách; sẽ đổi 126 (auto-ai 107, manual-push 18, other 1); bỏ qua 8 (no-source-page); 0 ảnh nguồn bị mất. CHỜ user chọn có `--skip-manual` hay không rồi mới `--apply`.
