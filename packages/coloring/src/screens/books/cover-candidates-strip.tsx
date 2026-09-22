@@ -35,7 +35,7 @@ export function CoverCandidatesStrip({
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 10 }}>
         {candidates.map((c) => {
           const isSel = c.id === selectedId;
-          const label = c.origin === "source" ? "Nguồn" : "Push";
+          const label = c.origin === "original" ? "Bìa gốc" : c.origin === "source" ? "Ban đầu" : "Push";
           return (
             <div key={c.id}>
               {/* Image is the positioning context so the label/badges anchor to the

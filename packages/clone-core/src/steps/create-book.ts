@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@vx/db";
 import type { JobContext } from "../job-context";
 import { normalizeRawData } from "./book-page-meta";
+import { pickSourceCoverPage } from "./source-cover";
 
 /**
  * stepCreateBook — writes the final Book row from a finished CloneJob.
@@ -105,8 +106,7 @@ export async function stepCreateBook(
   );
 
   // Partition by D2 pageType. Legacy pages (no pageType) count as interior so
-  // pre-D2 jobs behave exactly as before.
-  const coverPage = usablePages.find((p) => p.pageType === "cover");
+  // pre-D2 jobs behave exactly as before. The cover page itself is handled below.
   const introPages = usablePages.filter((p) => p.pageType === "interiorIntro");
   const interiorPages = usablePages
     .filter((p) => p.pageType !== "cover" && p.pageType !== "interiorIntro")
@@ -143,13 +143,18 @@ export async function stepCreateBook(
     }),
   );
 
-  // Cover: move the classified cover page if present; otherwise mirror the
-  // first interior page so coverUrl always points at a real, moved image.
+  // Cover = bìa của sách GỐC (ảnh render từ PDF nguồn, không phải bản redesign),
+  // copy sang assets/{bookId}/ vì ảnh của clone job là tạm và bị dọn dần. Không
+  // còn bước gen bìa AI sau create-book. Chỉ khi không có ảnh gốc nào dùng được
+  // mới rơi về trang interior đầu tiên để coverUrl luôn trỏ tới một ảnh thật.
+  const sourceCover = pickSourceCoverPage(pages);
   let coverUrl = coloringPages[0]?.url ?? "";
-  if (coverPage) {
-    const src = coverPage.redesignedUrl ?? coverPage.imageUrl;
-    const ext = src.split(".").pop()?.split("?")[0] || "png";
-    coverUrl = await deps.copyImage({ sourceUrl: src, destKey: `assets/${bookId}/cover.${ext}` });
+  if (sourceCover?.imageUrl) {
+    const ext = sourceCover.imageUrl.split("?")[0].match(/\.(png|jpe?g|webp)$/i)?.[1] ?? "png";
+    coverUrl = await deps.copyImage({
+      sourceUrl: sourceCover.imageUrl,
+      destKey: `assets/${bookId}/cover.${ext}`,
+    });
   }
   const firstImage = coverUrl;
 
@@ -194,6 +199,9 @@ export async function stepCreateBook(
         isEditionConverted: false,
         cloneJobId: ctx.jobId,
         sourceBookId: ctx.sourceBookId ?? null,
+        // Ảnh nền mặc định cho cover editor khi operator tự làm bìa sau (trước
+        // đây do stepGenerateCover ghi) — cùng quy ước với route create-book tay.
+        ...(coloringPages[0]?.url ? { coverMeta: { sourceThumbnailUrl: coloringPages[0].url } } : {}),
         ...(niche ? { niche, nicheLower: niche.toLowerCase() } : {}),
       },
     },

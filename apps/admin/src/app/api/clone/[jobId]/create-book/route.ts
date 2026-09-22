@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@vx/db";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
-import { moveCloneJobImageToBook } from "@/lib/move-clone-page-to-book";
+import { pickSourceCoverPage } from "@vx/clone-core/steps";
+import { moveCloneJobImageToBook, moveCloneJobCoverToBook } from "@/lib/move-clone-page-to-book";
 import { extractSourceStyleFromCover } from "./extract-source-style";
 import { readSourceTags } from "../../source-tags";
 
@@ -134,12 +135,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const sourceTags = await readSourceTags(jobId);
 
+    // Bìa = bìa của sách GỐC (ảnh nguồn gốc, không phải bản redesign) — cùng quy
+    // tắc với stepCreateBook của worker. Không có ảnh nào thì để mặc định (trống).
+    const sourceCover = pickSourceCoverPage(allPages);
+    const coverUrl = sourceCover?.imageUrl
+      ? await moveCloneJobCoverToBook({ sourceUrl: sourceCover.imageUrl, bookId })
+      : undefined;
+
     const createdBook = await prisma.book.create({
       data: {
         id: bookId,
         title: m.title || bd.title || row.name || "Untitled",
         subtitle: m.subtitle || bd.subtitle || "",
         description: m.description || bd.description || "",
+        coverUrl,
+        thumbnailUrl: coverUrl,
+        squareThumbnailUrl: coverUrl,
         categoryId: m.categoryId || bd.categoryId || null,
         category: m.category || bd.category || null,
         badge: m.badge || null,

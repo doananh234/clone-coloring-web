@@ -8,9 +8,6 @@ import {
   stepReproduce,
   stepCreateBook,
   stepOneShot,
-  stepGenerateCover,
-  stepGenerateBookMeta,
-  stepFinalizeCover,
   stepFillInterior,
 } from "@vx/clone-core";
 import { db } from "../db";
@@ -23,8 +20,6 @@ import {
   reproduceDeps,
   createBookDeps,
   oneShotDeps,
-  generateCoverDeps,
-  generateBookMetaDeps,
   fillInteriorDeps,
 } from "./step-deps";
 
@@ -97,8 +92,7 @@ export async function processCloneJob(jobId: string): Promise<void> {
     //
     // Auto-classify: set CLONE_AUTO_CLASSIFY=true (env) or job.data.autoClassify
     // to skip the manual review entirely — the job flows straight through to
-    // create-book → generate-cover → generate-book-meta → finalize-cover, so a
-    // cloned book ships with full AI meta without any manual step.
+    // fill-interior → create-book without any manual step.
     const gateRow = await db.cloneJob.findUnique({
       where: { id: jobId },
       select: { data: true },
@@ -132,40 +126,11 @@ export async function processCloneJob(jobId: string): Promise<void> {
       ? ctx.resultBookId
       : await withRetry("create-book", () => stepCreateBook(ctx, db, createBookDeps), ctx);
 
-    if (!ctx.isDone("generate-cover")) {
-      // stepGenerateCover runs in BOTH multi-step and one-shot paths. In one-shot mode,
-      // stepOneShot populates bookData.titleCover from the Diaflow LLM's isCover page.
-      // In multi-step mode, that extraction doesn't happen — stepGenerateCover falls back
-      // to bookData.title (the long form title) for the cover header.
-      await withRetry(
-        "generate-cover",
-        () => stepGenerateCover(ctx, db, generateCoverDeps),
-        ctx,
-      );
-    }
-
-    // Full AI book meta (title/subtitle/description, tags, Etsy, colors, badge,
-    // price, category, specs…) generated FROM the cover — parity with the manual
-    // "Sinh meta AI" button, so every cloned book ships complete.
-    if (!ctx.isDone("generate-book-meta")) {
-      await withRetry(
-        "generate-book-meta",
-        () => stepGenerateBookMeta(ctx, db, generateBookMetaDeps),
-        ctx,
-      );
-    }
-
-    // "Cover AI cuối" — bake the fresh meta title/subtitle + brand onto the clean
-    // cover illustration (reuses generateCoverDeps: it already carries
-    // generateAiCover + resolveR2Url, a superset of FinalizeCoverDeps).
-    if (!ctx.isDone("finalize-cover")) {
-      await withRetry(
-        "finalize-cover",
-        () => stepFinalizeCover(ctx, db, generateCoverDeps),
-        ctx,
-      );
-    }
-
+    // No automatic cover any more: the book keeps the SOURCE book's cover, set
+    // by create-book. generate-cover / generate-book-meta / finalize-cover stay
+    // in clone-core (and in STEP_ORDER, which JobContext.isDone() indexes — old
+    // jobs may still have one of them as currentStep) but are no longer run.
+    // Meta and a designed cover are on-demand from the book screen.
     await ctx.markComplete(bookId);
     await notifySuccess(ctx, bookId);
   } catch (err) {
