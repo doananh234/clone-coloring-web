@@ -28,3 +28,21 @@ export async function moveCloneJobImageToBook(args: {
   const { url } = await copyR2Object({ client: r2Client, config: r2Config, sourceKey, destKey });
   return url;
 }
+
+/**
+ * Same move for the book cover: the source book's original cover page lands at
+ * assets/{bookId}/cover.{ext} (parity with the worker's stepCreateBook).
+ */
+export async function moveCloneJobCoverToBook(args: { sourceUrl: string; bookId: string }): Promise<string> {
+  const { sourceUrl, bookId } = args;
+  if (!sourceUrl || sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://")) {
+    return sourceUrl;
+  }
+
+  const sourceKey = sourceUrl.replace(/^\//, "").split("?")[0];
+  const ext = sourceKey.match(/\.(png|jpe?g|webp)$/i)?.[1] ?? "png";
+  const destKey = `assets/${bookId}/cover.${ext}`;
+
+  const { url } = await copyR2Object({ client: r2Client, config: r2Config, sourceKey, destKey });
+  return url;
+}
