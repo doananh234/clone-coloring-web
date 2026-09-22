@@ -199,7 +199,9 @@ export interface PageVariant {
 export interface CoverCandidate {
   id: string;
   url: string;
-  origin: "source" | "pushed";
+  /** "source" = bìa sách có trước khi có candidate nào; "pushed" = đẩy từ một
+   *  trang màu; "original" = bìa của sách gốc (nguồn clone). */
+  origin: "source" | "pushed" | "original";
   fromPageId?: string;
   createdAt: string;
 }
