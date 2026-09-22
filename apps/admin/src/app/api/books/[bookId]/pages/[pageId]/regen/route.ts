@@ -22,16 +22,28 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       provider?: string;
       artStyleId?: string;
       instructions?: string;
+      /** Full replacement prompt from the intro regen dialog. */
+      promptOverride?: string;
+      /** "summary" = an intro page (book.summaryPages). Default: an interior. */
+      target?: "page" | "summary";
     };
+    const target = body.target === "summary" ? "summary" : undefined;
+    const promptOverride =
+      typeof body.promptOverride === "string" ? body.promptOverride.trim() || undefined : undefined;
     const provider =
       body.provider === "kingcong" || body.provider === "diaflow" || body.provider === "litellm" || body.provider === "azure"
         ? body.provider
         : undefined;
 
     // Fast-fail validation so the caller gets an immediate 404.
-    const book = await prisma.book.findUnique({ where: { id: bookId }, select: { coloringPages: true, title: true } });
+    const book = await prisma.book.findUnique({
+      where: { id: bookId },
+      select: { coloringPages: true, summaryPages: true, title: true },
+    });
     if (!book) return NextResponse.json({ error: "Book not found" }, { status: 404 });
-    const pages = (book.coloringPages as unknown as BookColoringPage[]) ?? [];
+    // Intro pages are a separate column, so look in the list the caller named.
+    const column = target === "summary" ? book.summaryPages : book.coloringPages;
+    const pages = (column as unknown as BookColoringPage[]) ?? [];
     const page = pages.find((p) => p.id === pageId);
     if (!page?.url) return NextResponse.json({ error: "Page not found" }, { status: 404 });
 
@@ -47,6 +59,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           newAngle: Boolean(body.newAngle),
           artStyleId: body.artStyleId || undefined,
           instructions: typeof body.instructions === "string" ? body.instructions.trim() || undefined : undefined,
+          promptOverride,
+          target,
           provider,
         },
       },

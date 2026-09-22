@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # VX Admin Theme — Project Guide
 
 ## Overview

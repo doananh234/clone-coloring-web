@@ -7,6 +7,9 @@ import type { BookColoringPage } from "./types";
 
 const LOCAL_ONLY = "Chỉ chạy ở chế độ ghi thật (staging).";
 
+/** Matches the jobs screen's default in its "% thay đổi khi regen" box. */
+const DEFAULT_CHANGE_PERCENT = 30;
+
 type PolledJob = { resultUrl?: string; resultId?: string; error?: string };
 
 /**
@@ -40,9 +43,12 @@ async function pollGenerationJob(jobId: string, maxMs = 15 * 60 * 1000): Promise
  * book-detail-page.tsx handlers. All behind the write flag (default local = off).
  * PUT sends real Book columns (coloringPages / squareThumbnailUrl) directly.
  *
- * `cloneJobId` (from book.data.cloneJobId) enables Regen / Đổi góc: a book page
- * maps 1:1 by index to its source clone job page, so /reproduce {pageIndex, apply:true}
- * regenerates and writes straight back onto the book page.
+ * `cloneJobId` (from book.data.cloneJobId) enables Regen / Đổi góc via /reproduce.
+ * A book page does NOT map by index to its source clone job page — the book's
+ * coloringPages holds interiors only (create-book drops excluded pages and lifts
+ * the cover + intro pages out), so position i in one array is an unrelated page
+ * in the other. Every clone-job call therefore identifies the page by
+ * `sourcePageNumber` (valid in the job) plus `bookPageId` (valid in the book).
  */
 export function usePageActions(bookId: string, cloneJobId?: string) {
   const qc = useQueryClient();
@@ -86,28 +92,73 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
      * if the job no longer exists → 404) → fall back to regenerating from the
      * page's CURRENT image. `viaJob` tells the caller which apply path to use.
      */
-    genCandidate: async (pageIndex: number, newAngle: boolean, pageId: string, artStyleId?: string, instructions?: string): Promise<{ url: string; cameraView?: string; viaJob: boolean }> => {
+    genCandidate: async (page: BookColoringPage, newAngle: boolean, artStyleId?: string, instructions?: string): Promise<{ url: string; cameraView?: string; viaJob: boolean }> => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
       // A chosen B&W style OR user-typed edit instructions can only be honored by
       // the image path (reproduce/clone-job has no style/instruction input), so
       // either one forces regen-from-image.
-      if (artStyleId || instructions) return genFromImage(pageId, newAngle, artStyleId, instructions);
-      if (!cloneJobId) return genFromImage(pageId, newAngle);
+      if (artStyleId || instructions) return genFromImage(page.id, newAngle, artStyleId, instructions);
+      // No source page number → this page has no counterpart in the clone job
+      // (e.g. origin:"additional"), so /reproduce could only guess. Redraw from
+      // the page's own image instead.
+      if (!cloneJobId || page.sourcePageNumber == null) return genFromImage(page.id, newAngle);
       try {
         const res = await httpPost<{ results?: { url?: string; cameraView?: string }[] }>(
           `${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`,
-          // No B&W style chosen here → keep the page's own nét vẽ (faithful clone),
-          // not a redesign variation. Only "đổi góc" changes the camera.
-          { pageIndex, newAngle, apply: false, preserveStyle: true },
+          // Same payload shape the jobs screen sends, so both screens get the
+          // same prompt (buildRedesignPrompt) anchored on the ORIGINAL source
+          // page. preserveStyle used to be set here, which selected the
+          // "do NOT redesign, keep the exact stroke weight" prompt — it redrew
+          // whatever texture it was handed, so regens only ever added detail.
+          {
+            sourcePageNumber: page.sourcePageNumber,
+            bookPageId: page.id,
+            newAngle,
+            apply: false,
+            changePercent: DEFAULT_CHANGE_PERCENT,
+          },
         );
         const r = res?.results?.[0];
-        if (!r?.url) throw new Error("no candidate");
+        if (!r?.url) throw new Error("Clone job không trả về bản nào.");
         return { url: r.url, cameraView: r.cameraView, viaJob: true };
-      } catch {
-        // Clone job missing (404) or reproduce failed → regen from current image.
-        return genFromImage(pageId, newAngle);
+      } catch (err) {
+        // ONLY a missing clone job justifies redrawing from the page's own
+        // image. A bare catch here hid a misrouted request for months: every
+        // failure quietly switched both the source image and the prompt, and
+        // the UI showed a normal-looking candidate either way.
+        if ((err as { status?: number } | null)?.status !== 404) throw err;
+        return genFromImage(page.id, newAngle);
       }
     },
+    /**
+     * Regen one INTRO page → a preview candidate. Intro pages live in the book's
+     * summaryPages column, so this always takes the id-addressed regen route with
+     * target:"summary" — never /reproduce, whose apply step writes coloringPages.
+     * `promptOverride` replaces the server's built prompt outright (the dialog
+     * prefills the box from GET /api/intro-regen-prompt).
+     */
+    genIntroCandidate: async (page: BookColoringPage, promptOverride?: string): Promise<{ url: string }> => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+      const res = await httpPost<{ jobId?: string; url?: string }>(
+        `${COLORING_API_BASE}/books/${encodeURIComponent(bookId)}/pages/${encodeURIComponent(page.id)}/regen`,
+        { target: "summary", promptOverride: promptOverride?.trim() || undefined },
+      );
+      if (res?.jobId) {
+        const job = await pollGenerationJob(res.jobId);
+        if (!job.resultUrl) throw new Error("Không tạo được bản mới cho trang intro.");
+        return { url: job.resultUrl };
+      }
+      if (!res?.url) throw new Error("Không tạo được bản mới cho trang intro.");
+      return { url: res.url };
+    },
+    /** Apply an intro candidate: point that summaryPages entry at the new image. */
+    applyIntroCandidate: async (summaryPages: BookColoringPage[], pageId: string, url: string) => {
+      if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
+      await put({ summaryPages: summaryPages.map((p) => (p.id === pageId ? { ...p, url } : p)) });
+    },
+    /** Remove one intro page from the book. */
+    removeIntroPage: (summaryPages: BookColoringPage[], pageId: string) =>
+      put({ summaryPages: summaryPages.filter((p) => p.id !== pageId) }),
     /** Apply an image-regen candidate (no job): set the page's line-art url. */
     applyImageCandidate: async (pages: BookColoringPage[], pageId: string, url: string) => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
@@ -121,10 +172,15 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
      * Apply a previously generated candidate to this page (sets the job page's
      * reproducedUrl AND updates the book page image). kind "regen" | "angle".
      */
-    applyCandidate: async (pageIndex: number, kind: "regen" | "angle") => {
+    applyCandidate: async (page: BookColoringPage, kind: "regen" | "angle") => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
       if (!cloneJobId) throw new Error("Sách này không có clone job nguồn.");
-      await httpPost(`${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/apply-candidate`, { pageIndex, kind });
+      if (page.sourcePageNumber == null) throw new Error("Trang này không có trang nguồn trong clone job.");
+      await httpPost(`${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/apply-candidate`, {
+        sourcePageNumber: page.sourcePageNumber,
+        bookPageId: page.id,
+        kind,
+      });
       inval();
     },
     /**
@@ -133,12 +189,15 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
      * apply when `apply:true`, so there is no preview/confirm step. Used by batch
      * regen. Does NOT invalidate per call (the batch invalidates once at the end).
      */
-    regenApply: async (pageIndex: number) => {
+    regenApply: async (page: BookColoringPage) => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
       if (!cloneJobId) throw new Error("Sách này không có clone job nguồn.");
+      // Batch regen writes straight through with no preview, so a page the job
+      // doesn't know about must fail loudly rather than redraw something else.
+      if (page.sourcePageNumber == null) throw new Error("Trang này không có trang nguồn trong clone job.");
       const res = await httpPost<{ succeeded?: number; results?: { error?: string }[] }>(
         `${COLORING_API_BASE}/clone/${encodeURIComponent(cloneJobId)}/reproduce`,
-        { pageIndex, newAngle: false, apply: true },
+        { sourcePageNumber: page.sourcePageNumber, bookPageId: page.id, newAngle: false, apply: true },
       );
       if (!res?.succeeded) throw new Error(res?.results?.[0]?.error || "Regen thất bại.");
     },
@@ -155,6 +214,19 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
     /** Remove one page from the book. */
     removePage: (pages: BookColoringPage[], pageId: string) =>
       put({ coloringPages: pages.filter((p) => p.id !== pageId) }),
+    /**
+     * Remove N pages from the book in ONE write (batch-select "Xoá đã chọn").
+     * Deliberately not a loop over removePage: that filters the SAME `pages`
+     * snapshot each time, so the second write would restore what the first
+     * removed. One write is also all-or-nothing — no half-deleted book.
+     * Only the book row is touched; the images stay on R2 (same as removePage),
+     * and the source clone job keeps its own pages, so a book export still
+     * ships the originals under "Main book/".
+     */
+    removePages: (pages: BookColoringPage[], pageIds: string[]) => {
+      const drop = new Set(pageIds);
+      return put({ coloringPages: pages.filter((p) => !drop.has(p.id)) });
+    },
     /** Persist a new interior page order (drag-drop reorder → full array). */
     reorderPages: (ordered: BookColoringPage[]) => put({ coloringPages: ordered }),
     /**

@@ -35,6 +35,10 @@ export interface BooksFilter {
   etsy?: string;
   /** "gt40" → only books with more than 40 interior pages. */
   interior?: string;
+  /** Niche chính xác, hoặc "__blank__" cho sách chưa gắn niche. */
+  niche?: string;
+  /** Priority chính xác, hoặc "__blank__" cho sách chưa gắn priority. */
+  priority?: string;
 }
 
 /** Books list (GET {base}/books → { data, meta }). Filters run server-side. */
@@ -46,8 +50,10 @@ export function useBooks(page = 1, limit = 20, filter: BooksFilter = {}): UseBoo
   const assignee = filter.assignee ?? "";
   const etsy = filter.etsy ?? "";
   const interior = filter.interior && filter.interior !== "" ? filter.interior : "";
+  const niche = filter.niche ?? "";
+  const priority = filter.priority ?? "";
   const query = useQuery({
-    queryKey: ["coloring", "books", page, limit, q, cat, status, assign, assignee, etsy, interior],
+    queryKey: ["coloring", "books", page, limit, q, cat, status, assign, assignee, etsy, interior, niche, priority],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (q) params.set("q", q);
@@ -57,6 +63,8 @@ export function useBooks(page = 1, limit = 20, filter: BooksFilter = {}): UseBoo
       if (assignee) params.set("assignee", assignee);
       if (etsy) params.set("etsy", etsy);
       if (interior) params.set("interior", interior);
+      if (niche) params.set("niche", niche);
+      if (priority) params.set("priority", priority);
       return httpGet<BooksResponse>(`${COLORING_API_BASE}/books?${params.toString()}`);
     },
     // Keep showing the previous page/results while the next query loads so the

@@ -16,6 +16,7 @@
     "backfill:regen-variants": "node --env-file=.env --import tsx src/scripts/backfill-regen-variants-to-pages.ts",
     "dedupe:styles": "node --env-file=.env --import tsx src/scripts/dedupe-coloring-styles.ts",
     "reset:stashed": "node --env-file=.env --import tsx src/scripts/reset-stashed-jobs.ts",
+    "restore:misregen": "node --env-file=.env --import tsx src/scripts/restore-misregen-pages.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -21,6 +21,7 @@ import { usePageActions } from "../../data/use-page-actions";
 import { useSetPageType } from "../../data/use-set-page-type";
 import { derivePageType, type BookPageType, type BookPagesState } from "../../data/page-type";
 import { PageActionsRow } from "./page-actions-row";
+import { IntroActionsRow } from "./intro-actions-row";
 import { CoverCandidatesStrip } from "./cover-candidates-strip";
 import { BookInformationTab } from "./book-info-tab";
 import { BookOriginalSection } from "./book-original-section";
@@ -229,8 +230,11 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
   const [fillProg, setFillProg] = useState("");
   const [preview, setPreview] = useState<Omit<PreviewModalProps, "open" | "onClose"> | null>(null);
   const [previewPage, setPreviewPage] = useState<BookColoringPage | null>(null);
+  // An intro page under preview. Separate from previewPage, which is an interior
+  // page and drives PageActionsRow (index-based, interior-only actions).
+  const [previewIntro, setPreviewIntro] = useState<BookColoringPage | null>(null);
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
-  const closePreview = () => { setPreview(null); setPreviewPage(null); setPreviewIdx(null); };
+  const closePreview = () => { setPreview(null); setPreviewPage(null); setPreviewIntro(null); setPreviewIdx(null); };
 
   const makePdf = async () => {
     setBusy(true); setMsg(null);
@@ -671,7 +675,7 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
                           page={{ id: s.id, url: s.url, isPublic: s.isPublic } as BookColoringPage}
                           displayNumber={s.sourcePageNumber != null ? `#${s.sourcePageNumber}` : `#${i + 1}`}
                           tone="intro"
-                          onClick={() => { setPreviewPage(null); setPreview({ title: `Intro ${i + 1}`, imageSrc: resolveImg(s.url) }); }}
+                          onClick={() => { setPreviewPage(null); setPreviewIntro(s); setPreview({ title: `Intro ${i + 1}`, imageSrc: resolveImg(s.url) }); }}
                           typeSelect={{
                             value: derivePageType(pageTypeState, { id: s.id, url: s.url } as BookColoringPage),
                             onChange: (t) => changePageType(s.id, t),
@@ -753,7 +757,15 @@ export function BookDetailScreen({ bookId }: { bookId: string }) {
         counter={previewIdx != null ? `${previewIdx + 1} / ${pages.length}` : undefined}
         onPrev={previewIdx != null && previewIdx > 0 ? () => openPageAt(previewIdx - 1) : undefined}
         onNext={previewIdx != null && previewIdx < pages.length - 1 ? () => openPageAt(previewIdx + 1) : undefined}
-        actions={previewPage ? <PageActionsRow bookId={bookId} pages={pages} page={previewPage} bookData={(b.data ?? undefined) as Record<string, unknown> | undefined} onRemoved={closePreview} /> : preview?.actions}
+        actions={
+          previewPage ? (
+            <PageActionsRow bookId={bookId} pages={pages} page={previewPage} bookData={(b.data ?? undefined) as Record<string, unknown> | undefined} onRemoved={closePreview} />
+          ) : previewIntro ? (
+            <IntroActionsRow bookId={bookId} summaryPages={(b.summaryPages ?? []) as BookColoringPage[]} page={previewIntro} onRemoved={closePreview} />
+          ) : (
+            preview?.actions
+          )
+        }
       />
     </div>
   );

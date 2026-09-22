@@ -1,0 +1,47 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const findMany = vi.fn();
+const queryRaw = vi.fn();
+vi.mock("@vx/db", () => ({
+  prisma: {
+    sourceBook: { findMany: (...a: unknown[]) => findMany(...a) },
+    $queryRaw: (...a: unknown[]) => queryRaw(...a),
+  },
+}));
+
+import { GET } from "./route";
+
+describe("GET /api/clone/facets", () => {
+  beforeEach(() => {
+    findMany.mockReset();
+    queryRaw.mockReset().mockResolvedValue([]);
+  });
+
+  it("returns distinct niches, priorities and sources without nulls", async () => {
+    findMany
+      .mockResolvedValueOnce([{ niche: "Cozy" }, { niche: "Film" }])
+      .mockResolvedValueOnce([{ priority: "1" }, { priority: "2" }]);
+    queryRaw.mockResolvedValueOnce([{ source: "Búsqueda y Plática" }, { source: "Zen" }]);
+
+    const res = await GET();
+    expect(await res.json()).toEqual({
+      niches: ["Cozy", "Film"],
+      priorities: ["1", "2"],
+      sources: ["Búsqueda y Plática", "Zen"],
+    });
+  });
+
+  it("returns empty lists rather than failing when nothing is tagged", async () => {
+    findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    const res = await GET();
+    expect(await res.json()).toEqual({ niches: [], priorities: [], sources: [] });
+  });
+
+  it("responds 500 when the query throws", async () => {
+    findMany.mockRejectedValueOnce(new Error("db down"));
+
+    const res = await GET();
+    expect(res.status).toBe(500);
+  });
+});

@@ -3,6 +3,7 @@ import { prisma } from "@vx/db";
 import { resolveR2Url } from "@vx/server-core/r2";
 import type { CloneJobBookData, CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { moveCloneJobImageToBook } from "@/lib/move-clone-page-to-book";
+import { readSourceTags } from "../../source-tags";
 
 type RouteParams = { params: Promise<{ jobId: string }> };
 
@@ -124,6 +125,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         mood: p.rawData!.environment?.mood || "",
       }));
 
+    const sourceTags = await readSourceTags(jobId);
+
     const createdBook = await prisma.book.create({
       data: {
         id: bookId,
@@ -143,6 +146,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           isRedesigned: false,
           isEditionConverted: false,
           cloneJobId: jobId,
+          ...sourceTags,
         },
       },
     });

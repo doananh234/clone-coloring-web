@@ -4,6 +4,7 @@ import { getR2Config, createR2Client, uploadToR2, resolveR2Url } from "@vx/serve
 import { renderPdfToImages } from "@vx/server-core/pdf-renderer";
 import type { CloneJob, CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { cloneQueue } from "@/lib/queue/clone-queue";
+import { buildCloneJobWhere, escapeLike } from "./filters";
 
 type UploadMode = "one-shot" | "multi-step";
 
@@ -22,7 +23,21 @@ export async function GET(req: NextRequest) {
     // dedicated counts request drives the tab badges without flashing empty.
     const wantCounts = url.searchParams.get("counts") !== "0";
 
-    const where = status && status !== "all" ? { status } : undefined;
+    const niche = url.searchParams.get("niche");
+    const priority = url.searchParams.get("priority");
+    const q = url.searchParams.get("q")?.trim() || "";
+    const source = url.searchParams.get("source");
+    // Nguồn nằm trong JSON (`data.brand`) mà filter JSON của Prisma không có
+    // chế độ không phân biệt hoa thường → lấy id khớp bằng ILIKE rồi gộp vào
+    // nhánh OR của search. Danh sách id đi thành bind param: nếu một từ khoá
+    // khớp hơn ~30k job sẽ chạm giới hạn param của Postgres (hiện ~2.2k job).
+    const brandMatchIds = q
+      ? (
+          await prisma.$queryRaw<{ id: string }[]>`
+            SELECT id FROM "CloneJob" WHERE data->>'brand' ILIKE ${`%${escapeLike(q)}%`}`
+        ).map((r) => r.id)
+      : [];
+    const where = buildCloneJobWhere({ status, niche, priority, q, brandMatchIds, source });
 
     // Terminal states are sorted by when they became terminal (updatedAt), so
     // the latest finish/failure is visible at the top. Non-terminal states
@@ -32,19 +47,26 @@ export async function GET(req: NextRequest) {
       ? ({ updatedAt: "desc" } as const)
       : ({ createdAt: "desc" } as const);
 
-    const [rows, cached] = await Promise.all([
+    // Tab badges đọc cached counts (theo status, chưa qua filter), nên khi có
+    // filter tag / search / nguồn chúng không còn dùng được để tính số trang.
+    // Chỉ khi đó mới trả thêm một count thật — giữ nguyên chi phí của đường không-lọc.
+    const hasTagFilter = Boolean(niche || priority || q || source);
+
+    const [rows, cached, total] = await Promise.all([
       prisma.cloneJob.findMany({
         where,
         orderBy,
         // List rows never use these heavy Json columns (pages = per-page image
         // data, the bulk of a row) — omit them to cut DB transfer + memory.
         omit: { pages: true, bookData: true },
+        include: { sourceBook: { select: { niche: true, priority: true } } },
         skip: (page - 1) * limit,
         take: limit,
       }),
       // Cached, lazily-recomputed counts (≤60s stale) instead of a full groupBy
       // on every request. See packages/db/src/clone-status-counts.ts.
       wantCounts ? readCloneJobStatusCounts(prisma) : Promise.resolve(null),
+      hasTagFilter ? prisma.cloneJob.count({ where }) : Promise.resolve(null),
     ]);
 
     const counts: Record<string, number> = { all: 0 };
@@ -71,12 +93,14 @@ export async function GET(req: NextRequest) {
         retryHistory: extra.retryHistory ?? [],
         thumbnailUrl: extra.thumbnailUrl ?? null,
         brand: extra.brand ?? null,
+        niche: row.sourceBook?.niche ?? null,
+        priority: row.sourceBook?.priority ?? null,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       };
     });
 
-    return NextResponse.json({ success: true, data: jobs, counts });
+    return NextResponse.json({ success: true, data: jobs, counts, total });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
@@ -196,6 +220,7 @@ export async function POST(req: NextRequest) {
           name: jobName,
           status: "queued",
           sourceFileName,
+          sourceBookId,
           sourcePdfUrl: `/${pdfKey}`,
           totalPages: 0,
           analyzedPages: 0,
@@ -266,6 +291,7 @@ export async function POST(req: NextRequest) {
         name: jobName,
         status: "extracted",
         sourceFileName,
+        sourceBookId,
         sourcePdfUrl: `/${pdfKey}`,
         totalPages: pages.length,
         analyzedPages: 0,

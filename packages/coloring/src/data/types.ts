@@ -24,12 +24,18 @@ export interface CloneJobRow {
   brand: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Niche của SourceBook nguồn (qua quan hệ CloneJob.sourceBook). */
+  niche?: string | null;
+  /** Priority của SourceBook nguồn. */
+  priority?: string | null;
 }
 
 export interface CloneJobsResponse {
   success: boolean;
   data: CloneJobRow[];
   counts: Record<string, number>;
+  /** Tổng số job khớp filter tag; null khi request không lọc theo tag. */
+  total?: number | null;
 }
 
 export interface CloneJobPage {
@@ -133,6 +139,8 @@ export interface BookRow {
   backgroundColor?: string | null;
   /** Denormalized source niche (from CloneJob → SourceBook), shown as a tag. */
   niche?: string | null;
+  /** Denormalized source priority (từ CloneJob → SourceBook), hiện làm tag. */
+  priority?: string | null;
   /** Operator id this book is assigned to (null = unassigned). */
   assignedToId?: string | null;
   /** Kanban queue status: "todo" | "in_progress" | "review" | "done". */

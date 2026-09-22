@@ -1,6 +1,6 @@
 import { prisma } from "@vx/db";
 import { editImage } from "@vx/server-core/ai";
-import { buildRedesignPrompt, type CameraView } from "@vx/server-core/ai/prompts";
+import { buildRedesignPrompt, buildPageRegenPrompt, type CameraView } from "@vx/server-core/ai/prompts";
 import { createR2Client, getR2Config, uploadToR2, resolveR2Url } from "@vx/server-core/r2";
 import type { CloneJobPage } from "@vx/server-core/ai/clone-types";
 import { mirrorUrlToSelectedVariant } from "@vx/coloring/data/page-variants";
@@ -34,23 +34,6 @@ async function withWriteLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Faithful redraw that KEEPS the source page's own black-and-white line-art
- * style (stroke weight / drawing technique) — no restyle, no redesign. Used when
- * the operator did NOT pick a B&W reference style: the result must clone the
- * original nét vẽ, only the camera angle may change (đổi góc).
- */
-function buildPreserveStylePrompt(cameraView?: CameraView): string {
-  const task = cameraView
-    ? `Redraw this black-and-white coloring page from a ${cameraView} CAMERA VIEW — the composition, framing and viewpoint MUST change SIGNIFICANTLY to fit this new angle (do NOT keep the original camera position). Keep the SAME characters, objects and scene, only the viewpoint changes`
-    : `Redraw this black-and-white coloring page keeping the SAME scene, composition, characters, objects and camera angle`;
-  return (
-    `${task}. ` +
-    `CRITICAL — PRESERVE THE ORIGINAL LINE-ART STYLE: keep the EXACT same stroke weight, line thickness, curve treatment and drawing technique as the source image. Do NOT restyle, do NOT redesign, do NOT change the artistic style. Clean black-and-white line art only (no color, no shading). ` +
-    `Output must be 1 single frame, not a split panel or grid layout.`
-  );
-}
-
-/**
  * Image-to-image variation of a page. By default uses the shared redesign
  * template (~30% change; optional forced camera view). When `preserveStyle` is
  * set (interactive single-page regen with NO chosen B&W style) it instead
@@ -72,8 +55,9 @@ export async function generateVariation(opts: {
   r2Config: R2Config;
 }): Promise<string> {
   const { sourceImageUrl, key, traceEntityId, cameraView, changePercent = 30, preserveStyle = false, r2Client, r2Config } = opts;
+  // No frame instruction here: the reproduce path never appended one.
   const fullPrompt = preserveStyle
-    ? buildPreserveStylePrompt(cameraView)
+    ? buildPageRegenPrompt({ cameraView })
     : buildRedesignPrompt(changePercent, cameraView ? { cameraView } : {});
   const img = await editImage(resolveR2Url(sourceImageUrl), fullPrompt, {
     trace: { caller: "clone/reproduce", entityType: "cloneJob", entityId: traceEntityId },
@@ -125,8 +109,44 @@ export async function patchJobPage(
 }
 
 /**
+ * Points the book's coloring page at a new URL, addressed by the page's OWN id.
+ *
+ * Prefer this over updateBookPageUrl: a book's coloringPages array holds only
+ * the interior pages (create-book pulls the cover and intro pages out), so an
+ * index taken from the job's page array points at the wrong book page — and one
+ * taken from the book's array can't be used to look the job page up either.
+ * The id is the only identifier that means the same thing on both sides.
+ */
+export async function updateBookPageUrlById(
+  bookId: string,
+  bookPageId: string,
+  url: string,
+): Promise<boolean> {
+  return withWriteLock(`book:${bookId}`, async () => {
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) return false;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const coloringPages = ((book.coloringPages as any[]) || []).slice();
+    const idx = coloringPages.findIndex((p) => p?.id === bookPageId);
+    if (idx < 0) return false;
+
+    coloringPages[idx] = mirrorUrlToSelectedVariant({ ...coloringPages[idx], url, status: "done" }, url);
+    await prisma.book.update({
+      where: { id: bookId },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { coloringPages: coloringPages as any },
+    });
+    return true;
+  });
+}
+
+/**
  * Points the book's coloring page at a new URL (apply step). No-op when the
  * book or the page at that index doesn't exist.
+ *
+ * Index-addressed: only safe when the caller's index really is a book-array
+ * index. Callers coming from a clone job must use updateBookPageUrlById.
  */
 export async function updateBookPageUrl(
   bookId: string,

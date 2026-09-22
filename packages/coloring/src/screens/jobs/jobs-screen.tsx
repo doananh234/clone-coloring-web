@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
@@ -8,12 +8,14 @@ import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Progress } from "../../components/ui/progress";
 import { Input } from "../../components/ui/input";
+import { Select } from "../../components/ui/form-controls";
 import { Tabs } from "../../components/ui/tabs";
 import { Pagination } from "../../components/ui/pagination";
 import { LoadingRows, EmptyState, ErrorState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { useCloneJobs } from "../../data/use-clone-jobs";
-import { useQueryParam, useQueryNumber, useSetQueryParams } from "../../hooks/use-query-param";
+import { useCloneFacets } from "../../data/use-clone-facets";
+import { useQueryParam, useQueryNumber, useSetQueryParams, useDebouncedInput } from "../../hooks/use-query-param";
 import { useJobCounts } from "../../data/use-job-counts";
 import { useLocalJobs } from "../../data/local-store";
 import { useQueueActions, rowActionFor } from "../../data/use-queue-actions";
@@ -55,16 +57,30 @@ export function JobsScreen() {
   const [tab] = useQueryParam("tab", "all");
   const [q] = useQueryParam("q", "");
   const [page, setPage] = useQueryNumber("page", 1);
+  const [niche] = useQueryParam("niche", "");
+  const [priority] = useQueryParam("priority", "");
+  const [source] = useQueryParam("source", "");
   const setParams = useSetQueryParams();
   const LIMIT = 50;
+  // Gõ chỉ đổi state local; `q` trên URL (thứ kích hoạt fetch) chỉ được ghi
+  // khi ngừng gõ — ghi URL mỗi phím làm re-render cả route và mất ký tự.
+  const [qInput, setQInput] = useDebouncedInput(q, (v) => setParams({ q: v || null, page: null }));
 
   const activeTab = STATUS_TABS.find((t) => t.key === tab) ?? STATUS_TABS[0];
   // List (rows) and summary (counts) are separate requests: switching tabs
   // refetches only the rows, so the tab badges (from cached counts) never flash empty.
-  const { jobs, isLoading, isError } = useCloneJobs(activeTab.filter || "all", LIMIT, page);
+  const { jobs, total, isLoading, isError } = useCloneJobs(
+    activeTab.filter || "all",
+    LIMIT,
+    page,
+    { niche, priority, q, source },
+  );
+  const facets = useCloneFacets();
   const counts = useJobCounts();
   const tabTotal = countFor(activeTab, counts);
-  const totalPages = Math.max(1, Math.ceil(tabTotal / LIMIT));
+  // Có filter tag / search / nguồn thì cached status counts không phản ánh đúng
+  // số kết quả nữa, nên dùng total thật do server đếm.
+  const totalPages = Math.max(1, Math.ceil((total ?? tabTotal) / LIMIT));
   const changeTab = (key: string) => setParams({ tab: key === "all" ? null : key, page: null });
   const local = useLocalJobs();
   const qa = useQueueActions();
@@ -86,19 +102,16 @@ export function JobsScreen() {
   };
   const queuedCount = countFor(STATUS_TABS.find((t) => t.key === "pending")!, counts);
 
-  // Local drafts only show on the "all" tab, first page (not a real server status).
-  const allJobs = tab === "all" && page === 1 ? [...local, ...jobs] : jobs;
-
-  // Defer the query so typing stays responsive; memoize the filter so it only
-  // reruns when the jobs or the (deferred) query actually change.
-  const ql = useDeferredValue(q).trim().toLowerCase();
-  const rows = useMemo(
-    () =>
-      allJobs.filter(
-        (j) => !ql || `${j.name} ${j.brand ?? ""} ${j.id}`.toLowerCase().includes(ql),
-      ),
-    [allJobs, ql],
-  );
+  // Search/nguồn lọc server-side trên toàn bộ job. Job nháp local không có trên
+  // server nên vẫn lọc ở đây; chúng chỉ hiện ở tab "all", trang 1.
+  const ql = q.trim().toLowerCase();
+  const rows = useMemo(() => {
+    if (tab !== "all" || page !== 1) return jobs;
+    const drafts = source
+      ? []
+      : local.filter((j) => !ql || `${j.name} ${j.brand ?? ""} ${j.id}`.toLowerCase().includes(ql));
+    return [...drafts, ...jobs];
+  }, [tab, page, local, jobs, ql, source]);
 
   const tabs = STATUS_TABS.map((t) => ({ key: t.key, label: t.label, count: countFor(t, counts) }));
 
@@ -133,8 +146,42 @@ export function JobsScreen() {
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <Tabs items={tabs} value={tab} onChange={changeTab} />
-        <div style={{ width: 260, maxWidth: "100%" }}>
-          <Input icon="search" placeholder="Tìm job, brand, id…" value={q} onChange={(e) => setParams({ q: e.target.value || null, page: null })} />
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ width: 260, maxWidth: "100%" }}>
+            <Input icon="search" placeholder="Tìm job, nguồn, id…" value={qInput} onChange={(e) => setQInput(e.target.value)} />
+          </div>
+          <div style={{ width: 160 }}>
+            <Select
+              value={niche}
+              onChange={(v) => setParams({ niche: v || null, page: null })}
+              options={[
+                { label: "Mọi niche", value: "" },
+                ...facets.niches.map((n) => ({ label: n, value: n })),
+                { label: "Chưa gắn niche", value: "__blank__" },
+              ]}
+            />
+          </div>
+          <div style={{ width: 160 }}>
+            <Select
+              value={priority}
+              onChange={(v) => setParams({ priority: v || null, page: null })}
+              options={[
+                { label: "Mọi priority", value: "" },
+                ...facets.priorities.map((p) => ({ label: `Priority ${p}`, value: p })),
+                { label: "Chưa gắn priority", value: "__blank__" },
+              ]}
+            />
+          </div>
+          <div style={{ width: 200 }}>
+            <Select
+              value={source}
+              onChange={(v) => setParams({ source: v || null, page: null })}
+              options={[
+                { label: "Mọi nguồn", value: "" },
+                ...facets.sources.map((s) => ({ label: s, value: s })),
+              ]}
+            />
+          </div>
         </div>
       </div>
 
@@ -147,11 +194,13 @@ export function JobsScreen() {
           <EmptyState icon="copy" title="Chưa có clone job" sub="Tạo clone job đầu tiên từ một PDF nguồn." />
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 1040 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 1180 }}>
               <thead>
                 <tr>
                   <th style={th}>Job</th>
                   <th style={th}>Nguồn</th>
+                  <th style={th}>Niche</th>
+                  <th style={th}>Prio</th>
                   <th style={th}>Bước</th>
                   <th style={th}>Tiến độ</th>
                   <th style={th}>Trạng thái</th>
@@ -194,6 +243,8 @@ export function JobsScreen() {
                         <div>{j.brand || "—"}</div>
                         {j.totalPages ? <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{j.totalPages} trang</div> : null}
                       </td>
+                      <td style={td}>{j.niche ? <Badge tone="info">{j.niche}</Badge> : "—"}</td>
+                      <td style={td}>{j.priority ? <Badge tone="neutral">{j.priority}</Badge> : "—"}</td>
                       <td style={{ ...td, ...mono }}>{j.currentStep || `${j.analyzedPages}/${j.totalPages || "—"}`}</td>
                       <td style={td}>
                         <div style={{ width: 120 }}>
