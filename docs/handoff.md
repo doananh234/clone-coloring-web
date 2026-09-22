@@ -1,25 +1,13 @@
-# Task hiện tại: Clone xong không tự làm cover — bìa sách = bìa sách gốc
-
-Branch: `feat/clone-keep-source-cover`. User đã duyệt thiết kế (2026-09-22), chọn C: bỏ luôn generate-book-meta.
+# Task hiện tại: (chưa có)
 
 ## Các bước
 
-- [x] 1. Helper chọn trang bìa gốc `pickSourceCoverPage` (clone-core) + `create-book` dùng `imageUrl` của nó cho cover/thumbnail/squareThumbnail, seed `coverMeta.sourceThumbnailUrl` + test
-- [x] 2. Worker `clone-job-processor.ts`: bỏ gọi generate-cover / generate-book-meta / finalize-cover (GIỮ `STEP_ORDER`) + test
-- [x] 3. Route tạo tay `apps/admin/src/app/api/clone/[jobId]/create-book/route.ts`: đặt coverUrl bằng bìa gốc + test
-- [x] 4. Script backfill `apps/worker/src/scripts/backfill-source-cover.ts` (dry-run mặc định, `--apply`, lưu URL cũ vào `data.coverBeforeSourceBackfill` để rollback)
-- [ ] 5. Verify (test + tsc) → user review → merge/deploy → chạy backfill dry-run trên prod, báo số liệu, CHỜ user duyệt mới `--apply`
+- [ ] 1. ...
 
 ## Đã chốt
 
-- Giữ `STEP_ORDER` nguyên: `isDone()` dựa vào index; xoá tên bước làm job cũ (currentStep=generate-cover) chạy lại create-book → sách trùng.
-- Giữ code 3 step trong clone-core (không gọi) để có thể gắn nút tay sau.
-- Bìa phải COPY sang `assets/{bookId}/` vì ảnh `assets/clone-jobs/{jobId}/` là tạm, bị dọn.
-- Fallback khi không có trang pageType=cover: trang nguồn đầu tiên không excluded (theo pageNumber).
-- Backfill KHÔNG lưu `coverBeforeSourceBackfill`: thay vào đó giữ bìa cũ thành Cover Candidate (origin "source" → nhãn "Ban đầu"), thêm candidate origin "original" ("Bìa gốc") và chọn nó → rollback bằng UI. Ảnh copy vào `assets/{bookId}/source-cover.*` (không đè `cover.png` = bìa AI của finalize-cover).
+-
 
 ## Lưu ý cho agent tiếp theo
 
-- Backfill ghi prod: chạy bằng `docker exec vx-worker /app/node_modules/.bin/tsx ...` (KHÔNG `yarn backfill:*` — .env cũ trong image). Có sách user đã tự chọn bìa (Cover candidates / cover editor) → hỏi user phạm vi trước khi apply.
-- 2026-09-22: merge `ae6214b` + deploy prod xong. Dry-run backfill trên prod: 134 sách; sẽ đổi 126 (auto-ai 107, manual-push 18, other 1); bỏ qua 8 (no-source-page); 0 ảnh nguồn bị mất. CHỜ user chọn có `--skip-manual` hay không rồi mới `--apply`.
-- User chọn đổi HẾT 126 sách (không `--skip-manual`). Lệnh `--apply` của agent bị chặn quyền → user tự chạy (lệnh ở tin nhắn 2026-09-22) hoặc cấp quyền. Sau apply: chạy lại dry-run, kỳ vọng `skip:already-done` ≈126 + `skip:no-source-page` 8.
+-
