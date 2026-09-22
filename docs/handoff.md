@@ -4,7 +4,7 @@ Branch: `feat/clone-keep-source-cover`. User đã duyệt thiết kế (2026-09-
 
 ## Các bước
 
-- [ ] 1. Helper chọn trang bìa gốc `pickSourceCoverPage` (clone-core) + `create-book` dùng `imageUrl` của nó cho cover/thumbnail/squareThumbnail, seed `coverMeta.sourceThumbnailUrl` + test
+- [x] 1. Helper chọn trang bìa gốc `pickSourceCoverPage` (clone-core) + `create-book` dùng `imageUrl` của nó cho cover/thumbnail/squareThumbnail, seed `coverMeta.sourceThumbnailUrl` + test
 - [ ] 2. Worker `clone-job-processor.ts`: bỏ gọi generate-cover / generate-book-meta / finalize-cover (GIỮ `STEP_ORDER`) + test
 - [ ] 3. Route tạo tay `apps/admin/src/app/api/clone/[jobId]/create-book/route.ts`: đặt coverUrl bằng bìa gốc + test
 - [ ] 4. Script backfill `apps/worker/src/scripts/backfill-source-cover.ts` (dry-run mặc định, `--apply`, lưu URL cũ vào `data.coverBeforeSourceBackfill` để rollback)
