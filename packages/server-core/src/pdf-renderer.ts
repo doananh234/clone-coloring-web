@@ -95,9 +95,16 @@ function ensurePolyfills() {
 }
 
 /**
- * Render all pages of a PDF to PNG buffers using pdfjs-dist v5 + @napi-rs/canvas.
+ * Nạp pdfjs-dist (bản legacy cho Node) cùng đường dẫn font chuẩn + wasm.
+ * Tách riêng để `renderPdfToImages` và `countPdfPages` dùng chung — mọi chú
+ * thích về cách resolve/dynamic import dưới đây áp dụng cho cả hai.
  */
-export async function renderPdfToImages(pdfBuffer: ArrayBuffer): Promise<RenderedPage[]> {
+async function loadPdfjs(): Promise<{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pdfjsLib: any;
+  standardFontDataUrl: string;
+  wasmUrl: string;
+}> {
   // Polyfill missing browser APIs before importing pdfjs-dist
   ensurePolyfills();
 
@@ -135,6 +142,33 @@ export async function renderPdfToImages(pdfBuffer: ArrayBuffer): Promise<Rendere
   // the shim ends up calling `fs.readFile(<byteLength>)`, producing
   // `The "path" argument must be of type string. Received type number (83004)`.
   const wasmUrl = nodePath.join(pdfjsRoot, "wasm") + nodePath.sep;
+
+  return { pdfjsLib, standardFontDataUrl, wasmUrl };
+}
+
+/**
+ * Chỉ đếm số trang của PDF — không render, nên nhanh hơn `renderPdfToImages`
+ * hàng chục lần. Dùng để biết sách nguồn dày mỏng trước khi cho job chạy
+ * (xem MIN_SOURCE_PAGES trong @vx/clone-core).
+ */
+export async function countPdfPages(pdfBuffer: ArrayBuffer): Promise<number> {
+  const { pdfjsLib, standardFontDataUrl, wasmUrl } = await loadPdfjs();
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(pdfBuffer),
+    standardFontDataUrl,
+    wasmUrl,
+  });
+  const pdfDoc = await loadingTask.promise;
+  const n = pdfDoc.numPages as number;
+  await pdfDoc.destroy();
+  return n;
+}
+
+/**
+ * Render all pages of a PDF to PNG buffers using pdfjs-dist v5 + @napi-rs/canvas.
+ */
+export async function renderPdfToImages(pdfBuffer: ArrayBuffer): Promise<RenderedPage[]> {
+  const { pdfjsLib, standardFontDataUrl, wasmUrl } = await loadPdfjs();
 
   // Use require (createRequire-bound) instead of `await import()` because
   // tsx loads this module as a data: URL and Node's ESM resolver rejects
