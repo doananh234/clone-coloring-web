@@ -25,3 +25,17 @@ export function planPageCount(
     ? { totalPages, status: INSUFFICIENT_PAGES_STATUS }
     : { totalPages };
 }
+
+/**
+ * URL PDF trong DB chứa dấu cách và ký tự có dấu ("Búsqueda y Plática"), S3 trả
+ * 404 nếu gửi thô. `new URL()` đã percent-encode sẵn phần path, nên chỉ cần
+ * chuẩn hoá qua nó — KHÔNG encodeURIComponent thêm lần nữa, vì như vậy "%" của
+ * URL đã encode sẽ thành "%25" và cũng 404.
+ */
+export function encodePdfUrl(raw: string): string {
+  try {
+    return new URL(raw).toString();
+  } catch {
+    return raw;
+  }
+}
