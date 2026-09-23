@@ -64,3 +64,25 @@ export function thumbImg(
   const path = parsed.pathname.replace(/^\//, "");
   return `${parsed.origin}/cdn-cgi/image/${params}/${path}${parsed.search}`;
 }
+
+/**
+ * Ngược của `thumbImg`: trả về URL ảnh GỐC từ một URL đã qua
+ * `/cdn-cgi/image/<params>/`, hoặc null nếu URL không phải dạng đó.
+ *
+ * Dùng cho fallback khi Cloudflare từ chối biến đổi ảnh — ví dụ hết hạn mức
+ * (`ERROR 9422: Free unique transformations by account has been exhausted`),
+ * lúc đó MỌI ảnh qua CDN trả 429 và cả giao diện trắng ảnh. Xem
+ * components/img-cdn-fallback.tsx.
+ */
+export function stripCdnTransform(url?: string | null): string | null {
+  if (!url) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  const m = parsed.pathname.match(/^\/cdn-cgi\/image\/[^/]+\/(.*)$/);
+  if (!m) return null;
+  return `${parsed.origin}/${m[1]}${parsed.search}`;
+}

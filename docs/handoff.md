@@ -6,9 +6,9 @@ Branch: `fix/img-cdn-fallback`. User chọn hướng A: fallback về ảnh gố
 
 ## Các bước
 
-- [ ] 1. `stripCdnTransform(url)` trong `packages/coloring/src/data/img.ts` + test
-- [ ] 2. Component `ImgCdnFallback` (listener 'error' capture ở window, đổi src ảnh lỗi sang bản gốc, chống lặp) + test jsdom
-- [ ] 3. Mount trong shell của coloring app + verify (test, tsc)
+- [x] 1. `stripCdnTransform(url)` trong `packages/coloring/src/data/img.ts` + test
+- [x] 2. Component `ImgCdnFallback` (listener 'error' capture ở window, đổi src ảnh lỗi sang bản gốc, chống lặp) + test jsdom
+- [x] 3. Mount trong shell của coloring app + verify (test, tsc)
 - [ ] 4. User review → merge/deploy → kiểm tra ảnh hiện lại trên prod
 
 ## Đã chốt
