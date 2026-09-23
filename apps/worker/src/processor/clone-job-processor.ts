@@ -9,6 +9,9 @@ import {
   stepCreateBook,
   stepOneShot,
   stepFillInterior,
+  isInsufficientSourcePages,
+  INSUFFICIENT_PAGES_STATUS,
+  MIN_SOURCE_PAGES,
 } from "@vx/clone-core";
 import { db } from "../db";
 import { notifySuccess, notifyFailure } from "../notify/telegram";
@@ -64,8 +67,24 @@ export async function processCloneJob(jobId: string): Promise<void> {
       }
     }
 
+    // Gate số trang nguồn — chạy NGAY SAU render (bước duy nhất biết được số
+    // trang thật) và TRƯỚC mọi lời gọi AI, nên sách mỏng không tốn tiền. Sách
+    // nguồn dưới MIN_SOURCE_PAGES trang thì clone ra cũng không đủ trang ruột;
+    // job dừng ở trạng thái insufficient-pages cho operator xem ở tab
+    // "Sách thiếu trang". totalPages = 0 (chưa đếm) KHÔNG bị chặn.
+    const gateOnPageCount = async (): Promise<boolean> => {
+      const row = await db.cloneJob.findUnique({ where: { id: jobId }, select: { totalPages: true } });
+      if (!isInsufficientSourcePages(row?.totalPages)) return false;
+      await db.cloneJob.updateMany({ where: { id: jobId }, data: { status: INSUFFICIENT_PAGES_STATUS } });
+      console.log(
+        `[worker] clone job ${jobId} parked: source has ${row?.totalPages} pages (< ${MIN_SOURCE_PAGES})`,
+      );
+      return true;
+    };
+
     if (useMultiStep) {
       if (!ctx.isDone("render"))           await withRetry("render",           () => stepRender(ctx, db, renderDeps),                     ctx);
+      if (await gateOnPageCount()) return;
       if (!ctx.isDone("analyze"))          await withRetry("analyze",          () => stepAnalyze(ctx, db, analyzeDeps),                   ctx);
       if (!ctx.isDone("extract-entities")) await ctx.markStepComplete("extract-entities");
       if (!ctx.isDone("reproduce"))        await withRetry("reproduce",        () => stepReproduce(ctx, db, reproduceDeps),               ctx);
@@ -79,6 +98,7 @@ export async function processCloneJob(jobId: string): Promise<void> {
       //      merges its output into the pages that stepRender already seeded,
       //      preserving `imageUrl` and adding `redesignedUrl` + `rawData`.
       if (!ctx.isDone("render"))    await withRetry("render",    () => stepRender(ctx, db, renderDeps),    ctx);
+      if (await gateOnPageCount()) return;
       if (!ctx.isDone("reproduce")) await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx);
     }
 
