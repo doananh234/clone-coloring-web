@@ -15,6 +15,7 @@
     "backfill:book-approved": "node --env-file=.env --import tsx src/scripts/backfill-book-approved.ts",
     "backfill:regen-variants": "node --env-file=.env --import tsx src/scripts/backfill-regen-variants-to-pages.ts",
     "backfill:source-cover": "node --env-file=.env --import tsx src/scripts/backfill-source-cover.ts",
+    "count:source-pages": "node --env-file=.env --import tsx src/scripts/count-source-pages.ts",
     "dedupe:styles": "node --env-file=.env --import tsx src/scripts/dedupe-coloring-styles.ts",
     "reset:stashed": "node --env-file=.env --import tsx src/scripts/reset-stashed-jobs.ts",
     "restore:misregen": "node --env-file=.env --import tsx src/scripts/restore-misregen-pages.ts",
