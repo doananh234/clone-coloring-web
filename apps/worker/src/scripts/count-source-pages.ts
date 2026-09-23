@@ -19,7 +19,7 @@
 import { countPdfPages } from "@vx/server-core/pdf-renderer";
 import { MIN_SOURCE_PAGES } from "@vx/clone-core";
 import { db } from "../db";
-import { planPageCount } from "./count-source-pages-plan";
+import { planPageCount, encodePdfUrl } from "./count-source-pages-plan";
 
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
@@ -34,19 +34,8 @@ function log(msg: string) {
   console.log(`[count-source-pages]${APPLY ? "" : " [dry-run]"} ${msg}`);
 }
 
-/** URL trong CSV có dấu cách / ký tự unicode — encode phần path trước khi fetch. */
-function encodeUrl(raw: string): string {
-  try {
-    const u = new URL(raw);
-    u.pathname = u.pathname.split("/").map(encodeURIComponent).join("/");
-    return u.toString();
-  } catch {
-    return raw;
-  }
-}
-
 async function fetchPdf(url: string): Promise<ArrayBuffer> {
-  const res = await fetch(encodeUrl(url));
+  const res = await fetch(encodePdfUrl(url));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.arrayBuffer();
 }
