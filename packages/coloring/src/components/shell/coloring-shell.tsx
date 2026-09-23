@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { Header, type HeaderCrumb } from "./header";
+import { ImgCdnFallback } from "../img-cdn-fallback";
 
 const THEME_KEY = "motio-theme";
 
@@ -49,6 +50,8 @@ export function ColoringShell({ pageTitle, crumbs, children }: ColoringShellProp
         background: "var(--background)",
       }}
     >
+      {/* Ảnh qua CDN lỗi (vd hết hạn mức biến đổi ảnh) thì rơi về ảnh gốc. */}
+      <ImgCdnFallback />
       {isMobile ? (
         <>
           {navOpen && (
