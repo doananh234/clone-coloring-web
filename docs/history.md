@@ -11,3 +11,9 @@
 - Candidate bìa: thêm origin "original" (nhãn "Bìa gốc"); "source" đổi nhãn thành "Ban đầu".
 - Backfill `apps/worker/src/scripts/backfill-source-cover.ts` chạy prod 2026-09-22: 126 sách đổi, 8 bỏ qua (không có trang nguồn). Bìa cũ còn trong Cover Candidates để quay lại; ảnh ở `assets/{bookId}/source-cover.*`.
 - Merge `ae6214b`, deploy prod 2026-09-22. Spec: thảo luận trong chat (không có file spec riêng).
+
+## 2026-09-23 — Ảnh trắng toàn site: fallback khi CDN từ chối biến đổi ảnh
+- Nguyên nhân: Cloudflare Image Transformations hết hạn mức miễn phí → mọi `/cdn-cgi/image/...` trả 429 `ERROR 9422`. Ảnh gốc trên R2 vẫn 200.
+- Fix: `ImgCdnFallback` (listener 'error' pha capture trong `ColoringShell`) đổi ảnh CDN lỗi sang URL gốc, mỗi ảnh 1 lần; tự vô hiệu khi quota reset. Vá cả ~38 chỗ gọi `thumbImg()`.
+- Merge `1063265`, deploy prod 2026-09-23.
+- CÒN NỢ: hạn mức tính theo số ảnh biến đổi KHÁC NHAU mỗi tháng → backfill đổi hàng loạt URL ảnh rất tốn quota. Hướng xử lý triệt để: tự sinh thumbnail bằng `sharp` (đã có trong @vx/server-core) rồi bỏ CDN transform, hoặc bật gói trả phí Cloudflare.
