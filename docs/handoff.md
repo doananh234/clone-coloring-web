@@ -4,7 +4,7 @@ Branch: `feat/source-page-count`. Spec: `docs/superpowers/specs/2026-09-23-sourc
 
 ## Các bước
 
-- [ ] 1. `countPdfPages` (server-core, tách bộ nạp pdfjs dùng chung) + `MIN_SOURCE_PAGES`/`isInsufficientSourcePages` + status `insufficient-pages` (clone-core) + test
+- [x] 1. `countPdfPages` (server-core, tách bộ nạp pdfjs dùng chung) + `MIN_SOURCE_PAGES`/`isInsufficientSourcePages` + status `insufficient-pages` (clone-core) + test
 - [ ] 2. Chặn trong pipeline: sau `stepRender`, dưới ngưỡng → status `insufficient-pages`, dừng trước mọi call AI + test
 - [ ] 3. UI: tab "Sách thiếu trang" trong `STATUS_TABS` + nhãn trong `STATUS_META`
 - [ ] 4. Script `apps/worker/src/scripts/count-source-pages.ts` (dry-run mặc định, `--apply`, `--limit`) + test phần thuần
