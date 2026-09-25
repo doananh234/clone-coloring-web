@@ -12,10 +12,13 @@ const promptKey = (ts: TitleSafePosition) => `sourceCoverPrompt:${ts}`;
 
 // Image model choices (LiteLLM only). "" = Auto (LITELLM_IMAGE_MODEL). gpt-image-2
 // lays out the top/middle/bottom title-safe area more reliably than gemini-3.1.
+// qwen-image-2.1 runs locally on the GPU box — slower (~20s gen, ~45s edit) but
+// no per-image cost. Keep this list in sync with the cover editor's AI panel.
 const COVER_MODELS: { label: string; value: string }[] = [
   { label: "Model: Auto", value: "" },
   { label: "gpt-image-2", value: "gpt-image-2" },
   { label: "Gemini 3.1", value: "gemini-3.1-flash-image" },
+  { label: "Qwen-Image 2.1", value: "qwen-image-2.1" },
 ];
 
 /** Max interior pages selectable for a single Gen Cover action. */
