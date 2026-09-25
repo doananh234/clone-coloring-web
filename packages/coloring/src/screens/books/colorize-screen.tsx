@@ -8,6 +8,8 @@ import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Progress } from "../../components/ui/progress";
 import { StylePicker } from "../../components/ui/style-picker";
+import { ProviderSelect, useProviderPreference } from "../../components/provider-select";
+import { ModelSelect, useModelPreference } from "../../components/model-select";
 import { LoadingRows, ErrorState } from "../../components/ui/states";
 import { COLORING_BASE as B } from "../../components/shell/nav-config";
 import { COLORING_WRITE_ENABLED } from "../../data/config";
@@ -23,6 +25,8 @@ export function ColorizeScreen({ bookId }: { bookId: string }) {
   const colorize = useColorizeBook(bookId);
   const [styleId, setStyleId] = useState("");
   const [useReference, setUseReference] = useState(true);
+  const [provider, setProvider] = useProviderPreference();
+  const [model, setModel] = useModelPreference();
   const [prog, setProg] = useState<{ done: number; total: number } | null>(null);
   const [msg, setMsg] = useState<{ err?: string; ok?: string } | null>(null);
   const [running, setRunning] = useState(false);
@@ -52,7 +56,13 @@ export function ColorizeScreen({ bookId }: { bookId: string }) {
     setMsg(null);
     setProg({ done: 0, total: pages.length });
     try {
-      const { done, failed } = await colorize(chosen, pages, (d, t) => setProg({ done: d, total: t }), useReference);
+      const { done, failed } = await colorize(
+        chosen,
+        pages,
+        (d, t) => setProg({ done: d, total: t }),
+        useReference,
+        { provider, model },
+      );
       setMsg({ ok: `Tô màu xong ${done - failed}/${done} trang${failed ? ` · ${failed} lỗi` : ""}` });
     } catch (e) {
       setMsg({ err: e instanceof Error ? e.message : "Tô màu thất bại" });
@@ -84,6 +94,19 @@ export function ColorizeScreen({ bookId }: { bookId: string }) {
             {sourceStyleExists && chosen === sourceStyleId && (
               <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 8 }}>Đang dùng coloring style trích từ bìa gốc (auto khi clone). Đổi style khác nếu muốn.</div>
             )}
+          </div>
+
+          <div>
+            <div className="mo-flabel" style={{ marginBottom: 8 }}>Backend</div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <ProviderSelect value={provider} onChange={setProvider} label="Provider" disabled={running} />
+              <ModelSelect value={model} onChange={setModel} label="Model" disabled={running || provider !== "litellm"} />
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 6 }}>
+              Model chỉ áp dụng cho provider <strong>LiteLLM</strong>; các backend khác dùng model cố định của chúng.
+              {provider === "litellm" && model === "qwen-image-2.1" &&
+                " Qwen-Image 2.1 chạy trên GPU nhà: không tốn phí mỗi ảnh, giữ nguyên nét gốc, nhưng chậm hơn (~45s/trang)."}
+            </div>
           </div>
 
           <div>

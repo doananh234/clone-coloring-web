@@ -14,14 +14,22 @@ export interface ColorizePage {
  * so we loop sequentially to avoid hammering the AI backend. Behind the write flag;
  * local mode throws (real AI generation — no safe local equivalent).
  */
+export interface ColorizeBackend {
+  /** Image backend; undefined falls back to the server's IMAGE_PROVIDER. */
+  provider?: string;
+  /** LiteLLM model id; only honoured when provider is "litellm". */
+  model?: string;
+}
+
 export function useColorizeBook(bookId: string): (
   styleId: string,
   pages: ColorizePage[],
   onProgress: (done: number, total: number) => void,
   useReference?: boolean,
+  backend?: ColorizeBackend,
 ) => Promise<{ done: number; failed: number }> {
   const qc = useQueryClient();
-  return async (styleId, pages, onProgress, useReference = true) => {
+  return async (styleId, pages, onProgress, useReference = true, backend) => {
     if (!COLORING_WRITE_ENABLED) throw new Error("Chỉ chạy ở chế độ ghi thật (staging).");
     let done = 0;
     let failed = 0;
@@ -33,6 +41,8 @@ export function useColorizeBook(bookId: string): (
           bookId,
           pageId: p.id,
           useReference,
+          provider: backend?.provider || undefined,
+          model: backend?.model || undefined,
         });
       } catch {
         failed++;

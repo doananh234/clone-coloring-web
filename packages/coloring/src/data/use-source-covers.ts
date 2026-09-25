@@ -44,11 +44,18 @@ export function useSourceCovers(bookId: string) {
       );
       return res.prompt;
     },
-    colorize: async (sc: SourceCover, styleId: string, variantId?: string | null) => {
+    colorize: async (
+      sc: SourceCover,
+      styleId: string,
+      variantId?: string | null,
+      backend?: { provider?: string; model?: string },
+    ) => {
       guard();
       await httpPost(`${COLORING_API_BASE}/coloring-styles/colorize`, {
         imageUrl: sc.url, coloringStyleId: styleId, coloringVariantId: variantId ?? undefined,
         bookId, pageId: sc.id, target: "sourceCover",
+        provider: backend?.provider || undefined,
+        model: backend?.model || undefined,
       });
       inval();
     },

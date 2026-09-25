@@ -74,6 +74,8 @@ type ColorizePayload = {
   useReference?: boolean;
   target?: "page" | "sourceCover";
   provider?: "kingcong" | "diaflow" | "litellm" | "azure";
+  /** Operator-chosen LiteLLM model id; only the litellm provider honours it. */
+  model?: string;
 };
 
 /**
@@ -166,6 +168,7 @@ async function runColorize(genJobId: string, payload: ColorizePayload): Promise<
     useReference = true,
     target = "page",
     provider,
+    model,
   } = payload;
 
   const style = await prisma.coloringStyle.findUnique({ where: { id: coloringStyleId } });
@@ -191,6 +194,7 @@ async function runColorize(genJobId: string, payload: ColorizePayload): Promise<
   const img = await colorizeImage(resolveR2Url(imageUrl), directive, {
     referenceImageUrls,
     provider,
+    ...(model ? { model } : {}),
     trace: { caller: "worker/generation/colorize", entityId: genJobId },
   });
 

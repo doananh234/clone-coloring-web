@@ -5,6 +5,8 @@ import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { ColoringStylePickerModal, type StyleSelection } from "../../components/ui/coloring-style-picker-modal";
 import { Select } from "../../components/ui/form-controls";
+import { ProviderSelect, useProviderPreference } from "../../components/provider-select";
+import { ModelSelect, useModelPreference } from "../../components/model-select";
 import { usePageActions } from "../../data/use-page-actions";
 import { usePageAdditional, type RegenAddOpts } from "../../data/use-page-additional";
 import { useEntityList } from "../../data/use-entity-list";
@@ -57,6 +59,10 @@ export function PageActionsRow({
   const [sel, setSel] = useState<StyleSelection | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // Shared with the colorize screen + cover dialogs via localStorage, so the
+  // operator's backend choice follows them around instead of resetting per row.
+  const [provider, setProvider] = useProviderPreference();
+  const [model, setModel] = useModelPreference();
   const [err, setErr] = useState<string | null>(null);
   // Regen/Đổi góc generate a candidate WITHOUT applying → user previews + chooses.
   const [cand, setCand] = useState<Candidate | null>(null);
@@ -141,10 +147,12 @@ export function PageActionsRow({
           </span>
           <Icon name="chevron-down" size={16} />
         </button>
+        <ProviderSelect value={provider} onChange={setProvider} disabled={busy !== null} />
+        <ModelSelect value={model} onChange={setModel} disabled={busy !== null || provider !== "litellm"} />
         <Button size="sm" disabled={disabled || !sel || busy !== null} onClick={run("colorize", () =>
           isSC
-            ? sourceCovers.colorize(sourceCover!, sel!.styleId, sel!.variantId)
-            : actions.colorize(page.id, page.url, sel!.styleId, sel!.variantId),
+            ? sourceCovers.colorize(sourceCover!, sel!.styleId, sel!.variantId, { provider, model })
+            : actions.colorize(page.id, page.url, sel!.styleId, sel!.variantId, { provider, model }),
         )}>
           <Icon name="palette" size={15} /> {busy === "colorize" ? "Đang tô…" : "Tô màu"}
         </Button>

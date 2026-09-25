@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       useReference = true,
       target = "page",
       provider: providerRaw,
+      model: modelRaw,
     } = body as {
       imageUrl: string;
       coloringStyleId: string;
@@ -34,6 +35,8 @@ export async function POST(req: NextRequest) {
       useReference?: boolean;
       target?: "page" | "sourceCover";
       provider?: string;
+      /** LiteLLM model id; only the litellm provider honours it. */
+      model?: string;
     };
 
     if (!imageUrl) return NextResponse.json({ error: "imageUrl is required" }, { status: 400 });
@@ -61,6 +64,11 @@ export async function POST(req: NextRequest) {
         ? providerRaw
         : undefined;
 
+    // Free-form on purpose: the LiteLLM model list lives in the proxy config, not
+    // here, so a new model works without redeploying this route. Blank -> undefined
+    // so the worker falls back to LITELLM_IMAGE_MODEL.
+    const model = typeof modelRaw === "string" && modelRaw.trim() ? modelRaw.trim() : undefined;
+
     // GenerationJob.bookId is required for polling. Book colorize always has one;
     // the test/preview path (no bookId) gets a synthetic id (worker skips the
     // book patch when payload.bookId is absent).
@@ -86,6 +94,7 @@ export async function POST(req: NextRequest) {
           useReference,
           target,
           provider,
+          model,
         },
       },
     });

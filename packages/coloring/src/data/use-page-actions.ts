@@ -247,7 +247,13 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
       return url;
     },
     /** Colorize one page with a coloring style + optional color variant (async job). */
-    colorize: async (pageId: string, pageUrl: string, styleId: string, variantId?: string | null) => {
+    colorize: async (
+      pageId: string,
+      pageUrl: string,
+      styleId: string,
+      variantId?: string | null,
+      backend?: { provider?: string; model?: string },
+    ) => {
       if (!COLORING_WRITE_ENABLED) throw new Error(LOCAL_ONLY);
       const res = await httpPost<{ jobId?: string }>(`${COLORING_API_BASE}/coloring-styles/colorize`, {
         imageUrl: pageUrl,
@@ -255,6 +261,8 @@ export function usePageActions(bookId: string, cloneJobId?: string) {
         coloringVariantId: variantId ?? undefined,
         bookId,
         pageId,
+        provider: backend?.provider || undefined,
+        model: backend?.model || undefined,
       });
       // Async: wait for the worker to finish so inval() shows the colored result.
       if (res?.jobId) await pollGenerationJob(res.jobId);

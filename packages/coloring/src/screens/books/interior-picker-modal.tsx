@@ -4,22 +4,12 @@ import { useEffect, useState } from "react";
 import { Icon } from "../../lib/icon";
 import { Button } from "../../components/ui/button";
 import { ProviderSelect, useProviderPreference, type ImageProvider } from "../../components/provider-select";
+import { ModelSelect } from "../../components/model-select";
 import { thumbImg } from "../../data/img";
 import type { BookColoringPage } from "../../data/types";
 import type { TitleSafePosition } from "../../data/source-covers";
 
 const promptKey = (ts: TitleSafePosition) => `sourceCoverPrompt:${ts}`;
-
-// Image model choices (LiteLLM only). "" = Auto (LITELLM_IMAGE_MODEL). gpt-image-2
-// lays out the top/middle/bottom title-safe area more reliably than gemini-3.1.
-// qwen-image-2.1 runs locally on the GPU box — slower (~20s gen, ~45s edit) but
-// no per-image cost. Keep this list in sync with the cover editor's AI panel.
-const COVER_MODELS: { label: string; value: string }[] = [
-  { label: "Model: Auto", value: "" },
-  { label: "gpt-image-2", value: "gpt-image-2" },
-  { label: "Gemini 3.1", value: "gemini-3.1-flash-image" },
-  { label: "Qwen-Image 2.1", value: "qwen-image-2.1" },
-];
 
 /** Max interior pages selectable for a single Gen Cover action. */
 const MAX_SELECT = 3;
@@ -211,17 +201,7 @@ export function InteriorPickerModal({
           <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Đã chọn {selected.length}/{MAX_SELECT}</span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <ProviderSelect value={provider} onChange={setProvider} disabled={busy} />
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              disabled={busy}
-              title="Image model (chỉ áp dụng cho provider LiteLLM)"
-              style={{ fontSize: 12.5, padding: "5px 8px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--card)", color: "var(--foreground)" }}
-            >
-              {COVER_MODELS.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
+            <ModelSelect value={model} onChange={setModel} disabled={busy || provider !== "litellm"} />
             <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Đóng</Button>
             <Button size="sm" onClick={confirmGen} disabled={busy || selected.length === 0}>
               <Icon name="sparkles" size={14} /> Gen ({selected.length})
