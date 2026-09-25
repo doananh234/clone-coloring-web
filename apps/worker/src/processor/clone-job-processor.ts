@@ -8,10 +8,10 @@ import {
   stepReproduce,
   stepCreateBook,
   stepOneShot,
-  stepGenerateCover,
-  stepGenerateBookMeta,
-  stepFinalizeCover,
   stepFillInterior,
+  isInsufficientSourcePages,
+  INSUFFICIENT_PAGES_STATUS,
+  MIN_SOURCE_PAGES,
 } from "@vx/clone-core";
 import { db } from "../db";
 import { notifySuccess, notifyFailure } from "../notify/telegram";
@@ -23,8 +23,6 @@ import {
   reproduceDeps,
   createBookDeps,
   oneShotDeps,
-  generateCoverDeps,
-  generateBookMetaDeps,
   fillInteriorDeps,
 } from "./step-deps";
 
@@ -69,8 +67,24 @@ export async function processCloneJob(jobId: string): Promise<void> {
       }
     }
 
+    // Gate số trang nguồn — chạy NGAY SAU render (bước duy nhất biết được số
+    // trang thật) và TRƯỚC mọi lời gọi AI, nên sách mỏng không tốn tiền. Sách
+    // nguồn dưới MIN_SOURCE_PAGES trang thì clone ra cũng không đủ trang ruột;
+    // job dừng ở trạng thái insufficient-pages cho operator xem ở tab
+    // "Sách thiếu trang". totalPages = 0 (chưa đếm) KHÔNG bị chặn.
+    const gateOnPageCount = async (): Promise<boolean> => {
+      const row = await db.cloneJob.findUnique({ where: { id: jobId }, select: { totalPages: true } });
+      if (!isInsufficientSourcePages(row?.totalPages)) return false;
+      await db.cloneJob.updateMany({ where: { id: jobId }, data: { status: INSUFFICIENT_PAGES_STATUS } });
+      console.log(
+        `[worker] clone job ${jobId} parked: source has ${row?.totalPages} pages (< ${MIN_SOURCE_PAGES})`,
+      );
+      return true;
+    };
+
     if (useMultiStep) {
       if (!ctx.isDone("render"))           await withRetry("render",           () => stepRender(ctx, db, renderDeps),                     ctx);
+      if (await gateOnPageCount()) return;
       if (!ctx.isDone("analyze"))          await withRetry("analyze",          () => stepAnalyze(ctx, db, analyzeDeps),                   ctx);
       if (!ctx.isDone("extract-entities")) await ctx.markStepComplete("extract-entities");
       if (!ctx.isDone("reproduce"))        await withRetry("reproduce",        () => stepReproduce(ctx, db, reproduceDeps),               ctx);
@@ -84,6 +98,7 @@ export async function processCloneJob(jobId: string): Promise<void> {
       //      merges its output into the pages that stepRender already seeded,
       //      preserving `imageUrl` and adding `redesignedUrl` + `rawData`.
       if (!ctx.isDone("render"))    await withRetry("render",    () => stepRender(ctx, db, renderDeps),    ctx);
+      if (await gateOnPageCount()) return;
       if (!ctx.isDone("reproduce")) await withRetry("reproduce", () => stepOneShot(ctx, db, oneShotDeps), ctx);
     }
 
@@ -97,8 +112,7 @@ export async function processCloneJob(jobId: string): Promise<void> {
     //
     // Auto-classify: set CLONE_AUTO_CLASSIFY=true (env) or job.data.autoClassify
     // to skip the manual review entirely — the job flows straight through to
-    // create-book → generate-cover → generate-book-meta → finalize-cover, so a
-    // cloned book ships with full AI meta without any manual step.
+    // fill-interior → create-book without any manual step.
     const gateRow = await db.cloneJob.findUnique({
       where: { id: jobId },
       select: { data: true },
@@ -132,40 +146,11 @@ export async function processCloneJob(jobId: string): Promise<void> {
       ? ctx.resultBookId
       : await withRetry("create-book", () => stepCreateBook(ctx, db, createBookDeps), ctx);
 
-    if (!ctx.isDone("generate-cover")) {
-      // stepGenerateCover runs in BOTH multi-step and one-shot paths. In one-shot mode,
-      // stepOneShot populates bookData.titleCover from the Diaflow LLM's isCover page.
-      // In multi-step mode, that extraction doesn't happen — stepGenerateCover falls back
-      // to bookData.title (the long form title) for the cover header.
-      await withRetry(
-        "generate-cover",
-        () => stepGenerateCover(ctx, db, generateCoverDeps),
-        ctx,
-      );
-    }
-
-    // Full AI book meta (title/subtitle/description, tags, Etsy, colors, badge,
-    // price, category, specs…) generated FROM the cover — parity with the manual
-    // "Sinh meta AI" button, so every cloned book ships complete.
-    if (!ctx.isDone("generate-book-meta")) {
-      await withRetry(
-        "generate-book-meta",
-        () => stepGenerateBookMeta(ctx, db, generateBookMetaDeps),
-        ctx,
-      );
-    }
-
-    // "Cover AI cuối" — bake the fresh meta title/subtitle + brand onto the clean
-    // cover illustration (reuses generateCoverDeps: it already carries
-    // generateAiCover + resolveR2Url, a superset of FinalizeCoverDeps).
-    if (!ctx.isDone("finalize-cover")) {
-      await withRetry(
-        "finalize-cover",
-        () => stepFinalizeCover(ctx, db, generateCoverDeps),
-        ctx,
-      );
-    }
-
+    // No automatic cover any more: the book keeps the SOURCE book's cover, set
+    // by create-book. generate-cover / generate-book-meta / finalize-cover stay
+    // in clone-core (and in STEP_ORDER, which JobContext.isDone() indexes — old
+    // jobs may still have one of them as currentStep) but are no longer run.
+    // Meta and a designed cover are on-demand from the book screen.
     await ctx.markComplete(bookId);
     await notifySuccess(ctx, bookId);
   } catch (err) {

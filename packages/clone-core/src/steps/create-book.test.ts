@@ -144,7 +144,12 @@ describe("stepCreateBook — moves page images into assets/{bookId}/", () => {
     const book = created[0].data as { coloringPages: Array<{ url: string }>; coverUrl: string };
     expect(book.coloringPages[0].url).toBe(`/assets/${bookId}/pages/page-001.png`);
     expect(book.coloringPages[0].url).not.toContain("clone-jobs");
-    expect(book.coverUrl).toBe(`/assets/${bookId}/pages/page-001.png`);
+    // Cover = the ORIGINAL source page (not the redesign), moved under the book.
+    expect(copyImage).toHaveBeenCalledWith({
+      sourceUrl: "https://r2/orig.png",
+      destKey: `assets/${bookId}/cover.png`,
+    });
+    expect(book.coverUrl).toBe(`/assets/${bookId}/cover.png`);
   });
 });
 
@@ -186,27 +191,33 @@ describe("stepCreateBook — D2 classification partitioning", () => {
       sourceBookId: undefined,
       markStepComplete: vi.fn().mockResolvedValue(undefined),
     } as never;
+    const copyImage = vi.fn(async ({ destKey }: { sourceUrl: string; destKey: string }) => `/${destKey}`);
 
-    const bookId = await stepCreateBook(ctx, db, {
-      randomUUID: () => "uuid-1",
-      copyImage: async ({ destKey }: { sourceUrl: string; destKey: string }) => `/${destKey}`,
-    });
+    const bookId = await stepCreateBook(ctx, db, { randomUUID: () => "uuid-1", copyImage });
 
     const book = created[0].data as {
       coverUrl: string;
+      thumbnailUrl: string;
+      squareThumbnailUrl: string;
       summaryPages: Array<{ url: string }>;
       coloringPages: Array<{ url: string }>;
+      data: { coverMeta?: { sourceThumbnailUrl?: string } };
     };
     // interior = pages 3 and 5 (legacy undefined counts as interior); 4 excluded
     expect(book.coloringPages).toHaveLength(2);
     // intro = page 2
     expect(book.summaryPages).toHaveLength(1);
-    // cover image is moved and mirrored into coverUrl
+    // cover = the cover page's ORIGINAL image ("o1"), not its redesign
+    expect(copyImage).toHaveBeenCalledWith({ sourceUrl: "o1", destKey: `assets/${bookId}/cover.png` });
     expect(book.coverUrl).toBe(`/assets/${bookId}/cover.png`);
     expect(book.coverUrl).not.toContain("clone-jobs");
+    expect(book.thumbnailUrl).toBe(book.coverUrl);
+    expect(book.squareThumbnailUrl).toBe(book.coverUrl);
+    // cover editor base image = first interior page (parity with manual create-book)
+    expect(book.data.coverMeta?.sourceThumbnailUrl).toBe(book.coloringPages[0].url);
   });
 
-  it("falls back coverUrl to the first interior when no cover page exists", async () => {
+  it("falls back to the first original page's image when no cover page exists", async () => {
     const { db, created } = fakeDbMixed();
     (db as { cloneJob: { findUnique: ReturnType<typeof vi.fn> } }).cloneJob.findUnique.mockResolvedValueOnce({
       id: "j1",
@@ -218,12 +229,11 @@ describe("stepCreateBook — D2 classification partitioning", () => {
       jobId: "j1", resultBookId: undefined, sourceBookId: undefined,
       markStepComplete: vi.fn().mockResolvedValue(undefined),
     } as never;
-    const bookId = await stepCreateBook(ctx, db, {
-      randomUUID: () => "uuid-1",
-      copyImage: async ({ destKey }: { sourceUrl: string; destKey: string }) => `/${destKey}`,
-    });
+    const copyImage = vi.fn(async ({ destKey }: { sourceUrl: string; destKey: string }) => `/${destKey}`);
+    const bookId = await stepCreateBook(ctx, db, { randomUUID: () => "uuid-1", copyImage });
     const book = created[0].data as { coverUrl: string; coloringPages: unknown[] };
-    expect(book.coverUrl).toBe(`/assets/${bookId}/pages/page-001.png`);
+    expect(copyImage).toHaveBeenCalledWith({ sourceUrl: "o1", destKey: `assets/${bookId}/cover.png` });
+    expect(book.coverUrl).toBe(`/assets/${bookId}/cover.png`);
     expect(book.coloringPages).toHaveLength(1);
   });
 });
