@@ -17,6 +17,7 @@ const ENV_KEYS = [
   "LITELLM_API_KEY",
   "LITELLM_IMAGE_MODEL",
   "LITELLM_IMAGE_API_MODELS",
+  "LITELLM_QWEN_PROMPT_LIMIT",
 ];
 const saved: Record<string, string | undefined> = {};
 
@@ -153,6 +154,57 @@ describe("litellm image provider — size handling", () => {
     await provider.generateImage("a lighthouse", { model: "gpt-image-2", aspectRatio: "3:4" });
 
     expect(generationBody().size).toBe("1024x1536");
+  });
+});
+
+describe("litellm image provider — prompt size guard", () => {
+  const HUGE = "x".repeat(21_000); // the cover-source spec is ~21KB
+
+  it("refuses a cover-sized prompt on qwen instead of rendering it into the image", async () => {
+    routeGeneration({ b64_json: "QUJD" });
+    const provider = await loadProvider();
+
+    await expect(provider.generateImage(HUGE, { model: QWEN })).rejects.toThrow(
+      /cannot take a 21000-character prompt/,
+    );
+    // Nothing was sent — the point is to not burn ~45s of GPU on a text wall.
+    expect(litellmFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses it on the edits path too", async () => {
+    routeGeneration({ b64_json: "QUJD" });
+    const provider = await loadProvider();
+
+    await expect(
+      provider.editImage("data:image/png;base64,QUJD", HUGE, { model: QWEN }),
+    ).rejects.toThrow(/gpt-image-2 or gemini-3.1-flash-image/);
+  });
+
+  it("lets a normal redesign-sized prompt through", async () => {
+    routeGeneration({ b64_json: "QUJD" });
+    const provider = await loadProvider();
+
+    await expect(
+      provider.generateImage("y".repeat(1200), { model: QWEN }),
+    ).resolves.toBeTruthy();
+  });
+
+  it("does not limit the hosted models, which follow long prompts fine", async () => {
+    routeGeneration({ b64_json: "QUJD" });
+    const provider = await loadProvider();
+
+    await expect(
+      provider.generateImage(HUGE, { model: "gpt-image-2" }),
+    ).resolves.toBeTruthy();
+  });
+
+  it("honours LITELLM_QWEN_PROMPT_LIMIT", async () => {
+    process.env.LITELLM_QWEN_PROMPT_LIMIT = "30000";
+    routeGeneration({ b64_json: "QUJD" });
+    const provider = await loadProvider();
+
+    await expect(provider.generateImage(HUGE, { model: QWEN })).resolves.toBeTruthy();
+    delete process.env.LITELLM_QWEN_PROMPT_LIMIT;
   });
 });
 

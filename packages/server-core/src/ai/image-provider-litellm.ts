@@ -195,6 +195,37 @@ function isQwenImageModel(model: string): boolean {
 }
 
 /**
+ * Qwen-Image 2.1's headline strength is rendering text, and it does not
+ * distinguish "text to obey" from "text to draw". Past a certain prompt size it
+ * stops treating the instructions as instructions and DRAWS them: the artwork
+ * comes back buried under columns of prose.
+ *
+ * Measured against this codebase's own prompts: the ~1.2KB redesign prompt is
+ * fine, the ~21KB cover-source spec reliably produces the text-wall failure. The
+ * negative prompt is no defence at that scale. 4KB sits between the two — raise
+ * it with LITELLM_QWEN_PROMPT_LIMIT if a longer prompt proves safe.
+ */
+function qwenPromptLimit(): number {
+  const raw = Number(process.env.LITELLM_QWEN_PROMPT_LIMIT);
+  return Number.isFinite(raw) && raw > 0 ? raw : 4000;
+}
+
+/**
+ * Fail fast rather than burn ~45s of GPU on an image that will come back as a
+ * page of text. The message names the way out, because the caller (an operator
+ * who picked a model in a dropdown) is the one who can act on it.
+ */
+function assertPromptFitsModel(model: string, prompt: string): void {
+  if (!isQwenImageModel(model)) return;
+  const limit = qwenPromptLimit();
+  if (prompt.length <= limit) return;
+  throw new Error(
+    `${model} cannot take a ${prompt.length}-character prompt: past ~${limit} characters it renders the instructions into the image instead of following them. ` +
+      `Use gpt-image-2 or gemini-3.1-flash-image for this step, or shorten the prompt.`,
+  );
+}
+
+/**
  * Map the aspect-ratio hint onto a supported size.
  *
  * Square-only for Qwen: it honours `size` literally (asking 1024x1536 returns
@@ -285,6 +316,7 @@ async function imagesGenerate(
   options: ImageGenerationOptions,
 ): Promise<GeneratedImage> {
   const { baseUrl, apiKey } = getConfig();
+  assertPromptFitsModel(model, prompt);
   // NB: no response_format — gpt-image-2 rejects it (always returns b64_json).
   const res = await litellmFetch(`${baseUrl}/v1/images/generations`, {
     method: "POST",
@@ -305,6 +337,7 @@ async function imagesEdit(
   options: ColorizeOptions,
 ): Promise<GeneratedImage> {
   const { baseUrl, apiKey } = getConfig();
+  assertPromptFitsModel(model, prompt);
   const form = new FormData();
   form.append("model", model);
   form.append("prompt", prompt);

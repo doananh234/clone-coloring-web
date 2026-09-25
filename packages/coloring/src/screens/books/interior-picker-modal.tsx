@@ -202,6 +202,11 @@ export function InteriorPickerModal({
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <ProviderSelect value={provider} onChange={setProvider} disabled={busy} />
             <ModelSelect value={model} onChange={setModel} disabled={busy || provider !== "litellm"} />
+            {provider === "litellm" && model === "qwen-image-2.1" && (
+              <span style={{ fontSize: 11.5, color: "var(--danger, #b91c1c)", maxWidth: 260 }}>
+                Qwen không dùng được cho Gen Cover: prompt bìa ~21KB, model sẽ vẽ chữ vào ảnh. Chọn gpt-image-2 hoặc Gemini.
+              </span>
+            )}
             <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Đóng</Button>
             <Button size="sm" onClick={confirmGen} disabled={busy || selected.length === 0}>
               <Icon name="sparkles" size={14} /> Gen ({selected.length})
