@@ -158,17 +158,20 @@ function logToLangfuse(
   });
 }
 
-// --- OpenAI images API path (gpt-image-2, DALL·E) --------------------------
+// --- OpenAI images API path (gpt-image-2, DALL·E, Qwen-Image 2.1) ----------
 //
 // Azure gpt-image-2 (and DALL·E) are image-GENERATION models: they only answer
 // on /v1/images/generations and /v1/images/edits, NOT /v1/chat/completions
 // (Azure returns "operation unsupported" for chat on these). Gemini image
 // models are the opposite — chat-only. So we branch by model.
+//
+// qwen-image-2.1 (local Qwen-Image 2.1 on ComfyUI, behind the same proxy) is
+// also images-API-only, so it joins this branch.
 
 /**
  * Models that must use the OpenAI images API instead of chat-completions.
  * Override with LITELLM_IMAGE_API_MODELS (csv, substring match); defaults to
- * gpt-image / dall-e name patterns.
+ * gpt-image / dall-e / qwen-image name patterns.
  */
 function usesImagesApi(model: string): boolean {
   const csv = process.env.LITELLM_IMAGE_API_MODELS;
@@ -179,11 +182,33 @@ function usesImagesApi(model: string): boolean {
       .filter(Boolean)
       .some((m) => model.toLowerCase().includes(m));
   }
-  return /gpt-image|dall-?e/i.test(model);
+  return /gpt-image|dall-?e|qwen-image/i.test(model);
 }
 
-/** Map the aspect-ratio hint onto a gpt-image-2 supported size (square default). */
-function imageApiSize(options?: ImageGenerationOptions): string {
+/**
+ * Qwen-Image 2.1 differs from the hosted image models in two ways that matter
+ * here — it honours `size` literally, and it treats every extra edit image as a
+ * co-equal reference. See imageApiSize() and imagesEdit() for what each implies.
+ */
+function isQwenImageModel(model: string): boolean {
+  return /qwen-image/i.test(model);
+}
+
+/**
+ * Map the aspect-ratio hint onto a supported size.
+ *
+ * Square-only for Qwen: it honours `size` literally (asking 1024x1536 returns
+ * exactly 1024x1536), and normalizeGeneratedImage() then cover-fits and
+ * CENTER-CROPS to 2048x2048 — so a portrait render would lose its top and
+ * bottom. gpt-image-2 and Gemini ignore `size` and always come back ~1024
+ * square, which is why the aspect hint was safe to pass before.
+ *
+ * 1024 (not 2048) is deliberate even though Qwen supports native 2K: at 2048 it
+ * renders the subject small and thin-lined, which is wrong for coloring pages.
+ * Render at 1024 and let normalizeGeneratedImage() upscale, as Gemini already does.
+ */
+function imageApiSize(model: string, options?: ImageGenerationOptions): string {
+  if (isQwenImageModel(model)) return "1024x1024";
   switch (options?.aspectRatio) {
     case "3:4":
     case "9:16":
@@ -196,18 +221,47 @@ function imageApiSize(options?: ImageGenerationOptions): string {
   }
 }
 
-/** images API returns { data: [{ b64_json } | { url }] }; normalize to GeneratedImage. */
+/**
+ * images API returns { data: [{ b64_json } | { url }] }; normalize to GeneratedImage.
+ *
+ * Both shapes are live: gpt-image-2 always answers b64_json, while
+ * qwen-image-2.1 answers a MinIO asset url. Asking for
+ * `response_format: "b64_json"` does not avoid the url branch — LiteLLM only
+ * forwards that param on the multipart /images/edits path and drops it on JSON
+ * /images/generations — so the url branch is load-bearing, not a fallback.
+ *
+ * The url lives on the LiteLLM host, which serves a self-signed cert, so it MUST
+ * be fetched through litellmFetch: the global fetch fails TLS verification here.
+ */
 async function toGeneratedImage(entry: { b64_json?: string; url?: string }): Promise<GeneratedImage> {
   if (entry.b64_json) {
     return { base64: entry.b64_json, dataUrl: `data:image/png;base64,${entry.b64_json}` };
   }
-  if (entry.url) {
-    const res = await fetch(entry.url);
-    if (!res.ok) throw new Error(`LiteLLM images API: failed to fetch result url (${res.status})`);
-    const b64 = Buffer.from(await res.arrayBuffer()).toString("base64");
-    return { base64: b64, dataUrl: `data:image/png;base64,${b64}` };
+  if (!entry.url) {
+    throw new Error("LiteLLM images API: response entry had neither b64_json nor url");
   }
-  throw new Error("LiteLLM images API: response entry had neither b64_json nor url");
+
+  const res = await litellmFetch(entry.url);
+  if (!res.ok) {
+    // Assets expire (MinIO lifecycle), so a 404 here means a stale url, not a bad request.
+    throw new Error(`LiteLLM images API: failed to fetch result url (${res.status}): ${entry.url}`);
+  }
+
+  // MinIO reports some failures as an XML body under HTTP 200, so res.ok alone
+  // is not enough — without this check we would hand an XML blob downstream as
+  // if it were a PNG.
+  const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim() || "image/png";
+  if (!mime.startsWith("image/")) {
+    throw new Error(
+      `LiteLLM images API: result url returned ${mime}, expected an image: ${entry.url}`,
+    );
+  }
+
+  const base64 = Buffer.from(await res.arrayBuffer()).toString("base64");
+  if (!base64) {
+    throw new Error(`LiteLLM images API: result url returned an empty body: ${entry.url}`);
+  }
+  return { base64, dataUrl: `data:${mime};base64,${base64}` };
 }
 
 /** Download a URL (or decode a data: URL) into a Blob for multipart upload. */
@@ -235,7 +289,7 @@ async function imagesGenerate(
   const res = await litellmFetch(`${baseUrl}/v1/images/generations`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, prompt, size: imageApiSize(options), n: 1 }),
+    body: JSON.stringify({ model, prompt, size: imageApiSize(model, options), n: 1 }),
   });
   if (!res.ok) {
     throw new Error(`LiteLLM images/generations error (${res.status}): ${(await res.text()).slice(0, 500)}`);
@@ -254,11 +308,21 @@ async function imagesEdit(
   const form = new FormData();
   form.append("model", model);
   form.append("prompt", prompt);
-  form.append("size", imageApiSize(options));
+  form.append("size", imageApiSize(model, options));
   form.append("n", "1");
   form.append("image", await fetchBlob(imageUrl), "image.png");
   // gpt-image-2 edits accept extra reference images.
-  for (const ref of (options.referenceImageUrls ?? []).slice(0, MAX_REFERENCE_IMAGES)) {
+  const refs = (options.referenceImageUrls ?? []).slice(0, MAX_REFERENCE_IMAGES);
+  if (refs.length > 0 && isQwenImageModel(model)) {
+    // Qwen-Image 2.1 weighs every image equally: it carries the extra subject's
+    // identity over faithfully, but RE-RENDERS the base scene, so details the
+    // prompt does not name are lost. Single-image edits stay faithful. Callers
+    // that want recomposition still get it — this only makes the trade visible.
+    console.warn(
+      `[litellm-image] ${model}: ${refs.length} reference image(s) will re-render the base scene, not preserve it. Omit referenceImageUrls for a faithful edit.`,
+    );
+  }
+  for (const ref of refs) {
     try {
       form.append("image", await fetchBlob(ref), "ref.png");
     } catch {

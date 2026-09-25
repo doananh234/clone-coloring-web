@@ -44,11 +44,14 @@ interface PreviewState {
  */
 // Image model choices for cover generation. "" = Auto (provider default,
 // LITELLM_IMAGE_MODEL). gpt-image-2 lays out top/mid/bottom text more reliably
-// than gemini-3.1-flash-image, so operators can pick per-cover.
+// than gemini-3.1-flash-image, so operators can pick per-cover. qwen-image-2.1
+// runs locally on the GPU box — slower per render (~20s) but no per-image cost,
+// and it renders square only (see imageApiSize in image-provider-litellm.ts).
 const COVER_MODELS: { label: string; value: string }[] = [
   { label: "Auto (mặc định)", value: "" },
   { label: "gpt-image-2", value: "gpt-image-2" },
   { label: "Gemini 3.1", value: "gemini-3.1-flash-image" },
+  { label: "Qwen-Image 2.1", value: "qwen-image-2.1" },
 ];
 
 export function AiPanel(props: AiPanelProps) {

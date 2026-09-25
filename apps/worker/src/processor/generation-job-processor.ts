@@ -420,6 +420,10 @@ async function runSourceCover(genJobId: string, bookId: string, payload: SourceC
   // generations endpoint → 400 unsupported_content_type), so route this model
   // straight to the `azure` provider, which hits Azure's edits endpoint directly
   // (AZURE_IMAGE_DEPLOYMENT_NAME=gpt-image-2). Other models keep their provider.
+  //
+  // This is deliberately Azure-only, not "every images-API model": the proxy
+  // forwards multipart edits to qwen-image-2.1 (local ComfyUI) just fine, so
+  // that model must keep the `litellm` provider and NOT be added to this test.
   const isAzureImageModel = /gpt-image/i.test(model ?? "");
   const effectiveProvider = isAzureImageModel ? "azure" : provider;
   const effectiveModel = isAzureImageModel ? undefined : model;
