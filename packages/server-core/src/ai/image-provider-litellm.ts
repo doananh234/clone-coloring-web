@@ -312,16 +312,21 @@ async function imagesEdit(
   form.append("n", "1");
   form.append("image", await fetchBlob(imageUrl), "image.png");
   // gpt-image-2 edits accept extra reference images.
-  const refs = (options.referenceImageUrls ?? []).slice(0, MAX_REFERENCE_IMAGES);
-  if (refs.length > 0 && isQwenImageModel(model)) {
-    // Qwen-Image 2.1 weighs every image equally: it carries the extra subject's
-    // identity over faithfully, but RE-RENDERS the base scene, so details the
-    // prompt does not name are lost. Single-image edits stay faithful. Callers
-    // that want recomposition still get it — this only makes the trade visible.
+  //
+  // Qwen-Image 2.1 does NOT: it weighs every image equally and returns the LAST
+  // one's subject, ignoring however firmly the prompt says the extras are style
+  // samples. Colorizing a page with a style reference came back as the style
+  // reference itself, recoloured — the source page gone entirely. So drop the
+  // extras for this model and let the prompt's directive (which already carries
+  // the palette in text) do the work, which is what useReference=false does.
+  const requestedRefs = (options.referenceImageUrls ?? []).slice(0, MAX_REFERENCE_IMAGES);
+  const dropRefs = requestedRefs.length > 0 && isQwenImageModel(model);
+  if (dropRefs) {
     console.warn(
-      `[litellm-image] ${model}: ${refs.length} reference image(s) will re-render the base scene, not preserve it. Omit referenceImageUrls for a faithful edit.`,
+      `[litellm-image] ${model}: dropping ${requestedRefs.length} reference image(s) — this model returns the reference's subject instead of the source. The prompt's directive still carries the style.`,
     );
   }
+  const refs = dropRefs ? [] : requestedRefs;
   for (const ref of refs) {
     try {
       form.append("image", await fetchBlob(ref), "ref.png");

@@ -156,6 +156,42 @@ describe("litellm image provider — size handling", () => {
   });
 });
 
+describe("litellm image provider — edit reference images", () => {
+  /** Count the multipart "image" parts on the edits request. */
+  function imagePartCount(): number {
+    const call = litellmFetchMock.mock.calls.find((c) => String(c[0]).includes("/v1/images/edits"));
+    if (!call) throw new Error("no images/edits call was made");
+    const form = (call[1] as { body: { getAll(k: string): unknown[] } }).body;
+    return form.getAll("image").length;
+  }
+
+  it("drops style references for qwen, which would otherwise be returned instead of the source", async () => {
+    routeGeneration({ b64_json: "QUJD" });
+    const provider = await loadProvider();
+
+    await provider.editImage("data:image/png;base64,QUJD", "colorize", {
+      model: QWEN,
+      referenceImageUrls: ["data:image/png;base64,REYx", "data:image/png;base64,REYy"],
+    });
+
+    // Source only. With the references attached this model returns the LAST
+    // image's subject — a colorized style sample, not the colorized page.
+    expect(imagePartCount()).toBe(1);
+  });
+
+  it("keeps style references for gpt-image-2, which composites them correctly", async () => {
+    routeGeneration({ b64_json: "QUJD" });
+    const provider = await loadProvider();
+
+    await provider.editImage("data:image/png;base64,QUJD", "colorize", {
+      model: "gpt-image-2",
+      referenceImageUrls: ["data:image/png;base64,REYx"],
+    });
+
+    expect(imagePartCount()).toBe(2);
+  });
+});
+
 describe("litellm image provider — result envelope", () => {
   it("returns b64_json straight through without a second request", async () => {
     routeGeneration({ b64_json: "QUJD" });
